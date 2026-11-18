@@ -6,7 +6,12 @@ import 'ui/splash.dart';
 // The page's own --paper, so the app's screens match the plate.
 const paper = Color(0xFFEEE5CE);
 const ink = Color(0xFF2A241C);
-const madder = Color(0xFF9C3B2E);
+// The rest of the page's palette (its :root), so the app's own controls
+// wear the plate's colours rather than Material's pinks.
+const madder = Color(0xFF8C3B2A);
+const paperDeep = Color(0xFFE3D7B8);
+const sepia = Color(0xFF6B5338);
+const rule = Color(0xFFBCAB86);
 
 // The plate's typefaces: IM Fell English for text, its small caps for
 // headings, as the page uses them.
@@ -20,7 +25,29 @@ Future<void> main() async {
 }
 
 ThemeData birdsongTheme() {
-  final scheme = ColorScheme.fromSeed(seedColor: madder, surface: paper);
+  final scheme = ColorScheme.fromSeed(seedColor: madder, surface: paper).copyWith(
+    primary: madder,
+    onPrimary: paper,
+    primaryContainer: paperDeep,
+    onPrimaryContainer: ink,
+    secondary: sepia,
+    onSecondary: paper,
+    secondaryContainer: madder,
+    onSecondaryContainer: paper,
+    tertiary: sepia,
+    onTertiary: paper,
+    surface: paper,
+    onSurface: ink,
+    onSurfaceVariant: sepia,
+    outline: rule,
+    outlineVariant: rule,
+    surfaceTint: Colors.transparent,
+    surfaceContainerLowest: paper,
+    surfaceContainerLow: paper,
+    surfaceContainer: paperDeep,
+    surfaceContainerHigh: paperDeep,
+    surfaceContainerHighest: paperDeep,
+  );
   final base = ThemeData(colorScheme: scheme, useMaterial3: true).textTheme
       .apply(fontFamily: serif);
   // IM Fell has one weight; let it stand rather than be faked bold.

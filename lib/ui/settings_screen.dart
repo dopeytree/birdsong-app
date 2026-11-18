@@ -87,8 +87,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         listenable: Listenable.merge([s, app.engine, app.models, app.store]),
         builder: (context, _) {
           final listen = s.mode == AppMode.listen;
+          // On a wide window (a Mac, an iPad) the settings keep to a
+          // readable column in the middle.
+          final side = ((MediaQuery.sizeOf(context).width - 680) / 2).clamp(16.0, 400.0);
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+            padding: EdgeInsets.fromLTRB(side, 4, side, 32),
             children: [
               _displaySection(context, listen),
               const SizedBox(height: 8),

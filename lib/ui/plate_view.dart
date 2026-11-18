@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../app_state.dart';
+import '../main.dart' show ink;
 import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
@@ -265,7 +266,7 @@ class _Arrow extends StatelessWidget {
     return IconButton(
       tooltip: tooltip,
       iconSize: 28,
-      color: Theme.of(context).colorScheme.primary,
+      color: ink,
       icon: Icon(icon),
       onPressed: onPressed,
     );

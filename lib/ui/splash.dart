@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
-import '../main.dart' show caps, paper, serif;
+import '../main.dart' show caps, paper, sepia, serif;
 import 'home_shell.dart';
 
-const sepia = Color(0xFF6B5338);
 
 /// Height of the cardinal on the loading screen; the iPhone's own launch
 /// screen (tool/launch, set by patch_platforms.py) draws it at the same size
