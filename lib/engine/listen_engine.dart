@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:record/record.dart';
 
 import '../settings.dart';
@@ -70,6 +71,30 @@ class ListenEngine extends ChangeNotifier {
   // (model, species) to the detection still open for repeats.
   final Map<String, Detection> _open = {};
 
+  /// The session being recorded, while listening.
+  Session? session;
+
+  /// Location problems, for the Listen tab; listening carries on without.
+  String? locationNote;
+
+  // Species to when the plate's model last heard them above the threshold.
+  final Map<String, DateTime> _lastHeard = {};
+
+  /// Species heard in the last couple of windows by the model the plate
+  /// draws: these glow on the plate.
+  Set<String> get liveSpecies {
+    if (!running) return const {};
+    final keep = Duration(milliseconds: (settings.hopSeconds * 2000 + 1500).round());
+    final now = DateTime.now();
+    return {
+      for (final e in _lastHeard.entries)
+        if (now.difference(e.value) <= keep) e.key,
+    };
+  }
+
+  double? get _lat => settings.latitude ?? session?.lat;
+  double? get _lon => settings.longitude ?? session?.lon;
+
   Future<void> start() async {
     if (running || starting) return;
     starting = true;
@@ -101,6 +126,9 @@ class ListenEngine extends ChangeNotifier {
       _timer = Timer.periodic(
           Duration(milliseconds: (settings.hopSeconds * 1000).round()), (_) => _tick());
       running = true;
+      _lastHeard.clear();
+      final ses = session = await store.startSession();
+      unawaited(_locate(ses));
     } catch (e) {
       error = e.toString().replaceFirst('Bad state: ', '');
       await _unload();
@@ -123,6 +151,10 @@ class ListenEngine extends ChangeNotifier {
     while (_busy) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
+    final ses = session;
+    session = null;
+    _lastHeard.clear();
+    if (ses != null) await store.endSession(ses);
     await _unload();
     notifyListeners();
   }
@@ -162,10 +194,7 @@ class ListenEngine extends ChangeNotifier {
         report.error = 'Could not load: $e';
       }
     }
-    if (settings.useGeomodel &&
-        settings.latitude != null &&
-        settings.longitude != null &&
-        models.isInstalled(geomodel)) {
+    if (settings.useGeomodel && models.isInstalled(geomodel)) {
       try {
         _geo = await GeoFilter.load(
             models.fileFor(geomodel.model), models.fileFor(geomodel.labels));
@@ -254,11 +283,12 @@ class ListenEngine extends ChangeNotifier {
 
   Future<void> _refreshGeo(DateTime now) async {
     final geo = _geo;
-    if (geo == null) return;
+    final lat = _lat, lon = _lon;
+    if (geo == null || lat == null || lon == null) return;
     final last = _geoFor;
     if (_geoScores != null && last != null && last.day == now.day) return;
     try {
-      _geoScores = await geo.scores(settings.latitude!, settings.longitude!, now);
+      _geoScores = await geo.scores(lat, lon, now);
       _geoFor = now;
     } catch (e) {
       error = 'Location filter: $e';
@@ -267,6 +297,8 @@ class ListenEngine extends ChangeNotifier {
 
   Future<void> _detected(LoadedModel m, SpeciesLabel l, double score, DateTime now) async {
     final key = '${m.spec.id}|${l.sci}';
+    final plate = settings.plateModel;
+    if (plate == 'all' || plate == m.spec.id) _lastHeard[l.sci] = now;
     final open = _open[key];
     if (open != null &&
         now.difference(open.at).inMilliseconds < settings.repeatSeconds * 1000) {
@@ -297,6 +329,38 @@ class ListenEngine extends ChangeNotifier {
       await store.save(d);
     } catch (e) {
       debugPrint('clip ${d.id}: $e');
+    }
+  }
+
+  /// Where this session is, for the plate and the location filter. Asks for
+  /// permission the first time; listening goes on without it.
+  Future<void> _locate(Session ses) async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        locationNote = 'Location Services are off, so this session has no place.';
+        return;
+      }
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm != LocationPermission.whileInUse && perm != LocationPermission.always) {
+        locationNote = 'Location not allowed, so this session has no place.';
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      ses.lat = pos.latitude;
+      ses.lon = pos.longitude;
+      locationNote = null;
+      _geoScores = null; // the location filter now knows where we are
+      await store.saveSession(ses);
+    } catch (e) {
+      locationNote = 'Could not get a location: $e';
+    } finally {
+      notifyListeners();
     }
   }
 

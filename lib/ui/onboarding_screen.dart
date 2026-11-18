@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:record/record.dart';
 
 import '../app_state.dart';
@@ -31,6 +32,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String _model = _starterIds.first;
   bool _coreMl = Platform.isIOS || Platform.isMacOS;
   bool? _micAllowed;
+  bool? _locAllowed;
   late final TextEditingController _url;
   late final TextEditingController _station;
 
@@ -83,6 +85,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
+  Future<void> _askLocation() async {
+    try {
+      var p = await Geolocator.checkPermission();
+      if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
+      final ok = p == LocationPermission.whileInUse || p == LocationPermission.always;
+      if (mounted) setState(() => _locAllowed = ok);
+    } catch (_) {
+      if (mounted) setState(() => _locAllowed = false);
+    }
+  }
+
   void _skip() {
     s.update((x) => x.onboarded = true);
     widget.onDone(0);
@@ -104,6 +117,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       x.activeModels = {_model};
       x.plateModel = _model;
       x.useCoreMl = _coreMl;
+      // With a location, the geomodel drops birds that don't live there.
+      if (_locAllowed == true) x.useGeomodel = true;
       x.onboarded = true;
     });
     widget.onDone(1);
@@ -305,7 +320,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Text('${((m.progress[_model] ?? 0) * 100).round()}% of ${megabytes(_spec.totalBytes)}'),
             ] else
               FilledButton.icon(
-                onPressed: busy ? null : () => m.install(_spec),
+                onPressed: busy
+                    ? null
+                    : () {
+                        m.install(_spec);
+                        // The location filter is small; fetch it alongside.
+                        if (!m.isInstalled(geomodel)) m.install(geomodel);
+                      },
                 icon: const Icon(Icons.download),
                 label: Text('Download ${megabytes(_spec.totalBytes)}'),
               ),
@@ -369,7 +390,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('The microphone', style: theme.textTheme.headlineSmall),
+        Text('Microphone and location', style: theme.textTheme.headlineSmall),
         const SizedBox(height: 8),
         const Text('Birdsong needs the microphone to hear the birds. Sound is analysed '
             'on this device and never sent anywhere. Short recordings of each '
@@ -394,6 +415,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 'It was refused. Allow Birdsong under the device\'s Settings > '
                 'Privacy > Microphone, then try again.',
                 style: TextStyle(color: theme.colorScheme.error)),
+          ),
+        const SizedBox(height: 24),
+        const Text('Location is optional. Each listening session is marked with where '
+            'it happened, and the app leaves out birds that don\'t live there.'),
+        const SizedBox(height: 12),
+        if (_locAllowed == true)
+          const Row(children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Location allowed.'),
+          ])
+        else
+          OutlinedButton.icon(
+            onPressed: _askLocation,
+            icon: const Icon(Icons.place_outlined),
+            label: const Text('Allow location'),
+          ),
+        if (_locAllowed == false)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text('Not allowed. Sessions will have no place; you can allow it later '
+                'under the device\'s Settings > Privacy > Location Services.',
+                style: theme.textTheme.bodySmall),
           ),
       ],
     );

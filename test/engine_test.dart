@@ -119,4 +119,28 @@ void main() {
       expect(String.fromCharCodes(bmp.sublist(0, 2)), 'BM');
     });
   });
+
+  group('sessions', () {
+    test('older detections split at gaps of over 30 minutes', () {
+      final t0 = DateTime(2026, 11, 18, 6);
+      final times = [
+        t0,
+        t0.add(const Duration(minutes: 10)),
+        t0.add(const Duration(minutes: 35)), // 25 min gap: same session
+        t0.add(const Duration(hours: 3)), // new session
+      ];
+      final spans = groupIntoSpans(times, legacySessionGap);
+      expect(spans.length, 2);
+      expect(spans.first.$2, times[2]);
+      expect(spans.last.$1, times[3]);
+    });
+
+    test('a live session holds everything after its start', () {
+      final s = Session(id: 1, start: DateTime(2026, 11, 18, 6));
+      expect(s.contains(DateTime(2026, 11, 19)), isTrue);
+      s.end = DateTime(2026, 11, 18, 7);
+      expect(s.contains(DateTime(2026, 11, 18, 8)), isFalse);
+      expect(s.contains(DateTime(2026, 11, 18, 6, 30)), isTrue);
+    });
+  });
 }

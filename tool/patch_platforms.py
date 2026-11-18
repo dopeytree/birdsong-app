@@ -23,6 +23,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 MIC = ("Birdsong listens for birds and identifies them on this device. "
        "Audio never leaves it.")
+LOC = ("Birdsong marks each listening session with where it happened, and leaves "
+       "out birds that don't live there.")
 LAN = "Birdsong reads detections from your BirdNET-Go station on your home network."
 
 # Built with the iOS 27 SDK; runs on iOS 27 and the two releases before it
@@ -66,6 +68,7 @@ def ios():
         "CFBundleDisplayName": "Birdsong",
         "NSMicrophoneUsageDescription": MIC,
         "NSLocalNetworkUsageDescription": LAN,
+        "NSLocationWhenInUseUsageDescription": LOC,
         "UIBackgroundModes": ["audio"],
         "NSAppTransportSecurity": ATS,
     })
@@ -83,6 +86,8 @@ def ios():
 def macos():
     patch_plist(ROOT / "macos/Runner/Info.plist", {
         "NSMicrophoneUsageDescription": MIC,
+        "NSLocationUsageDescription": LOC,
+        "NSLocationWhenInUseUsageDescription": LOC,
         "NSAppTransportSecurity": ATS,
     })
     ent = {
@@ -90,6 +95,7 @@ def macos():
         "com.apple.security.network.client": True,
         "com.apple.security.network.server": True,
         "com.apple.security.device.audio-input": True,
+        "com.apple.security.personal-information.location": True,
     }
     for name in ("DebugProfile.entitlements", "Release.entitlements"):
         patch_plist(ROOT / "macos/Runner" / name, ent)
@@ -102,7 +108,9 @@ def android():
     manifest = ROOT / "android/app/src/main/AndroidManifest.xml"
     if manifest.exists():
         text = manifest.read_text()
-        perms = ["android.permission.RECORD_AUDIO", "android.permission.INTERNET"]
+        perms = ["android.permission.RECORD_AUDIO", "android.permission.INTERNET",
+                 "android.permission.ACCESS_COARSE_LOCATION",
+                 "android.permission.ACCESS_FINE_LOCATION"]
         add = "".join(f'    <uses-permission android:name="{p}"/>\n'
                       for p in perms if p not in text)
         if add:

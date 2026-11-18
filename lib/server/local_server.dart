@@ -94,19 +94,25 @@ class LocalServer {
     final res = req.response;
     final q = req.uri.queryParameters;
     final path = req.uri.path;
-    final all = store.forPlate(plateModel?.call() ?? 'all');
+    // Listen here draws one listening session at a time, picked with the
+    // arrows on the plate; the page is told period=all, and the dates it
+    // sends are set aside in favour of the session.
+    final session = store.selected;
+    final all = store.forPlate(plateModel?.call() ?? 'all', session: session);
+    final bySession = session != null;
+    String? from(String key) => bySession ? null : q[key];
 
     if (path.startsWith('/api/v2/analytics/species/daily')) {
       return _json(res, api.speciesDaily(all, q['date']));
     }
     if (path.startsWith('/api/v2/analytics/species/summary')) {
-      return _json(res, api.speciesSummary(all, q['start_date'], q['end_date']));
+      return _json(res, api.speciesSummary(all, from('start_date'), from('end_date')));
     }
     if (path.startsWith('/api/v2/analytics/time/distribution/hourly')) {
-      return _json(res, api.hourly(all, q['species'] ?? '', q['start_date'], q['end_date']));
+      return _json(res, api.hourly(all, q['species'] ?? '', from('start_date'), from('end_date')));
     }
     if (path.startsWith('/api/v2/analytics/time/daily')) {
-      return _json(res, api.daily(all, q['species'] ?? '', q['start_date'], q['end_date']));
+      return _json(res, api.daily(all, q['species'] ?? '', from('start_date'), from('end_date')));
     }
     if (path.startsWith('/api/v2/detections')) {
       final n = int.tryParse(q['numResults'] ?? '') ?? 5;
@@ -205,9 +211,30 @@ class LocalServer {
   // off to that address instead of asking this app.
   static const _headExtra = '<script>try{localStorage.removeItem("birdplate.server");'
       'localStorage.removeItem("birdplate.station")}catch(e){}</script>'
-      '<style>#stationOpts,#cardOpts{display:none}</style>';
+      '<style>#stationOpts,#cardOpts{display:none}'
+      // A creature being heard right now glows, and the dot on it (over its
+      // centre, or beneath it) breathes out a ring, in the plate's madder.
+      '@keyframes bsGlow{0%,100%{filter:drop-shadow(0 0 0 rgba(140,59,42,0))}'
+      '50%{filter:drop-shadow(0 0 .8rem rgba(140,59,42,.7))}}'
+      '@keyframes bsRing{0%{box-shadow:0 0 0 0 rgba(140,59,42,.6),0 0 4px #eee5ce}'
+      '100%{box-shadow:0 0 0 .8rem rgba(140,59,42,0),0 0 4px #eee5ce}}'
+      '.bird.live{animation:bsGlow 1.6s ease-in-out infinite}'
+      '.bird.live::after{animation:bsRing 1.6s ease-out infinite}'
+      '@media (prefers-reduced-motion:reduce){.bird.live{animation:none;'
+      'filter:drop-shadow(0 0 .6rem rgba(140,59,42,.6))}.bird.live::after{animation:none}}'
+      '</style>';
+
+  // window.birdsongLive(["Turdus merula", ...]) marks the creatures being
+  // heard; the app calls it after every window it analyses.
   static const _bodyExtra = '<script>(function(){var s=document.getElementById("stationOpts"),'
-      'o=document.getElementById("showOpts");if(s)s.open=false;if(o)o.open=true;})();</script>';
+      'o=document.getElementById("showOpts");if(s)s.open=false;if(o)o.open=true;'
+      'var live=new Set();window.birdsongLive=function(list){live=new Set(list||[]);mark();};'
+      'function mark(){try{for(const [sci,f] of figures){if(f&&f.button)'
+      'f.button.classList.toggle("live",live.has(sci));}}catch(e){}}'
+      // the plate redraws on its own too; keep the marks on through that
+      'new MutationObserver(function(){if(live.size)mark();})'
+      '.observe(document.getElementById("plate")||document.body,{childList:true});'
+      '})();</script>';
 
   String? _pageHtml;
 

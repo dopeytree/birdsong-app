@@ -65,6 +65,12 @@ flutter test
    and its top five species. Detections above the threshold are saved, with a
    recording and a spectrogram.
 4. **Plate** tab: the familiar plate, cards, recordings and spectrograms.
+   In *Listen here* the plate shows one listening session at a time: the
+   bar beneath it gives its date and time, how many species and where, and
+   the arrows step to earlier and later sessions. The round microphone
+   button starts a new session and stops it. While listening the plate
+   fetches each new detection as it arrives, and a creature being heard
+   right now glows, with its dot breathing out a ring.
 5. **Settings**: switch between *Station* and *Listen here*, set a
    BirdNET-Go address or a BirdWeather station, the threshold, how often to
    analyse, the location filter, and Core ML (experimental) on Apple devices.

@@ -39,7 +39,7 @@ class _HomeShellState extends State<HomeShell> {
         child: IndexedStack(
           index: _tab,
           children: [
-            PlateView(app: app),
+            PlateView(app: app, openTab: (i) => setState(() => _tab = i)),
             ListenScreen(app: app),
             ModelsScreen(app: app),
             SettingsScreen(app: app),
