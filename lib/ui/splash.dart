@@ -1,9 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
-import '../main.dart' show paper, serif;
+import '../main.dart' show caps, paper, serif;
 import 'home_shell.dart';
 
 const sepia = Color(0xFF6B5338);
@@ -56,13 +54,18 @@ class SupportQuote extends StatelessWidget {
 }
 
 class Splash extends StatelessWidget {
-  const Splash({super.key, this.error});
+  const Splash({super.key, this.error, this.ready = false});
 
   final Object? error;
 
+  /// The app has started: say that a tap goes in.
+  final bool ready;
+
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
+    // Material, so the text has a proper style (bare text shows Flutter's
+    // yellow underline).
+    return Material(
       color: paper,
       child: LayoutBuilder(
         builder: (context, box) => Stack(
@@ -76,7 +79,23 @@ class Splash extends StatelessWidget {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 340),
                   child: error == null
-                      ? const SupportQuote()
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SupportQuote(),
+                            const SizedBox(height: 28),
+                            AnimatedOpacity(
+                              opacity: ready ? 1 : 0,
+                              duration: const Duration(milliseconds: 900),
+                              child: Text('tap to begin',
+                                  style: TextStyle(
+                                      fontFamily: caps,
+                                      color: sepia.withValues(alpha: 0.7),
+                                      fontSize: 14,
+                                      letterSpacing: 1.2)),
+                            ),
+                          ],
+                        )
                       : Text('Birdsong could not start:\n$error',
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontFamily: serif, color: sepia)),
@@ -90,8 +109,7 @@ class Splash extends StatelessWidget {
   }
 }
 
-/// Starts the app behind the loading screen, and lifts it once the plate
-/// has drawn (or after a while regardless).
+/// Starts the app behind the loading screen, which stays until tapped.
 class Boot extends StatefulWidget {
   const Boot({super.key, required this.boot});
 
@@ -104,9 +122,7 @@ class Boot extends StatefulWidget {
 class _BootState extends State<Boot> {
   AppState? _app;
   Object? _error;
-  bool _minDone = false;
-  bool _plateDrawn = false;
-  final _timers = <Timer>[];
+  bool _tapped = false;
 
   @override
   void initState() {
@@ -116,43 +132,27 @@ class _BootState extends State<Boot> {
     }, onError: (Object e, StackTrace _) {
       if (mounted) setState(() => _error = e);
     });
-    _timers
-      ..add(Timer(const Duration(milliseconds: 1800), () => _set(() => _minDone = true)))
-      ..add(Timer(const Duration(seconds: 8), () => _set(() => _plateDrawn = true)));
-  }
-
-  void _set(VoidCallback f) {
-    if (mounted) setState(f);
-  }
-
-  @override
-  void dispose() {
-    for (final t in _timers) {
-      t.cancel();
-    }
-    super.dispose();
-  }
-
-  void _plateLoaded() {
-    // The page has loaded; give it a moment to fetch and lay out its birds.
-    _timers.add(Timer(const Duration(milliseconds: 900), () => _set(() => _plateDrawn = true)));
   }
 
   @override
   Widget build(BuildContext context) {
     final app = _app;
-    final done = app != null && _minDone && (_plateDrawn || !app.settings.onboarded);
+    final done = app != null && _tapped;
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (app != null) HomeShell(app: app, onPlateLoaded: _plateLoaded),
+        if (app != null) HomeShell(app: app),
         IgnorePointer(
           ignoring: done,
-          child: AnimatedOpacity(
-            opacity: done ? 0 : 1,
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.easeOut,
-            child: Splash(error: _error),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: app == null ? null : () => setState(() => _tapped = true),
+            child: AnimatedOpacity(
+              opacity: done ? 0 : 1,
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeOut,
+              child: Splash(error: _error, ready: app != null),
+            ),
           ),
         ),
       ],
