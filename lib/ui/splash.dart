@@ -19,7 +19,7 @@ class Cardinal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Image.asset('assets/app/cardinal.webp', height: height, filterQuality: FilterQuality.medium);
+      Image.asset('assets/app/cardinal.png', height: height, filterQuality: FilterQuality.medium);
 }
 
 class SupportQuote extends StatelessWidget {
@@ -110,6 +110,9 @@ class Splash extends StatelessWidget {
 }
 
 /// Starts the app behind the loading screen, which stays until tapped.
+/// The plate is only built after the tap: on macOS the web view draws over
+/// anything Flutter puts on top of it, so it can't wait underneath. After the
+/// tap the screen stays until the plate has loaded, then fades.
 class Boot extends StatefulWidget {
   const Boot({super.key, required this.boot});
 
@@ -123,6 +126,7 @@ class _BootState extends State<Boot> {
   AppState? _app;
   Object? _error;
   bool _tapped = false;
+  bool _plateLoaded = false;
 
   @override
   void initState() {
@@ -137,16 +141,30 @@ class _BootState extends State<Boot> {
   @override
   Widget build(BuildContext context) {
     final app = _app;
-    final done = app != null && _tapped;
+    final done = app != null && _tapped && (_plateLoaded || !app.settings.onboarded);
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (app != null) HomeShell(app: app),
+        if (app != null && _tapped)
+          HomeShell(
+            app: app,
+            onPlateLoaded: () {
+              if (mounted && !_plateLoaded) setState(() => _plateLoaded = true);
+            },
+          ),
         IgnorePointer(
           ignoring: done,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: app == null ? null : () => setState(() => _tapped = true),
+            onTap: app == null || _tapped
+                ? null
+                : () {
+                    setState(() => _tapped = true);
+                    // Don't hold the screen up for ever if the page stalls.
+                    Future.delayed(const Duration(seconds: 6), () {
+                      if (mounted && !_plateLoaded) setState(() => _plateLoaded = true);
+                    });
+                  },
             child: AnimatedOpacity(
               opacity: done ? 0 : 1,
               duration: const Duration(milliseconds: 700),
