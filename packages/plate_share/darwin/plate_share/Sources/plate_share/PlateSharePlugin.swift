@@ -24,6 +24,10 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    if call.method == "fullBleed" {
+      DispatchQueue.main.async { self.fullBleed(result: result) }
+      return
+    }
     guard call.method == "share" else {
       result(FlutterMethodNotImplemented)
       return
@@ -64,6 +68,19 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
     return nil
   }
 
+  private func fullBleed(result: @escaping FlutterResult) {
+    guard let window = keyWindow(), let web = findWebView(window) else {
+      result(false)
+      return
+    }
+    web.scrollView.contentInsetAdjustmentBehavior = .never
+    let paper = UIColor(red: 0xEE / 255.0, green: 0xE5 / 255.0, blue: 0xCE / 255.0, alpha: 1)
+    web.backgroundColor = paper
+    web.scrollView.backgroundColor = paper
+    if #available(iOS 15.0, *) { web.underPageBackgroundColor = paper }
+    result(true)
+  }
+
   private func share(text: String?, anchor: CGRect, result: @escaping FlutterResult) {
     guard let window = keyWindow(), let web = findWebView(window) else {
       result(false)
@@ -89,6 +106,8 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
   }
 
   #elseif os(macOS)
+
+  private func fullBleed(result: @escaping FlutterResult) { result(true) }
 
   private func findWebView(_ v: NSView) -> WKWebView? {
     if let w = v as? WKWebView { return w }

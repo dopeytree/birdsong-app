@@ -26,12 +26,13 @@ class HomeShell extends StatelessWidget {
           return OnboardingScreen(app: app, onDone: (_) {});
         }
         return Scaffold(
-          body: SafeArea(
-            child: PlateView(
-                app: app,
-                openSettings: () => _openSettings(context),
-                onLoaded: onPlateLoaded),
-          ),
+          // Edge to edge: the page's own paper runs under the status bar, the
+          // Dynamic Island and the home indicator; the page pads its content
+          // clear of them instead (PlateView passes it the insets).
+          body: PlateView(
+              app: app,
+              openSettings: () => _openSettings(context),
+              onLoaded: onPlateLoaded),
         );
       },
     );

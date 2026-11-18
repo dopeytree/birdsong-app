@@ -228,6 +228,9 @@ class LocalServer {
       // The session number after the title: Birdsong #2/3.
       '#bsCount{margin-left:.35em;color:var(--sepia)}#bsCount:empty{display:none}'
       '#bsPlace:empty{display:none}'
+      'html{background:var(--paper)}'
+      'body{padding:max(env(safe-area-inset-top),var(--bs-top,0px)) max(env(safe-area-inset-right),var(--bs-right,0px))'
+      ' max(env(safe-area-inset-bottom),var(--bs-bottom,0px)) max(env(safe-area-inset-left),var(--bs-left,0px))}'
 
       // A creature being heard right now glows, and the dot on it (over its
       // centre, or beneath it) breathes out a ring, in the plate's madder.
@@ -290,6 +293,11 @@ class LocalServer {
     if (html == null) {
       html = await rootBundle.loadString('assets/web/index.html');
       html = html.replaceFirst('</head>', '$_headExtra</head>');
+      // Lay out under the status bar and the Dynamic Island too; the body
+      // is padded clear of them (--bs-* from the app, env() from WebKit).
+      html = html.replaceFirst(
+          'content="width=device-width, initial-scale=1"',
+          'content="width=device-width, initial-scale=1, viewport-fit=cover"');
       final at = html.lastIndexOf('</body>');
       if (at >= 0) html = html.replaceRange(at, at, _bodyExtra);
       _pageHtml = html;

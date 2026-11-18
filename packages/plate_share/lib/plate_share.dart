@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
-
 import 'package:flutter/services.dart';
 
 /// Takes a picture of the plate (the app's web view, without the app's own
@@ -11,6 +9,18 @@ class PlateShare {
 
   /// iPhone, iPad and Mac for now.
   static bool get supported => Platform.isIOS || Platform.isMacOS;
+
+  /// iOS: let the web view run under the status bar and the Dynamic Island
+  /// (no automatic safe-area insets), in the page's paper colour. The page
+  /// pads its own content. Elsewhere does nothing.
+  static Future<void> fullBleed() async {
+    if (!Platform.isIOS) return;
+    for (var i = 0; i < 10; i++) {
+      // The web view appears a frame or two after it is asked for.
+      if (await _channel.invokeMethod<bool>('fullBleed') == true) return;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
 
   /// [from] is where the button is, in logical pixels from the window's top
   /// left: the sheet points at it on iPad and Mac. Returns false if there

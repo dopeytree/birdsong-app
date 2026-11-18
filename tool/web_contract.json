@@ -172,6 +172,10 @@
     {
       "find": "<h2>Index of species</h2>\n    <ol id=\"index\">",
       "used_by": "local_server.dart: the app's session arrows sit on this line"
+    },
+    {
+      "find": "content=\"width=device-width, initial-scale=1\"",
+      "used_by": "local_server.dart: viewport-fit=cover added so the page fills the iPhone screen"
     }
   ],
   "endpoints": [

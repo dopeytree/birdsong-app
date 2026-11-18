@@ -50,6 +50,23 @@ class _PlateViewState extends State<PlateView> {
 
   final _shareKey = GlobalKey();
 
+  // The screen's safe-area insets, as last given to the page.
+  EdgeInsets _insets = EdgeInsets.zero;
+  String _insetsPushed = '';
+
+  void _pushInsets() {
+    final p = _insets;
+    final key = '${p.top},${p.right},${p.bottom},${p.left}';
+    if (key == _insetsPushed) return;
+    _insetsPushed = key;
+    String px(double v) => '${v.toStringAsFixed(1)}px';
+    _web
+        .runJavaScript('(function(s){s.setProperty("--bs-top","${px(p.top)}");'
+            's.setProperty("--bs-right","${px(p.right)}");s.setProperty("--bs-bottom","${px(p.bottom)}");'
+            's.setProperty("--bs-left","${px(p.left)}");})(document.documentElement.style)')
+        .catchError((Object _) {});
+  }
+
   AppState get app => widget.app;
   Settings get _s => app.settings;
 
@@ -86,6 +103,8 @@ class _PlateViewState extends State<PlateView> {
       })
       ..setNavigationDelegate(NavigationDelegate(onPageFinished: (_) {
         if (_popup) setState(() => _popup = false);
+        _insetsPushed = '';
+        _pushInsets();
         _livePushed = '';
         _sessionPushed = '';
         _pushLive();
@@ -94,6 +113,9 @@ class _PlateViewState extends State<PlateView> {
       }))
       ..loadRequest(_url);
     app.page = PageControl(_web);
+    // iOS: stop WebKit adding its own safe-area insets, so the page fills
+    // the screen and pads itself.
+    PlateShare.fullBleed().catchError((Object _) {});
     _s.addListener(_settingsChanged);
     app.store.addListener(_storeChanged);
     app.engine.addListener(_pushLive);
@@ -240,6 +262,11 @@ class _PlateViewState extends State<PlateView> {
 
   @override
   Widget build(BuildContext context) {
+    final safe = MediaQuery.paddingOf(context);
+    if (safe != _insets) {
+      _insets = safe;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _pushInsets());
+    }
     return ListenableBuilder(
       listenable: Listenable.merge([_s, app.store, app.engine]),
       builder: (context, _) {
@@ -254,8 +281,8 @@ class _PlateViewState extends State<PlateView> {
             // itself as birds are heard.
             if (!listen && !_popup)
               Positioned(
-                right: 16,
-                bottom: 16,
+                right: 16 + safe.right,
+                bottom: 16 + safe.bottom,
                 child: IconButton.filledTonal(
                   tooltip: 'Reload the plate',
                   icon: const Icon(Icons.refresh),
@@ -264,8 +291,8 @@ class _PlateViewState extends State<PlateView> {
               ),
             if (!_popup)
               Positioned(
-                right: 8,
-                top: 8,
+                right: 8 + safe.right,
+                top: 8 + safe.top,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -302,7 +329,7 @@ class _PlateViewState extends State<PlateView> {
               ),
             if (listen && !_popup && n > 1 && _arrowsShown(context)) ...[
               Positioned(
-                left: 0,
+                left: safe.left,
                 top: _arrowTop(context),
                 child: _Arrow(
                   icon: Icons.chevron_left,
@@ -311,7 +338,7 @@ class _PlateViewState extends State<PlateView> {
                 ),
               ),
               Positioned(
-                right: 0,
+                right: safe.right,
                 top: _arrowTop(context),
                 child: _Arrow(
                   icon: Icons.chevron_right,
