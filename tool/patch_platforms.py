@@ -69,7 +69,11 @@ def ios():
     patch_text(podfile, r"^#?\s*platform :ios, '[\d.]+'", "platform :ios, '16.0'", re.M)
     patch_text(podfile, r"^(\s*)use_frameworks!\s*$", r"\1use_frameworks! :linkage => :static", re.M)
     patch_text(ROOT / "ios/Runner.xcodeproj/project.pbxproj",
-               r"IPHONEOS_DEPLOYMENT_TARGET = [\d.]+;", "IPHONEOS_DEPLOYMENT_TARGET = 16.0;")
+               r"IPHONEOS_DEPLOYMENT_TARGET = [^;]+;", "IPHONEOS_DEPLOYMENT_TARGET = 16.0;")
+    # Flutter writes the minimum iOS into the Swift package it generates for
+    # the plugins; ONNX Runtime refuses anything below 16.
+    patch_text(ROOT / "ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift",
+               r'\.iOS\("1[0-5]\.\d+"\)', '.iOS("16.0")')
 
 
 def macos():
@@ -87,7 +91,7 @@ def macos():
         patch_plist(ROOT / "macos/Runner" / name, ent)
     patch_text(ROOT / "macos/Podfile", r"^#?\s*platform :osx, '[\d.]+'", "platform :osx, '14.0'", re.M)
     patch_text(ROOT / "macos/Runner.xcodeproj/project.pbxproj",
-               r"MACOSX_DEPLOYMENT_TARGET = [\d.]+;", "MACOSX_DEPLOYMENT_TARGET = 14.0;")
+               r"MACOSX_DEPLOYMENT_TARGET = [^;]+;", "MACOSX_DEPLOYMENT_TARGET = 14.0;")
 
 
 def android():
