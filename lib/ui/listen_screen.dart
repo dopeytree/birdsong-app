@@ -90,10 +90,12 @@ class ListenScreen extends StatelessWidget {
                             SizedBox(
                               width: 44,
                               child: Text('${(score * 100).round()}%',
+                                  // Above the threshold: the plate's madder red,
+                                  // as the page marks counts (the face has no bold).
                                   style: TextStyle(
-                                      fontWeight: score >= app.settings.threshold
-                                          ? FontWeight.bold
-                                          : FontWeight.normal)),
+                                      color: score >= app.settings.threshold
+                                          ? theme.colorScheme.primary
+                                          : null)),
                             ),
                             Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
                           ],

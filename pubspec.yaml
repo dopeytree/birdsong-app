@@ -34,3 +34,15 @@ flutter:
   assets:
     - assets/web/
     - assets/web/fonts/
+
+  # The plate's typeface, so the app's own screens match it.
+  # IM Fell English by Igino Marini, SIL Open Font Licence.
+  fonts:
+    - family: IM Fell English
+      fonts:
+        - asset: assets/web/fonts/IMFeENrm28P.ttf
+        - asset: assets/web/fonts/IMFeENit28P.ttf
+          style: italic
+    - family: IM Fell English SC
+      fonts:
+        - asset: assets/web/fonts/IMFeENsc28P.ttf
