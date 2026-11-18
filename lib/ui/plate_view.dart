@@ -9,8 +9,9 @@ import '../settings.dart';
 import 'format.dart';
 
 /// Birdsong's own page, served by the app's local server. In Listen here it
-/// shows one listening session at a time, with arrows to step through them,
-/// and a microphone button to start a new one.
+/// shows one listening session at a time: small arrows either side step
+/// through them, the page's date line says when and where, and a small
+/// microphone button at the top right starts a new one.
 class PlateView extends StatefulWidget {
   const PlateView({super.key, required this.app, required this.openTab});
 
@@ -30,14 +31,15 @@ class _PlateViewState extends State<PlateView> {
   late String _station;
   Timer? _refreshSoon;
   String _livePushed = '';
+  String _sessionPushed = '';
 
   AppState get app => widget.app;
   Settings get _s => app.settings;
 
-  // Listen here: the page's period buttons and date line give way to the
-  // session bar, and period=all lets the session decide what is drawn.
+  // Listen here: the page's period buttons give way to sessions, and
+  // period=all lets the session decide what is drawn.
   Uri get _url => Uri.parse(_s.mode == AppMode.listen
-      ? '${app.server.origin}/?period=all&hide=periods,date'
+      ? '${app.server.origin}/?period=all&hide=periods'
       : '${app.server.origin}/');
 
   @override
@@ -50,12 +52,15 @@ class _PlateViewState extends State<PlateView> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(NavigationDelegate(onPageFinished: (_) {
         _livePushed = '';
+        _sessionPushed = '';
         _pushLive();
+        _pushSession();
       }))
       ..loadRequest(_url);
     _s.addListener(_settingsChanged);
     app.store.addListener(_storeChanged);
     app.engine.addListener(_pushLive);
+    app.engine.addListener(_pushSession);
   }
 
   @override
@@ -64,6 +69,7 @@ class _PlateViewState extends State<PlateView> {
     _s.removeListener(_settingsChanged);
     app.store.removeListener(_storeChanged);
     app.engine.removeListener(_pushLive);
+    app.engine.removeListener(_pushSession);
     super.dispose();
   }
 
@@ -80,6 +86,7 @@ class _PlateViewState extends State<PlateView> {
   // A new detection, or another session picked: ask the page to fetch again.
   // Coalesced, since a burst of detections arrives within one window.
   void _storeChanged() {
+    _pushSession();
     _refreshSoon ??= Timer(const Duration(milliseconds: 500), () {
       _refreshSoon = null;
       _web
@@ -96,6 +103,34 @@ class _PlateViewState extends State<PlateView> {
     _livePushed = js;
     _web
         .runJavaScript('window.birdsongLive&&window.birdsongLive($js)')
+        .catchError((Object _) {});
+  }
+
+  // The session's date, time and place, for the page's date line.
+  String _sessionText() {
+    final store = app.store;
+    final ses = store.selected;
+    if (ses == null) return 'Nothing recorded yet: tap the microphone to start.';
+    final when = ses.live
+        ? 'Listening now, since ${clock(ses.start)}'
+        : span(ses.start, ses.end ?? ses.start);
+    final where = ses.hasPlace
+        ? ', at ${place(ses.lat!, ses.lon!)}'
+        : ses.live
+            ? ''
+            : ', place unknown';
+    final n = store.sessions.length;
+    final which = n > 1 ? ' Session ${store.selectedIndex + 1} of $n.' : '';
+    return '$when$where.$which';
+  }
+
+  void _pushSession() {
+    if (_s.mode != AppMode.listen) return;
+    final js = jsonEncode(_sessionText());
+    if (js == _sessionPushed) return;
+    _sessionPushed = js;
+    _web
+        .runJavaScript('window.birdsongSession&&window.birdsongSession($js)')
         .catchError((Object _) {});
   }
 
@@ -122,38 +157,53 @@ class _PlateViewState extends State<PlateView> {
       listenable: Listenable.merge([_s, app.store, app.engine]),
       builder: (context, _) {
         final listen = _s.mode == AppMode.listen;
-        return Column(
+        final store = app.store;
+        final i = store.selectedIndex;
+        final n = store.sessions.length;
+        return Stack(
           children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  WebViewWidget(controller: _web),
-                  // Listen here refreshes itself as birds are heard; a station
-                  // plate keeps a reload button, clear of the heading.
-                  if (!listen)
-                    Positioned(
-                      right: 16,
-                      bottom: 16,
-                      child: IconButton.filledTonal(
-                        tooltip: 'Reload the plate',
-                        icon: const Icon(Icons.refresh),
-                        onPressed: () => _web.reload(),
-                      ),
-                    ),
-                  if (listen)
-                    Positioned(
-                      right: 16,
-                      bottom: 16,
-                      child: _MicButton(
-                        listening: app.engine.running,
-                        busy: app.engine.starting,
-                        onPressed: _toggleListening,
-                      ),
-                    ),
-                ],
+            WebViewWidget(controller: _web),
+            // A station plate keeps a reload button; Listen here refreshes
+            // itself as birds are heard.
+            if (!listen)
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: IconButton.filledTonal(
+                  tooltip: 'Reload the plate',
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () => _web.reload(),
+                ),
               ),
-            ),
-            if (listen) _SessionBar(app: app),
+            if (listen) ...[
+              Positioned(
+                right: 8,
+                top: 8,
+                child: _MicButton(
+                  listening: app.engine.running,
+                  busy: app.engine.starting,
+                  onPressed: _toggleListening,
+                ),
+              ),
+              if (n > 1) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _Arrow(
+                    icon: Icons.chevron_left,
+                    tooltip: 'Earlier session',
+                    onPressed: i > 0 ? () => store.step(-1) : null,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _Arrow(
+                    icon: Icons.chevron_right,
+                    tooltip: 'Later session',
+                    onPressed: i >= 0 && i < n - 1 ? () => store.step(1) : null,
+                  ),
+                ),
+              ],
+            ],
           ],
         );
       },
@@ -161,76 +211,23 @@ class _PlateViewState extends State<PlateView> {
   }
 }
 
-/// ‹ date and time, species, place ›
-class _SessionBar extends StatelessWidget {
-  const _SessionBar({required this.app});
+/// A small arrow at the edge of the plate; hidden at the first or last session.
+class _Arrow extends StatelessWidget {
+  const _Arrow({required this.icon, required this.tooltip, required this.onPressed});
 
-  final AppState app;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final store = app.store;
-    final ses = store.selected;
-    final i = store.selectedIndex;
-    final n = store.sessions.length;
-
-    String title;
-    String detail;
-    if (ses == null) {
-      title = 'Nothing recorded yet';
-      detail = 'Tap the microphone to start listening.';
-    } else {
-      final heard = store.forPlate(app.settings.plateModel, session: ses);
-      final species = heard.map((d) => d.sci).toSet().length;
-      final end = ses.end ?? DateTime.now();
-      title = ses.live ? 'Listening now, since ${clock(ses.start)}' : span(ses.start, end);
-      final where = ses.hasPlace
-          ? place(ses.lat!, ses.lon!)
-          : ses.live
-              ? (app.engine.locationNote ?? 'Finding the location…')
-              : 'No location';
-      detail = '${species == 0 ? 'Nothing heard' : species == 1 ? '1 species' : '$species species'}'
-          ' · $where';
-    }
-
-    return Material(
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        child: Row(
-          children: [
-            IconButton(
-              tooltip: 'Earlier session',
-              icon: const Icon(Icons.chevron_left),
-              onPressed: i > 0 ? () => store.step(-1) : null,
-            ),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(title,
-                      style: theme.textTheme.titleSmall,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  Text(
-                      n > 1 ? '$detail · ${i + 1} of $n' : detail,
-                      style: theme.textTheme.bodySmall,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: 'Later session',
-              icon: const Icon(Icons.chevron_right),
-              onPressed: i >= 0 && i < n - 1 ? () => store.step(1) : null,
-            ),
-          ],
-        ),
-      ),
+    if (onPressed == null) return const SizedBox.shrink();
+    return IconButton(
+      tooltip: tooltip,
+      iconSize: 28,
+      color: Theme.of(context).colorScheme.primary,
+      icon: Icon(icon),
+      onPressed: onPressed,
     );
   }
 }
@@ -274,10 +271,10 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     final red = Theme.of(context).colorScheme.primary;
-    const size = 64.0;
+    const size = 40.0;
     return SizedBox(
-      width: size + 28,
-      height: size + 28,
+      width: size + 16,
+      height: size + 16,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -285,8 +282,8 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
             AnimatedBuilder(
               animation: _pulse,
               builder: (context, _) => Container(
-                width: size + 28 * _pulse.value,
-                height: size + 28 * _pulse.value,
+                width: size + 16 * _pulse.value,
+                height: size + 16 * _pulse.value,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: red.withValues(alpha: 0.35 * (1 - _pulse.value)),
@@ -299,7 +296,7 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
             child: Material(
               color: red,
               shape: const CircleBorder(),
-              elevation: 3,
+              elevation: 1,
               child: InkWell(
                 customBorder: const CircleBorder(),
                 onTap: widget.busy ? null : widget.onPressed,
@@ -308,11 +305,11 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
                   height: size,
                   child: widget.busy
                       ? const Padding(
-                          padding: EdgeInsets.all(20),
-                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                          padding: EdgeInsets.all(11),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
                       : Icon(widget.listening ? Icons.stop_rounded : Icons.mic,
-                          color: Colors.white, size: 32),
+                          color: Colors.white, size: 22),
                 ),
               ),
             ),

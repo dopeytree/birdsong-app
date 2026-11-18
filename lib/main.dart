@@ -3,12 +3,9 @@ import 'package:flutter/material.dart';
 import 'app_state.dart';
 import 'ui/home_shell.dart';
 
-// The plate's own colours (html/index.html :root).
-const paper = Color(0xFFEEE5CE);
-const paperDeep = Color(0xFFE3D7B8);
+const paper = Color(0xFFEFE9D8);
 const ink = Color(0xFF2A241C);
-const sepia = Color(0xFF6B5338);
-const madder = Color(0xFF8C3B2A);
+const madder = Color(0xFF9C3B2E);
 
 // The plate's typefaces: IM Fell English for text, its small caps for
 // headings, as the page uses them.
@@ -22,14 +19,9 @@ Future<void> main() async {
 }
 
 ThemeData birdsongTheme() {
-  final scheme = ColorScheme.fromSeed(
-    seedColor: madder,
-    primary: madder,
-    surface: paper,
-    onSurface: ink,
-  );
+  final scheme = ColorScheme.fromSeed(seedColor: madder, surface: paper);
   final base = ThemeData(colorScheme: scheme, useMaterial3: true).textTheme
-      .apply(fontFamily: serif, bodyColor: ink, displayColor: ink);
+      .apply(fontFamily: serif);
   // IM Fell has one weight; let it stand rather than be faked bold.
   TextStyle? heading(TextStyle? t, double spacing) =>
       t?.copyWith(fontFamily: caps, fontWeight: FontWeight.w400, letterSpacing: spacing);
@@ -46,7 +38,7 @@ ThemeData birdsongTheme() {
     titleSmall: heading(base.titleSmall, 0.5),
     bodyLarge: base.bodyLarge?.copyWith(fontSize: 17),
     bodyMedium: base.bodyMedium?.copyWith(fontSize: 16),
-    bodySmall: base.bodySmall?.copyWith(fontSize: 13.5, color: sepia),
+    bodySmall: base.bodySmall?.copyWith(fontSize: 13.5),
     labelLarge: plain(base.labelLarge)?.copyWith(fontSize: 15.5),
     labelMedium: plain(base.labelMedium),
     labelSmall: plain(base.labelSmall),
@@ -57,13 +49,6 @@ ThemeData birdsongTheme() {
     fontFamily: serif,
     textTheme: text,
     scaffoldBackgroundColor: paper,
-    cardTheme: const CardThemeData(color: paperDeep, elevation: 0),
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: paperDeep,
-      labelTextStyle: WidgetStatePropertyAll(
-          const TextStyle(fontFamily: serif, fontSize: 13, color: ink)),
-    ),
-    dividerTheme: const DividerThemeData(color: Color(0xFFBCAB86)),
   );
 }
 

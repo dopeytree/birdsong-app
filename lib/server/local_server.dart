@@ -212,6 +212,9 @@ class LocalServer {
   static const _headExtra = '<script>try{localStorage.removeItem("birdplate.server");'
       'localStorage.removeItem("birdplate.station")}catch(e){}</script>'
       '<style>#stationOpts,#cardOpts{display:none}'
+      // No plate number in the app; room on the right for the microphone.
+      '#pl{display:none}#plateno{padding-right:3.4rem}'
+
       // A creature being heard right now glows, and the dot on it (over its
       // centre, or beneath it) breathes out a ring, in the plate's madder.
       '@keyframes bsGlow{0%,100%{filter:drop-shadow(0 0 0 rgba(140,59,42,0))}'
@@ -226,14 +229,23 @@ class LocalServer {
 
   // window.birdsongLive(["Turdus merula", ...]) marks the creatures being
   // heard; the app calls it after every window it analyses.
+  // window.birdsongSession(text) puts the listening session's date, time and
+  // place where the page's date line is; the page's own redraws keep it.
+  // The plate's own Settings, which in the app only holds what to show, is
+  // called Display here, so it isn't confused with the app's Settings.
   static const _bodyExtra = '<script>(function(){var s=document.getElementById("stationOpts"),'
       'o=document.getElementById("showOpts");if(s)s.open=false;if(o)o.open=true;'
+      'var b=document.getElementById("openSettings");if(b)b.textContent="Display";'
+      'var h=document.querySelector("#settings h3");if(h)h.textContent="Display";'
       'var live=new Set();window.birdsongLive=function(list){live=new Set(list||[]);mark();};'
       'function mark(){try{for(const [sci,f] of figures){if(f&&f.button)'
       'f.button.classList.toggle("live",live.has(sci));}}catch(e){}}'
-      // the plate redraws on its own too; keep the marks on through that
       'new MutationObserver(function(){if(live.size)mark();})'
       '.observe(document.getElementById("plate")||document.body,{childList:true});'
+      'var ses=null;window.birdsongSession=function(x){ses=x;showSession();};'
+      'function showSession(){var d=document.getElementById("subDate");'
+      'if(d&&ses)d.textContent=ses+" ";}'
+      'try{var rh=renderHeading;renderHeading=function(){rh();showSession();};}catch(e){}'
       '})();</script>';
 
   String? _pageHtml;
