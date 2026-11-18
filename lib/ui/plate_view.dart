@@ -44,8 +44,8 @@ class _PlateViewState extends State<PlateView> {
   bool _popup = false;
   Timer? _popupBack;
 
-  /// The middle of the page's collage, top to bottom, in logical pixels, so
-  /// the arrows sit level with it rather than over the index below.
+  /// Where the page's "Index of species" line is, top to bottom, in logical
+  /// pixels: the arrows sit on it, clear of the birds and the names.
   double? _plateMid;
 
   final _shareKey = GlobalKey();
@@ -199,7 +199,7 @@ class _PlateViewState extends State<PlateView> {
   double _arrowTop(BuildContext context) =>
       (_plateMid ?? MediaQuery.sizeOf(context).height / 2) - 24;
 
-  // Hidden while the collage is scrolled out of view.
+  // Hidden while that line is scrolled out of view.
   bool _arrowsShown(BuildContext context) {
     final mid = _plateMid;
     return mid == null || (mid > 24 && mid < MediaQuery.sizeOf(context).height - 24);

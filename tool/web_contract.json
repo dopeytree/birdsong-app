@@ -168,6 +168,10 @@
     {
       "find": "--paper:#eee5ce",
       "used_by": "main.dart: app paper colour matches the page"
+    },
+    {
+      "find": "<h2>Index of species</h2>\n    <ol id=\"index\">",
+      "used_by": "local_server.dart: the app's session arrows sit on this line"
     }
   ],
   "endpoints": [

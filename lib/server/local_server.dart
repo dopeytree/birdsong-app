@@ -268,9 +268,12 @@ class LocalServer {
       'try{window.BirdsongHost&&BirdsongHost.postMessage(open?"popup-open":"popup-closed");}catch(e){}}'
       'document.querySelectorAll("dialog").forEach(function(d){'
       'new MutationObserver(popups).observe(d,{attributes:true,attributeFilter:["open"]});});'
-      // Where the collage's middle is on screen, so the app's arrows sit
-      // level with it.
-      'var lastMid=null;function plateMid(){var p=document.getElementById("plate");if(!p)return;'
+      // Where the "Index of species" line is on screen, so the app's arrows
+      // sit on it, clear of the birds and the names; the collage's middle
+      // when the index is hidden.
+      'var lastMid=null;function plateMid(){var ix=document.getElementById("index"),'
+      'h=ix&&ix.previousElementSibling&&ix.previousElementSibling.tagName==="H2"?ix.previousElementSibling:null,'
+      'p=h&&h.getBoundingClientRect().height?h:document.getElementById("plate");if(!p)return;'
       'var r=p.getBoundingClientRect();if(!r.height)return;var m=Math.round(r.top+r.height/2);'
       'if(m===lastMid)return;lastMid=m;'
       'try{window.BirdsongHost&&BirdsongHost.postMessage("plate:"+m);}catch(e){}}'
