@@ -39,6 +39,7 @@ class _PlateViewState extends State<PlateView> {
   /// One of the page's own pop-ups (a creature's card, its dialog) is open:
   /// the app's buttons and arrows step aside.
   bool _popup = false;
+  Timer? _popupBack;
 
   AppState get app => widget.app;
   Settings get _s => app.settings;
@@ -58,8 +59,16 @@ class _PlateViewState extends State<PlateView> {
     _web = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel('BirdsongHost', onMessageReceived: (m) {
-        final open = m.message == 'popup-open';
-        if (open != _popup && mounted) setState(() => _popup = open);
+        _popupBack?.cancel();
+        if (m.message == 'popup-open') {
+          if (!_popup && mounted) setState(() => _popup = true);
+        } else if (_popup) {
+          // Back a moment later: the page's Close sits where the menu button
+          // is, and the same click mustn't land on it too.
+          _popupBack = Timer(const Duration(milliseconds: 400), () {
+            if (mounted) setState(() => _popup = false);
+          });
+        }
       })
       ..setNavigationDelegate(NavigationDelegate(onPageFinished: (_) {
         if (_popup) setState(() => _popup = false);
@@ -80,6 +89,7 @@ class _PlateViewState extends State<PlateView> {
   @override
   void dispose() {
     app.page = null;
+    _popupBack?.cancel();
     _refreshSoon?.cancel();
     _s.removeListener(_settingsChanged);
     app.store.removeListener(_storeChanged);
