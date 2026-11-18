@@ -1,61 +1,33 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
-import 'listen_screen.dart';
-import 'models_screen.dart';
 import 'onboarding_screen.dart';
 import 'plate_view.dart';
 import 'settings_screen.dart';
 
-class HomeShell extends StatefulWidget {
+/// The plate fills the app; everything else is under its menu button.
+class HomeShell extends StatelessWidget {
   const HomeShell({super.key, required this.app});
 
   final AppState app;
 
-  @override
-  State<HomeShell> createState() => _HomeShellState();
-}
-
-class _HomeShellState extends State<HomeShell> {
-  int _tab = 0;
+  void _openSettings(BuildContext context) => Navigator.of(context)
+      .push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(app: app)));
 
   @override
   Widget build(BuildContext context) {
-    final app = widget.app;
     return ListenableBuilder(
       listenable: app.settings,
       builder: (context, _) {
         if (!app.settings.onboarded) {
-          return OnboardingScreen(app: app, onDone: (tab) => setState(() => _tab = tab));
+          return OnboardingScreen(app: app, onDone: (_) {});
         }
-        return _shell(app);
+        return Scaffold(
+          body: SafeArea(
+            child: PlateView(app: app, openSettings: () => _openSettings(context)),
+          ),
+        );
       },
-    );
-  }
-
-  Widget _shell(AppState app) {
-    return Scaffold(
-      body: SafeArea(
-        child: IndexedStack(
-          index: _tab,
-          children: [
-            PlateView(app: app, openTab: (i) => setState(() => _tab = i)),
-            ListenScreen(app: app),
-            ModelsScreen(app: app),
-            SettingsScreen(app: app),
-          ],
-        ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.image_outlined), label: 'Plate'),
-          NavigationDestination(icon: Icon(Icons.hearing), label: 'Listen'),
-          NavigationDestination(icon: Icon(Icons.memory), label: 'Models'),
-          NavigationDestination(icon: Icon(Icons.tune), label: 'Settings'),
-        ],
-      ),
     );
   }
 }

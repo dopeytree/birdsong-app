@@ -13,12 +13,12 @@ import 'format.dart';
 /// through them, the page's date line says when and where, and a small
 /// microphone button at the top right starts a new one.
 class PlateView extends StatefulWidget {
-  const PlateView({super.key, required this.app, required this.openTab});
+  const PlateView({super.key, required this.app, required this.openSettings});
 
   final AppState app;
 
-  /// Switch the app to another tab (2 is Models).
-  final ValueChanged<int> openTab;
+  /// Open Settings (sources, listening, models, data).
+  final VoidCallback openSettings;
 
   @override
   State<PlateView> createState() => _PlateViewState();
@@ -146,7 +146,7 @@ class _PlateViewState extends State<PlateView> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(engine.error!),
       action: noModel
-          ? SnackBarAction(label: 'Models', onPressed: () => widget.openTab(2))
+          ? SnackBarAction(label: 'Models', onPressed: widget.openSettings)
           : null,
     ));
   }
@@ -175,16 +175,28 @@ class _PlateViewState extends State<PlateView> {
                   onPressed: () => _web.reload(),
                 ),
               ),
-            if (listen) ...[
-              Positioned(
-                right: 8,
-                top: 8,
-                child: _MicButton(
-                  listening: app.engine.running,
-                  busy: app.engine.starting,
-                  onPressed: _toggleListening,
-                ),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Settings',
+                    icon: const Icon(Icons.menu),
+                    color: Theme.of(context).colorScheme.primary,
+                    onPressed: widget.openSettings,
+                  ),
+                  if (listen)
+                    _MicButton(
+                      listening: app.engine.running,
+                      busy: app.engine.starting,
+                      onPressed: _toggleListening,
+                    ),
+                ],
               ),
+            ),
+            if (listen) ...[
               if (n > 1) ...[
                 Align(
                   alignment: Alignment.centerLeft,

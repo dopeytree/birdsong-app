@@ -216,7 +216,7 @@ class LocalServer {
       'localStorage.setItem("birdplate.markAt",JSON.stringify("below"))}catch(e){}</script>'
       '<style>#stationOpts,#cardOpts{display:none}'
       // No plate number in the app; room on the right for the microphone.
-      '#pl{display:none}#plateno{padding-right:3.4rem}'
+      '#pl{display:none}#plateno{padding-right:6.6rem}'
 
       // A creature being heard right now glows, and the dot on it (over its
       // centre, or beneath it) breathes out a ring, in the plate's madder.

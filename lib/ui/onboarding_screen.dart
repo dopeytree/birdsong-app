@@ -7,7 +7,7 @@ import 'package:record/record.dart';
 import '../app_state.dart';
 import '../engine/model_catalog.dart';
 import '../settings.dart';
-import 'models_screen.dart' show megabytes;
+import 'format.dart' show megabytes;
 
 /// First launch: choose where birds come from, fetch a model, switch on
 /// Core ML, allow the microphone, and start.

@@ -56,25 +56,15 @@ flutter test
 0. First launch walks you through it: choose *This device listens* or
    *I have a station*, download a model, switch on Core ML, allow the
    microphone. Settings > *Show the welcome screens again* repeats it.
-1. **Models** tab: download one or more models. Start with
-   *BirdNET+ V3.0 Global 10K, FP16* (67 MB), the build BirdNET Live ships.
-2. Tick **Listen** on each model to run. Every window goes through every
-   ticked model, so you can compare speed and results. Choose which model the
-   plate draws (**On the plate**), or all of them.
-3. **Listen** tab: Start listening. Each model card shows the time per window
-   and its top five species. Detections above the threshold are saved, with a
-   recording and a spectrogram.
-4. **Plate** tab: the familiar plate, cards, recordings and spectrograms.
-   In *Listen here* the plate shows one listening session at a time:
-   the date line under the title gives its date, time and place, and the
-   small arrows at either side step to earlier and later sessions. The
-   small microphone at the top right starts and stops a session. While
-   listening the plate fetches each new detection as it arrives, and a
-   creature being heard right now glows, its dot breathing out a ring. The
-   plate's own settings link is called *Display* in the app.
-5. **Settings**: switch between *Station* and *Listen here*, set a
-   BirdNET-Go address or a BirdWeather station, the threshold, how often to
-   analyse, the location filter, and Core ML (experimental) on Apple devices.
+1. The app is the plate. Top right: the menu button opens **Settings**,
+   and in *Listen here & now* the microphone starts and stops a session.
+2. **Settings**, in sections: where birds come from; *Listening* (live
+   scores per model while listening, threshold, how often, Core ML);
+   *Models* (download, tick to listen, which one the plate draws);
+   *Location filter*; *Data*.
+3. On the plate the date line gives the session's time and place; the
+   small arrows at either side step between sessions. A creature being
+   heard right now glows, its dot breathing out a ring.
 
 On iPhone the app keeps listening with the screen locked (the orange
 microphone dot shows).

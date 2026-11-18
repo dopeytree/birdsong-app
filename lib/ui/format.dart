@@ -25,3 +25,6 @@ String span(DateTime from, DateTime to) => sameDay(from, to)
 String place(double lat, double lon) =>
     '${lat.abs().toStringAsFixed(3)}° ${lat >= 0 ? 'N' : 'S'}, '
     '${lon.abs().toStringAsFixed(3)}° ${lon >= 0 ? 'E' : 'W'}';
+
+String megabytes(int bytes) =>
+    bytes <= 0 ? 'size unknown' : '${(bytes / 1048576).toStringAsFixed(0)} MB';
