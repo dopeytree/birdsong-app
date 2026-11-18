@@ -1,0 +1,36 @@
+name: birdsong_app
+description: "Birdsong for iPhone, iPad, Mac and Android: the plate of 1800s bird illustrations, fed by your BirdNET-Go station or by BirdNET running on the device. Test build."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.7.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ONNX Runtime for the bird models. Pinned to the release BirdNET Live ships
+  # (it carries the session config key that turns off the Arm KleidiAI kernels,
+  # see lib/engine/classifier.dart).
+  flutter_onnxruntime: 1.9.0
+
+  # Microphone as a stream of 16-bit PCM.
+  record: ^7.1.2
+
+  # The plate itself: Birdsong's own index.html in a native web view.
+  webview_flutter: ^4.13.0
+
+  # Where models, detections and recordings live.
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/web/
+    - assets/web/fonts/

@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""Apply Birdsong's platform settings to the projects `flutter create` made.
+
+Safe to run again: every change checks before it writes.
+
+iOS and macOS: microphone and local-network wording, background audio (iOS),
+App Transport Security for the page served on 127.0.0.1 and plain-HTTP
+BirdNET-Go stations, sandbox entitlements (macOS), and the minimum OS that
+ONNX Runtime needs (iOS 16, macOS 14).
+
+Android: microphone and internet permissions, plain HTTP to the local page
+and LAN stations, the ONNX Runtime ProGuard rule, minSdk 24.
+
+TEST BUILD: NSAllowsArbitraryLoads and cleartext everywhere are for testing
+against LAN stations; tighten both before a store release.
+"""
+import plistlib
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+MIC = ("Birdsong listens for birds and identifies them on this device. "
+       "Audio never leaves it.")
+LAN = "Birdsong reads detections from your BirdNET-Go station on your home network."
+
+ATS = {"NSAllowsArbitraryLoads": True, "NSAllowsLocalNetworking": True}
+
+
+def say(msg):
+    print(f"  {msg}")
+
+
+def patch_plist(path, changes):
+    if not path.exists():
+        say(f"skip {path.relative_to(ROOT)} (not there)")
+        return
+    with path.open("rb") as f:
+        data = plistlib.load(f)
+    before = dict(data)
+    for k, v in changes.items():
+        data[k] = v
+    if data != before:
+        with path.open("wb") as f:
+            plistlib.dump(data, f)
+        say(f"updated {path.relative_to(ROOT)}")
+
+
+def patch_text(path, pattern, repl, flags=0):
+    if not path.exists():
+        return
+    text = path.read_text()
+    new, n = re.subn(pattern, repl, text, flags=flags)
+    if new != text:
+        path.write_text(new)
+        say(f"updated {path.relative_to(ROOT)} ({n} change{'s' if n != 1 else ''})")
+
+
+def ios():
+    patch_plist(ROOT / "ios/Runner/Info.plist", {
+        "CFBundleDisplayName": "Birdsong",
+        "NSMicrophoneUsageDescription": MIC,
+        "NSLocalNetworkUsageDescription": LAN,
+        "UIBackgroundModes": ["audio"],
+        "NSAppTransportSecurity": ATS,
+    })
+    podfile = ROOT / "ios/Podfile"
+    patch_text(podfile, r"^#?\s*platform :ios, '[\d.]+'", "platform :ios, '16.0'", re.M)
+    patch_text(podfile, r"^(\s*)use_frameworks!\s*$", r"\1use_frameworks! :linkage => :static", re.M)
+    patch_text(ROOT / "ios/Runner.xcodeproj/project.pbxproj",
+               r"IPHONEOS_DEPLOYMENT_TARGET = [\d.]+;", "IPHONEOS_DEPLOYMENT_TARGET = 16.0;")
+
+
+def macos():
+    patch_plist(ROOT / "macos/Runner/Info.plist", {
+        "NSMicrophoneUsageDescription": MIC,
+        "NSAppTransportSecurity": ATS,
+    })
+    ent = {
+        "com.apple.security.app-sandbox": True,
+        "com.apple.security.network.client": True,
+        "com.apple.security.network.server": True,
+        "com.apple.security.device.audio-input": True,
+    }
+    for name in ("DebugProfile.entitlements", "Release.entitlements"):
+        patch_plist(ROOT / "macos/Runner" / name, ent)
+    patch_text(ROOT / "macos/Podfile", r"^#?\s*platform :osx, '[\d.]+'", "platform :osx, '14.0'", re.M)
+    patch_text(ROOT / "macos/Runner.xcodeproj/project.pbxproj",
+               r"MACOSX_DEPLOYMENT_TARGET = [\d.]+;", "MACOSX_DEPLOYMENT_TARGET = 14.0;")
+
+
+def android():
+    manifest = ROOT / "android/app/src/main/AndroidManifest.xml"
+    if manifest.exists():
+        text = manifest.read_text()
+        perms = ["android.permission.RECORD_AUDIO", "android.permission.INTERNET"]
+        add = "".join(f'    <uses-permission android:name="{p}"/>\n'
+                      for p in perms if p not in text)
+        if add:
+            text = text.replace("<application", add + "    <application", 1)
+        if "usesCleartextTraffic" not in text:
+            text = text.replace("<application", '<application\n        android:usesCleartextTraffic="true"', 1)
+        if text != manifest.read_text():
+            manifest.write_text(text)
+            say("updated android/app/src/main/AndroidManifest.xml")
+    rules = ROOT / "android/app/proguard-rules.pro"
+    rule = "-keep class ai.onnxruntime.** { *; }"
+    if not rules.exists() or rule not in rules.read_text():
+        if rules.parent.exists():
+            with rules.open("a") as f:
+                f.write(rule + "\n")
+            say("updated android/app/proguard-rules.pro")
+    for gradle in (ROOT / "android/app/build.gradle.kts", ROOT / "android/app/build.gradle"):
+        patch_text(gradle, r"minSdk(Version)?\s*=?\s*flutter\.minSdkVersion", r"minSdk = 24")
+
+
+def main():
+    print("Patching platform projects")
+    ios()
+    macos()
+    android()
+    print("Done")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

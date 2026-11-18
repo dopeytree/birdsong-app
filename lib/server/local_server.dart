@@ -1,0 +1,263 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
+
+import '../settings.dart';
+import '../store/detection_store.dart';
+import 'local_api.dart' as api;
+
+/// A small web server on 127.0.0.1 doing nginx's job from the Docker image:
+/// it serves the page and its fonts, writes source.json, and answers /api
+/// either by forwarding to BirdNET-Go (Station) or from this device's own
+/// detections (Listen here).
+class LocalServer {
+  LocalServer(this.settings, this.store, {this.plateModel});
+
+  final Settings settings;
+  final DetectionStore store;
+
+  /// Which model's detections the plate shows; read on every request.
+  final String Function()? plateModel;
+
+  HttpServer? _server;
+  final _client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+  final Map<String, Uint8List> _assets = {};
+
+  int get port => _server?.port ?? 0;
+  String get origin => 'http://127.0.0.1:$port';
+
+  Future<void> start() async {
+    _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    _server!.listen((req) {
+      _handle(req).catchError((Object e) {
+        debugPrint('server: ${req.uri} failed: $e');
+        try {
+          req.response.statusCode = HttpStatus.internalServerError;
+          req.response.close();
+        } catch (_) {}
+      });
+    });
+    debugPrint('Birdsong page at $origin');
+  }
+
+  Future<void> close() async {
+    await _server?.close(force: true);
+    _client.close(force: true);
+  }
+
+  Future<void> _handle(HttpRequest req) async {
+    final res = req.response;
+    final path = req.uri.path;
+    res.headers.set('Cache-Control', 'no-store');
+
+    if (path == '/' || path == '/index.html') {
+      return _asset(res, 'assets/web/index.html', 'text/html; charset=utf-8');
+    }
+    if (path.startsWith('/fonts/')) {
+      final name = path.substring('/fonts/'.length);
+      if (name.contains('..') || name.contains('/')) return _notFound(res);
+      return _asset(res, 'assets/web/fonts/$name',
+          name.endsWith('.ttf') ? 'font/ttf' : 'text/plain; charset=utf-8');
+    }
+    if (path == '/source.json') return _json(res, _source());
+    if (path == '/healthz') {
+      res.write('ok\n');
+      return res.close();
+    }
+    if (path == '/graphql') return _birdweather(req);
+    if (path.startsWith('/api/')) {
+      if (settings.mode == AppMode.station) return _forward(req);
+      return _local(req);
+    }
+    // /art/ and anything else: not here. The page then fetches the
+    // Fugleramme artwork from GitHub, as it does without a local copy.
+    return _notFound(res);
+  }
+
+  Map<String, dynamic> _source() {
+    if (settings.mode == AppMode.station && settings.stationDigits.isNotEmpty) {
+      return {
+        'birdweatherStation': settings.stationDigits,
+        'proxy': true,
+        'birdnet': false,
+      };
+    }
+    if (settings.mode == AppMode.station) {
+      return {'birdnet': settings.birdnetBase.isNotEmpty};
+    }
+    return {'birdnet': true};
+  }
+
+  // ---- Listen here: answer from this device's detections -----------------
+
+  Future<void> _local(HttpRequest req) async {
+    final res = req.response;
+    final q = req.uri.queryParameters;
+    final path = req.uri.path;
+    final all = store.forPlate(plateModel?.call() ?? 'all');
+
+    if (path.startsWith('/api/v2/analytics/species/daily')) {
+      return _json(res, api.speciesDaily(all, q['date']));
+    }
+    if (path.startsWith('/api/v2/analytics/species/summary')) {
+      return _json(res, api.speciesSummary(all, q['start_date'], q['end_date']));
+    }
+    if (path.startsWith('/api/v2/analytics/time/distribution/hourly')) {
+      return _json(res, api.hourly(all, q['species'] ?? '', q['start_date'], q['end_date']));
+    }
+    if (path.startsWith('/api/v2/analytics/time/daily')) {
+      return _json(res, api.daily(all, q['species'] ?? '', q['start_date'], q['end_date']));
+    }
+    if (path.startsWith('/api/v2/detections')) {
+      final n = int.tryParse(q['numResults'] ?? '') ?? 5;
+      return _json(res, api.detections(all, q['species'] ?? '', n));
+    }
+    if (path.startsWith('/api/v2/species')) {
+      // No taxonomy on the device yet: the card leaves family and order off.
+      return _json(res, {'scientific_name': q['scientific_name'] ?? ''});
+    }
+    if (path.startsWith('/api/v2/audio/')) {
+      final id = int.tryParse(path.split('/').last);
+      final f = id == null ? null : store.clipFile(id);
+      if (f == null || !await f.exists()) return _notFound(res);
+      return _file(req, f, 'audio/wav');
+    }
+    if (path.startsWith('/api/v2/spectrogram/')) {
+      final id = int.tryParse(path.split('/').last);
+      final f = id == null ? null : store.spectrogramFile(id);
+      if (f == null || !await f.exists()) return _notFound(res);
+      return _file(req, f, 'image/bmp');
+    }
+    return _json(res, <Object>[]);
+  }
+
+  // ---- Station: forward to BirdNET-Go ------------------------------------
+
+  Future<void> _forward(HttpRequest req) async {
+    final res = req.response;
+    final base = settings.birdnetBase;
+    if (base.isEmpty) {
+      res.statusCode = HttpStatus.badGateway;
+      return _json(res, {'error': 'No BirdNET-Go address set. Add one in Settings.'});
+    }
+    final target = Uri.parse('$base${req.uri.path}${req.uri.hasQuery ? '?${req.uri.query}' : ''}');
+    try {
+      final out = await _client.openUrl(req.method, target);
+      out.followRedirects = false;
+      final range = req.headers.value(HttpHeaders.rangeHeader);
+      if (range != null) out.headers.set(HttpHeaders.rangeHeader, range);
+      out.headers.set(HttpHeaders.acceptHeader, req.headers.value(HttpHeaders.acceptHeader) ?? '*/*');
+      if (req.method == 'POST' || req.method == 'PUT') {
+        await out.addStream(req);
+      }
+      final back = await out.close();
+      res.statusCode = back.statusCode;
+      for (final h in [
+        HttpHeaders.contentTypeHeader,
+        HttpHeaders.contentLengthHeader,
+        HttpHeaders.contentRangeHeader,
+        HttpHeaders.acceptRangesHeader,
+      ]) {
+        final v = back.headers.value(h);
+        if (v != null) res.headers.set(h, v);
+      }
+      await res.addStream(back);
+      await res.close();
+    } catch (e) {
+      res.statusCode = HttpStatus.badGateway;
+      res.headers.contentType = ContentType.json;
+      res.write(jsonEncode({'error': 'BirdNET-Go at $base did not answer: $e'}));
+      await res.close();
+    }
+  }
+
+  // ---- Station: BirdWeather's public GraphQL ------------------------------
+
+  Future<void> _birdweather(HttpRequest req) async {
+    final res = req.response;
+    if (req.method != 'POST') {
+      res.statusCode = HttpStatus.methodNotAllowed;
+      return res.close();
+    }
+    try {
+      final body = await req.fold<List<int>>(<int>[], (a, b) => a..addAll(b));
+      final out = await _client.postUrl(Uri.parse('https://app.birdweather.com/graphql'));
+      out.headers.contentType = ContentType.json;
+      out.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      out.add(body);
+      final back = await out.close();
+      res.statusCode = back.statusCode;
+      res.headers.contentType = ContentType.json;
+      await res.addStream(back);
+      await res.close();
+    } catch (e) {
+      res.statusCode = HttpStatus.badGateway;
+      return _json(res, {'errors': [{'message': 'BirdWeather did not answer: $e'}]});
+    }
+  }
+
+  // ---- helpers ------------------------------------------------------------
+
+  Future<void> _asset(HttpResponse res, String key, String type) async {
+    var bytes = _assets[key];
+    if (bytes == null) {
+      try {
+        final data = await rootBundle.load(key);
+        bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        _assets[key] = bytes;
+      } catch (_) {
+        return _notFound(res);
+      }
+    }
+    res.headers.set(HttpHeaders.contentTypeHeader, type);
+    res.add(bytes);
+    await res.close();
+  }
+
+  Future<void> _json(HttpResponse res, Object body) async {
+    res.headers.contentType = ContentType.json;
+    res.write(jsonEncode(body));
+    await res.close();
+  }
+
+  Future<void> _notFound(HttpResponse res) async {
+    res.statusCode = HttpStatus.notFound;
+    res.write('not here\n');
+    await res.close();
+  }
+
+  /// A file, honouring a Range request: Safari's audio player asks for one.
+  Future<void> _file(HttpRequest req, File f, String type) async {
+    final res = req.response;
+    final len = await f.length();
+    res.headers.set(HttpHeaders.contentTypeHeader, type);
+    res.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+    final range = req.headers.value(HttpHeaders.rangeHeader);
+    final m = range == null ? null : RegExp(r'bytes=(\d*)-(\d*)').firstMatch(range);
+    if (m != null) {
+      var start = int.tryParse(m.group(1) ?? '') ?? 0;
+      var end = int.tryParse(m.group(2) ?? '') ?? (len - 1);
+      if ((m.group(1) ?? '').isEmpty && (m.group(2) ?? '').isNotEmpty) {
+        start = len - end; // suffix range: the last N bytes
+        end = len - 1;
+      }
+      if (end >= len) end = len - 1;
+      if (start < 0 || start > end) {
+        res.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+        res.headers.set(HttpHeaders.contentRangeHeader, 'bytes */$len');
+        return res.close();
+      }
+      res.statusCode = HttpStatus.partialContent;
+      res.headers.set(HttpHeaders.contentRangeHeader, 'bytes $start-$end/$len');
+      res.headers.contentLength = end - start + 1;
+      await res.addStream(f.openRead(start, end + 1));
+      return res.close();
+    }
+    res.headers.contentLength = len;
+    await res.addStream(f.openRead());
+    await res.close();
+  }
+}

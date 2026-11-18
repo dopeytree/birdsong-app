@@ -1,0 +1,31 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+.vscode/
+
+# Platform build output
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/ephemeral/
+macos/Pods/
+macos/Flutter/ephemeral/
+android/.gradle/
+android/local.properties
+android/app/.cxx/
+**/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Models are downloaded by the app, never committed
+models/
+*.onnx
+
+.DS_Store
