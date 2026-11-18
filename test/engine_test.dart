@@ -8,6 +8,7 @@ import 'package:birdsong_app/server/local_api.dart';
 import 'package:birdsong_app/store/detection_store.dart';
 import 'package:birdsong_app/store/media.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:birdsong_app/ui/format.dart';
 
 void main() {
   group('labels', () {
@@ -151,5 +152,15 @@ void main() {
       expect(old.contains(now), isFalse);
       expect(next.contains(now), isTrue);
     });
+  });
+
+  test('session lengths read as 13m, 1hr32, 2hr', () {
+    expect(lasting(const Duration(seconds: 40)), 'under a minute');
+    expect(lasting(const Duration(minutes: 13)), '13m');
+    expect(lasting(const Duration(minutes: 92)), '1hr32');
+    expect(lasting(const Duration(minutes: 65)), '1hr05');
+    expect(lasting(const Duration(hours: 2)), '2hr');
+    final t = DateTime(2026, 11, 18, 22, 19);
+    expect(span(t, t.add(const Duration(minutes: 13))), endsWith('22:19 for 13m'));
   });
 }

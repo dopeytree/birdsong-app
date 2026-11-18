@@ -1,0 +1,22 @@
+name: plate_share
+description: Snapshot the plate's web view and open the system share sheet (iOS, macOS).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.7.0 <4.0.0'
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      ios:
+        pluginClass: PlateSharePlugin
+        sharedDarwinSource: true
+      macos:
+        pluginClass: PlateSharePlugin
+        sharedDarwinSource: true

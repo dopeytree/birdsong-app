@@ -227,6 +227,7 @@ class LocalServer {
       '#plateno{display:none!important}'
       // The session number after the title: Birdsong #2/3.
       '#bsCount{margin-left:.35em;color:var(--sepia)}#bsCount:empty{display:none}'
+      '#bsPlace:empty{display:none}'
 
       // A creature being heard right now glows, and the dot on it (over its
       // centre, or beneath it) breathes out a ring, in the plate's madder.
@@ -255,9 +256,10 @@ class LocalServer {
       'f.button.classList.toggle("live",live.has(sci));}}catch(e){}}'
       'new MutationObserver(function(){if(live.size)mark();})'
       '.observe(document.getElementById("plate")||document.body,{childList:true});'
-      'var ses=null,num="";window.birdsongSession=function(x,n){ses=x;num=n||"";showSession();};'
+      'var ses=null,num="",where="";window.birdsongSession=function(x,n,w){ses=x;num=n||"";where=w||"";showSession();};'
       'function showSession(){var d=document.getElementById("subDate");'
-      'if(d&&ses)d.textContent=ses+" ";'
+      'if(d&&ses){d.textContent=ses;var w=document.getElementById("bsPlace");'
+      'if(!w){w=document.createElement("span");w.id="bsPlace";d.after(w);}w.textContent=where;}'
       'var h=document.querySelector("header h1");if(h){var c=document.getElementById("bsCount");'
       'if(!c){c=document.createElement("span");c.id="bsCount";h.appendChild(c);}c.textContent=num;}}'
       // Tell the app when one of the page's pop-ups opens or closes, so its
@@ -266,6 +268,15 @@ class LocalServer {
       'try{window.BirdsongHost&&BirdsongHost.postMessage(open?"popup-open":"popup-closed");}catch(e){}}'
       'document.querySelectorAll("dialog").forEach(function(d){'
       'new MutationObserver(popups).observe(d,{attributes:true,attributeFilter:["open"]});});'
+      // Where the collage's middle is on screen, so the app's arrows sit
+      // level with it.
+      'var lastMid=null;function plateMid(){var p=document.getElementById("plate");if(!p)return;'
+      'var r=p.getBoundingClientRect();if(!r.height)return;var m=Math.round(r.top+r.height/2);'
+      'if(m===lastMid)return;lastMid=m;'
+      'try{window.BirdsongHost&&BirdsongHost.postMessage("plate:"+m);}catch(e){}}'
+      'addEventListener("resize",plateMid);addEventListener("scroll",plateMid,{passive:true});'
+      'new ResizeObserver(plateMid).observe(document.getElementById("plate")||document.body);'
+      'setInterval(plateMid,1000);'
       'try{var rh=renderHeading;renderHeading=function(){rh();showSession();};}catch(e){}'
       '})();</script>';
 

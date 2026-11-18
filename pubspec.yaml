@@ -21,6 +21,8 @@ dependencies:
   # The plate itself: Birdsong's own index.html in a native web view.
   webview_flutter: ^4.13.0
   url_launcher: ^6.3.1
+  plate_share:
+    path: packages/plate_share
 
   # Where models, detections and recordings live.
   path_provider: ^2.1.5

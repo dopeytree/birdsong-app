@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:plate_share/plate_share.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../app_state.dart';
@@ -42,6 +44,12 @@ class _PlateViewState extends State<PlateView> {
   bool _popup = false;
   Timer? _popupBack;
 
+  /// The middle of the page's collage, top to bottom, in logical pixels, so
+  /// the arrows sit level with it rather than over the index below.
+  double? _plateMid;
+
+  final _shareKey = GlobalKey();
+
   AppState get app => widget.app;
   Settings get _s => app.settings;
 
@@ -60,6 +68,11 @@ class _PlateViewState extends State<PlateView> {
     _web = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel('BirdsongHost', onMessageReceived: (m) {
+        if (m.message.startsWith('plate:')) {
+          final mid = double.tryParse(m.message.substring(6));
+          if (mid != _plateMid && mounted) setState(() => _plateMid = mid);
+          return;
+        }
         _popupBack?.cancel();
         if (m.message == 'popup-open') {
           if (!_popup && mounted) setState(() => _popup = true);
@@ -140,12 +153,15 @@ class _PlateViewState extends State<PlateView> {
     final when = ses.live
         ? 'Listening now, since ${clock(ses.start)}'
         : span(ses.start, ses.end ?? ses.start);
-    final where = ses.hasPlace
-        ? ', at ${place(ses.lat!, ses.lon!)}'
-        : ses.live
-            ? ''
-            : ', place unknown';
-    return '$when$where.';
+    return '$when.';
+  }
+
+  // Where, on a line of its own under the date.
+  String _placeText() {
+    final ses = app.store.selected;
+    if (ses == null) return '';
+    if (ses.hasPlace) return 'At ${place(ses.lat!, ses.lon!)}.';
+    return ses.live ? '' : 'Place unknown.';
   }
 
   void _pushSession() {
@@ -154,7 +170,7 @@ class _PlateViewState extends State<PlateView> {
     final n = store.sessions.length;
     // Which session, after the title: Birdsong #2/3.
     final count = n > 0 && store.selectedIndex >= 0 ? '#${store.selectedIndex + 1}/$n' : '';
-    final js = '${jsonEncode(_sessionText())},${jsonEncode(count)}';
+    final js = '${jsonEncode(_sessionText())},${jsonEncode(count)},${jsonEncode(_placeText())}';
     if (js == _sessionPushed) return;
     _sessionPushed = js;
     _web
@@ -177,6 +193,49 @@ class _PlateViewState extends State<PlateView> {
           ? SnackBarAction(label: 'Models', onPressed: widget.openSettings)
           : null,
     ));
+  }
+
+  // The arrows' own height is 48.
+  double _arrowTop(BuildContext context) =>
+      (_plateMid ?? MediaQuery.sizeOf(context).height / 2) - 24;
+
+  // Hidden while the collage is scrolled out of view.
+  bool _arrowsShown(BuildContext context) {
+    final mid = _plateMid;
+    return mid == null || (mid > 24 && mid < MediaQuery.sizeOf(context).height - 24);
+  }
+
+  // Noisiest species, then recent ramblings, then no pecking order, round
+  // again: the plate's Size by, a tap away.
+  Future<void> _cycleSize() async {
+    final page = app.page;
+    if (page == null) return;
+    final now = (await page.read())?['sizeBy'];
+    const order = ['calls', 'time', 'equal'];
+    final next = order[(order.indexOf(now is String ? now : 'calls') + 1) % order.length];
+    await page.set('sizeBy', next);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(PageControl.sizeBy[next]!),
+        duration: const Duration(milliseconds: 1200),
+        behavior: SnackBarBehavior.floating,
+        width: 240,
+      ));
+  }
+
+  Future<void> _share() async {
+    final box = _shareKey.currentContext?.findRenderObject() as RenderBox?;
+    final from = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+    var ok = false;
+    try {
+      ok = await PlateShare.share(text: 'Heard with Birdsong', from: from);
+    } catch (_) {}
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't take a picture of the plate.")));
+    }
   }
 
   @override
@@ -217,6 +276,22 @@ class _PlateViewState extends State<PlateView> {
                         onPressed: _toggleListening,
                       ),
                     IconButton(
+                      tooltip: 'Size the birds by…',
+                      icon: const Icon(Icons.autorenew),
+                      color: Theme.of(context).colorScheme.primary,
+                      onPressed: _cycleSize,
+                    ),
+                    if (PlateShare.supported)
+                      IconButton(
+                        key: _shareKey,
+                        tooltip: 'Share the plate',
+                        icon: Icon(Platform.isIOS || Platform.isMacOS
+                            ? Icons.ios_share
+                            : Icons.share),
+                        color: Theme.of(context).colorScheme.primary,
+                        onPressed: _share,
+                      ),
+                    IconButton(
                       tooltip: 'Settings',
                       icon: const Icon(Icons.menu),
                       color: Theme.of(context).colorScheme.primary,
@@ -225,25 +300,25 @@ class _PlateViewState extends State<PlateView> {
                   ],
                 ),
               ),
-            if (listen && !_popup) ...[
-              if (n > 1) ...[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: _Arrow(
-                    icon: Icons.chevron_left,
-                    tooltip: 'Earlier session',
-                    onPressed: i > 0 ? () => store.step(-1) : null,
-                  ),
+            if (listen && !_popup && n > 1 && _arrowsShown(context)) ...[
+              Positioned(
+                left: 0,
+                top: _arrowTop(context),
+                child: _Arrow(
+                  icon: Icons.chevron_left,
+                  tooltip: 'Earlier session',
+                  onPressed: i > 0 ? () => store.step(-1) : null,
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _Arrow(
-                    icon: Icons.chevron_right,
-                    tooltip: 'Later session',
-                    onPressed: i >= 0 && i < n - 1 ? () => store.step(1) : null,
-                  ),
+              ),
+              Positioned(
+                right: 0,
+                top: _arrowTop(context),
+                child: _Arrow(
+                  icon: Icons.chevron_right,
+                  tooltip: 'Later session',
+                  onPressed: i >= 0 && i < n - 1 ? () => store.step(1) : null,
                 ),
-              ],
+              ),
             ],
           ],
         );
