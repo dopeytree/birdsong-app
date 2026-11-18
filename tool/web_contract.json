@@ -1,0 +1,33 @@
+{
+  "about": "What the app relies on inside the Birdsong web page (assets/web/index.html). The app never edits that page: lib/server/local_server.dart adds a little script and CSS when serving it, and lib/server/local_api.dart answers the BirdNET-Go calls it makes. tool/sync_web.py and test/web_contract_test.dart check every new copy of the page against this list. If upstream renames something, change the app's injection (or ask upstream for a proper hook), then update this file.",
+  "hooks": [
+    {"find": "id=\"stationOpts\"", "used_by": "local_server.dart: hidden, closed (no server field in the app)"},
+    {"find": "id=\"cardOpts\"", "used_by": "local_server.dart: hidden"},
+    {"find": "id=\"showOpts\"", "used_by": "local_server.dart: opened"},
+    {"find": "id=\"pl\"", "used_by": "local_server.dart: plate number hidden"},
+    {"find": "id=\"plateno\"", "used_by": "local_server.dart: padded clear of the menu and mic buttons"},
+    {"find": "id=\"openSettings\"", "used_by": "local_server.dart: renamed Display"},
+    {"find": "id=\"settings\"", "used_by": "local_server.dart: its h3 renamed Display"},
+    {"find": "id=\"subDate\"", "used_by": "local_server.dart: session date, time and place"},
+    {"find": "id=\"plate\"", "used_by": "local_server.dart: watched to re-mark live birds"},
+    {"find": "function renderHeading", "used_by": "local_server.dart: wrapped so the session line survives redraws"},
+    {"find": "function refresh", "used_by": "plate_view.dart: refresh(false) after new detections"},
+    {"find": "const figures = new Map", "used_by": "local_server.dart: figures.get(sci).button gets .live"},
+    {"find": "b.className = \"bird\"", "used_by": "local_server.dart: .bird.live glow CSS"},
+    {"find": "localStorage.getItem(\"birdplate.\" + k)", "used_by": "local_server.dart: birdplate.server/station cleared, markAt defaulted"},
+    {"find": "value=\"below\"", "used_by": "local_server.dart: markAt default 'below' in listen mode"},
+    {"find": "params.get(\"period\")", "used_by": "plate_view.dart: ?period=all"},
+    {"find": "[\"hide\", false]", "used_by": "plate_view.dart: ?hide=periods"},
+    {"find": "fetch(\"source.json\"", "used_by": "local_server.dart: /source.json"}
+  ],
+  "endpoints": [
+    "/api/v2/analytics/species/daily",
+    "/api/v2/analytics/species/summary",
+    "/api/v2/analytics/time/daily",
+    "/api/v2/analytics/time/distribution/hourly",
+    "/api/v2/audio/",
+    "/api/v2/detections",
+    "/api/v2/species",
+    "/api/v2/spectrogram/"
+  ]
+}

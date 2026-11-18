@@ -92,6 +92,31 @@ gallery uses (`tphakala/BirdNET-Plus-V3.0`, `tphakala/BirdNET-v3.0-Models`,
 with its authors before a release; "Powered by BirdNET" credit is required
 for BirdNET models.
 
+## Keeping the web page in step
+
+The plate is the Birdsong web page itself (dopeytree/birdsong, `html/`),
+copied unchanged into `assets/web/`. Everything the app does differently is
+added while serving it (`lib/server/local_server.dart`), and listen mode
+answers the page's BirdNET-Go calls itself (`lib/server/local_api.dart`).
+So the page's styles, images, fonts and features come in with a copy, and
+the app's own changes are never redone.
+
+- **Web to app:** double-click `Update web page.command` (or
+  `python3 tool/sync_web.py [--ref v0.43 | --from ~/birdsong]`). It copies
+  `html/`, records the commit in `assets/web/UPSTREAM.json`, lists what
+  changed upstream, and checks `tool/web_contract.json`: every element,
+  function and API call the app relies on. `flutter test` checks it too.
+  If something broke, fix the hook in the app (or add a proper hook
+  upstream), update the contract, then build.
+- **App to web:** anything that would help the web page too (the live glow,
+  session line, an app mode that hides the server fields) belongs upstream
+  as a small named hook, e.g. `window.birdsongLive()`. Once the page has
+  it, the injected copy in `local_server.dart` comes out and the contract
+  points at the hook. The injection gets smaller over time.
+- **Data:** anything new the app records (sessions, places) is served in
+  BirdNET-Go's API shape, so the page and a real station stay
+  interchangeable.
+
 ## How it fits together
 
 ```
