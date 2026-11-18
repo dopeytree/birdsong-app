@@ -5,8 +5,8 @@ Safe to run again: every change checks before it writes.
 
 iOS and macOS: microphone and local-network wording, background audio (iOS),
 App Transport Security for the page served on 127.0.0.1 and plain-HTTP
-BirdNET-Go stations, sandbox entitlements (macOS), and the minimum OS that
-ONNX Runtime needs (iOS 16, macOS 14).
+BirdNET-Go stations, sandbox entitlements (macOS), and the minimum OS
+(iOS 18, so iOS 18, 26 and 27; macOS 14, which ONNX Runtime needs).
 
 Android: microphone and internet permissions, plain HTTP to the local page
 and LAN stations, the ONNX Runtime ProGuard rule, minSdk 24.
@@ -24,6 +24,10 @@ ROOT = Path(__file__).resolve().parent.parent
 MIC = ("Birdsong listens for birds and identifies them on this device. "
        "Audio never leaves it.")
 LAN = "Birdsong reads detections from your BirdNET-Go station on your home network."
+
+# Built with the iOS 27 SDK; runs on iOS 27 and the two releases before it
+# (iOS 26 and iOS 18: Apple went from 18 straight to 26).
+IOS_MIN = "18.0"
 
 ATS = {"NSAllowsArbitraryLoads": True, "NSAllowsLocalNetworking": True}
 
@@ -66,14 +70,14 @@ def ios():
         "NSAppTransportSecurity": ATS,
     })
     podfile = ROOT / "ios/Podfile"
-    patch_text(podfile, r"^#?\s*platform :ios, '[\d.]+'", "platform :ios, '16.0'", re.M)
+    patch_text(podfile, r"^#?\s*platform :ios, '[\d.]+'", f"platform :ios, '{IOS_MIN}'", re.M)
     patch_text(podfile, r"^(\s*)use_frameworks!\s*$", r"\1use_frameworks! :linkage => :static", re.M)
     patch_text(ROOT / "ios/Runner.xcodeproj/project.pbxproj",
-               r"IPHONEOS_DEPLOYMENT_TARGET = [^;]+;", "IPHONEOS_DEPLOYMENT_TARGET = 16.0;")
+               r"IPHONEOS_DEPLOYMENT_TARGET = [^;]+;", f"IPHONEOS_DEPLOYMENT_TARGET = {IOS_MIN};")
     # Flutter writes the minimum iOS into the Swift package it generates for
     # the plugins; ONNX Runtime refuses anything below 16.
     patch_text(ROOT / "ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift",
-               r'\.iOS\("1[0-5]\.\d+"\)', '.iOS("16.0")')
+               r'\.iOS\("[\d.]+"\)', f'.iOS("{IOS_MIN}")')
 
 
 def macos():

@@ -16,7 +16,8 @@ compared side by side, including ones that can't ship in a paid app.
 
 ## Set up on a Mac
 
-You need Xcode (installed) and Flutter.
+You need Xcode (installed) and Flutter. The iPhone and iPad app needs iOS 18
+or later (iOS 18, 26 and 27).
 
 ```sh
 brew install --cask flutter      # if `flutter` isn't installed yet
