@@ -59,6 +59,11 @@ class LocalServer {
       return _asset(res, 'assets/web/fonts/$name',
           name.endsWith('.ttf') ? 'font/ttf' : 'text/plain; charset=utf-8');
     }
+    // The Support section's cardinal, bundled with the app (the page looks
+    // for it in an art folder beside itself, which only the Docker image has).
+    if (path == '/art/artwork/classic/birds/cardinalis-cardinalis.webp') {
+      return _asset(res, 'assets/app/cardinal.webp', 'image/webp');
+    }
     if (path == '/source.json') return _json(res, _source());
     if (path == '/healthz') {
       res.write('ok\n');
@@ -216,7 +221,9 @@ class LocalServer {
       'localStorage.setItem("birdplate.markAt",JSON.stringify("below"))}catch(e){}</script>'
       '<style>#stationOpts,#cardOpts{display:none}'
       // No plate number in the app; room on the right for the microphone.
-      '#pl{display:none}#plateno{padding-right:6.6rem}'
+      // The page's Settings/Display button too: its options are in the
+      // app's menu (Settings > Display).
+      '#pl{display:none}#openSettings{display:none}'
 
       // A creature being heard right now glows, and the dot on it (over its
       // centre, or beneath it) breathes out a ring, in the plate's madder.

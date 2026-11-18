@@ -1,12 +1,15 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
 import '../engine/listen_engine.dart';
 import '../engine/model_catalog.dart';
+import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
+import 'splash.dart' show Cardinal, SupportQuote;
 
 /// Everything that isn't the plate: where birds come from, listening,
 /// models, the location filter and stored data. Opened from the plate's
@@ -25,6 +28,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _station;
   late final TextEditingController _lat;
   late final TextEditingController _lon;
+  final _limit = TextEditingController();
+
+  /// The plate's Display options as the page has them; null until read.
+  Map<String, Object?>? _display;
 
   AppState get app => widget.app;
   Settings get s => app.settings;
@@ -36,6 +43,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _station = TextEditingController(text: s.birdweatherStation);
     _lat = TextEditingController(text: s.latitude?.toString() ?? '');
     _lon = TextEditingController(text: s.longitude?.toString() ?? '');
+    app.page?.read().then((d) {
+      if (!mounted || d == null) return;
+      final n = (d['limit'] as num?)?.toInt() ?? 0;
+      _limit.text = n > 0 ? '$n' : '';
+      setState(() => _display = d);
+    });
   }
 
   @override
@@ -44,6 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _station.dispose();
     _lat.dispose();
     _lon.dispose();
+    _limit.dispose();
     super.dispose();
   }
 
@@ -79,23 +93,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 8),
               if (listen) ...[
+                _displaySection(context, listen),
                 _listening(context),
                 _models(context),
                 _location(context),
                 _data(context),
-              ] else
+              ] else ...[
                 _remote(context),
-              _section(context, 'About', [
-                TextButton(
-                  onPressed: app.engine.running
-                      ? null
-                      : () {
-                          s.update((x) => x.onboarded = false);
-                          Navigator.of(context).pop();
-                        },
-                  child: const Text('Show the welcome again'),
-                ),
-              ]),
+                _displaySection(context, listen),
+              ],
+              _about(context),
             ],
           );
         },
@@ -389,6 +396,106 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ],
     );
   }
+
+  void _setDisplay(String key, Object value) {
+    setState(() => _display = {...?_display, key: value});
+    app.page?.set(key, value);
+  }
+
+  Widget _displaySection(BuildContext context, bool listen) {
+    final d = _display;
+    if (d == null) {
+      return _section(context, 'Display', summary: 'Open the plate first', const []);
+    }
+    bool on(String k) => d[k] == true;
+    String pick(String k, Map<String, String> from, String fallback) {
+      final v = d[k];
+      return v is String && from.containsKey(v) ? v : fallback;
+    }
+
+    return _section(
+      context,
+      'Display',
+      summary: PageControl.sizeBy[pick('sizeBy', PageControl.sizeBy, 'calls')],
+      [
+        _switch('Fit on one screen', on('fit'), (v) => _setDisplay('fit', v)),
+        for (final e in PageControl.parts.entries)
+          // Listen here steps through sessions instead of periods.
+          if (!(listen && e.key == 'periods'))
+            _switch(e.value, on(e.key), (v) => _setDisplay(e.key, v)),
+        _switch('Mark the latest', on('mark'), (v) => _setDisplay('mark', v)),
+        if (on('mark'))
+          _dropdown('Marked by', pick('markAt', PageControl.markAt, 'centre'), PageControl.markAt,
+              (v) => _setDisplay('markAt', v)),
+        _dropdown('Size by', pick('sizeBy', PageControl.sizeBy, 'calls'), PageControl.sizeBy,
+            (v) => _setDisplay('sizeBy', v)),
+        _switch('Skulls, wings and eggs', on('parts'), (v) => _setDisplay('parts', v)),
+        Row(
+          children: [
+            const SizedBox(width: 130, child: Text('Limit species')),
+            Expanded(
+              child: TextField(
+                controller: _limit,
+                decoration: const InputDecoration(hintText: 'all', isDense: true),
+                keyboardType: TextInputType.number,
+                onSubmitted: (v) => _setDisplay('limit', '${int.tryParse(v.trim()) ?? 0}'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _about(BuildContext context) {
+    final theme = Theme.of(context);
+    return _section(context, 'About', [
+      const Center(child: Cardinal(height: 110)),
+      const SizedBox(height: 12),
+      const SupportQuote(size: 15),
+      const SizedBox(height: 16),
+      Text(
+        'Birdsong by Ed Stone. Bird cut-outs from Fugleramme by Arne Giacomo, after Gould, '
+        'the von Wright brothers, Audubon and others (CC BY-SA 4.0). Descriptions from '
+        'Wikipedia (CC BY-SA). Detections by BirdNET.',
+        style: theme.textTheme.bodySmall,
+      ),
+      Wrap(
+        spacing: 8,
+        children: [
+          TextButton(
+            onPressed: () => launchUrl(Uri.parse('https://github.com/dopeytree/birdsong/issues'),
+                mode: LaunchMode.externalApplication),
+            child: const Text('Something amiss? Say on GitHub'),
+          ),
+          TextButton(
+            onPressed: app.engine.running
+                ? null
+                : () {
+                    s.update((x) => x.onboarded = false);
+                    Navigator.of(context).pop();
+                  },
+            child: const Text('Show the welcome again'),
+          ),
+        ],
+      ),
+    ]);
+  }
+
+  Widget _dropdown(String label, String value, Map<String, String> items,
+          ValueChanged<String> onChanged) =>
+      Row(
+        children: [
+          SizedBox(width: 130, child: Text(label)),
+          DropdownButton<String>(
+            value: value,
+            items: [
+              for (final e in items.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
+            ],
+            onChanged: (v) => v == null ? null : onChanged(v),
+          ),
+        ],
+      );
 
   // ---- bits -----------------------------------------------------------------
 

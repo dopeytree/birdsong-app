@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'engine/listen_engine.dart';
 import 'engine/model_manager.dart';
 import 'server/local_server.dart';
+import 'server/page_control.dart';
 import 'settings.dart';
 import 'store/detection_store.dart';
 
@@ -18,6 +19,9 @@ class AppState {
   final DetectionStore store;
   final ListenEngine engine;
   final LocalServer server;
+
+  /// The plate page, once it is showing, for Settings' Display section.
+  PageControl? page;
 
   static Future<AppState> create() async {
     final dir = await getApplicationSupportDirectory();

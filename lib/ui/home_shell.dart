@@ -7,9 +7,12 @@ import 'settings_screen.dart';
 
 /// The plate fills the app; everything else is under its menu button.
 class HomeShell extends StatelessWidget {
-  const HomeShell({super.key, required this.app});
+  const HomeShell({super.key, required this.app, this.onPlateLoaded});
 
   final AppState app;
+
+  /// Called when the plate page has loaded, to lift the loading screen.
+  final VoidCallback? onPlateLoaded;
 
   void _openSettings(BuildContext context) => Navigator.of(context)
       .push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(app: app)));
@@ -24,7 +27,10 @@ class HomeShell extends StatelessWidget {
         }
         return Scaffold(
           body: SafeArea(
-            child: PlateView(app: app, openSettings: () => _openSettings(context)),
+            child: PlateView(
+                app: app,
+                openSettings: () => _openSettings(context),
+                onLoaded: onPlateLoaded),
           ),
         );
       },

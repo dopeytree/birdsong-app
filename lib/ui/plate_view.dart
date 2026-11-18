@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../app_state.dart';
+import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
 
@@ -13,12 +14,14 @@ import 'format.dart';
 /// through them, the page's date line says when and where, and a small
 /// microphone button at the top right starts a new one.
 class PlateView extends StatefulWidget {
-  const PlateView({super.key, required this.app, required this.openSettings});
+  const PlateView({super.key, required this.app, required this.openSettings, this.onLoaded});
 
   final AppState app;
 
   /// Open Settings (sources, listening, models, data).
   final VoidCallback openSettings;
+
+  final VoidCallback? onLoaded;
 
   @override
   State<PlateView> createState() => _PlateViewState();
@@ -55,8 +58,10 @@ class _PlateViewState extends State<PlateView> {
         _sessionPushed = '';
         _pushLive();
         _pushSession();
+        widget.onLoaded?.call();
       }))
       ..loadRequest(_url);
+    app.page = PageControl(_web);
     _s.addListener(_settingsChanged);
     app.store.addListener(_storeChanged);
     app.engine.addListener(_pushLive);
@@ -65,6 +70,7 @@ class _PlateViewState extends State<PlateView> {
 
   @override
   void dispose() {
+    app.page = null;
     _refreshSoon?.cancel();
     _s.removeListener(_settingsChanged);
     app.store.removeListener(_storeChanged);

@@ -83,6 +83,32 @@ def ios():
                r'\.iOS\("[\d.]+"\)', f'.iOS("{IOS_MIN}")')
 
 
+PAPER = (0xEF, 0xE9, 0xD8)
+
+
+def ios_launch():
+    """The launch screen: the cardinal on paper, as the app's loading screen
+    then shows it, so one hands over to the other."""
+    board = ROOT / "ios/Runner/Base.lproj/LaunchScreen.storyboard"
+    r, g, b = (round(c / 255, 4) for c in PAPER)
+    patch_text(board, r'(<color key="backgroundColor") red="[\d.]+" green="[\d.]+" blue="[\d.]+"',
+               rf'\1 red="{r}" green="{g}" blue="{b}"')
+    images = ROOT / "ios/Runner/Assets.xcassets/LaunchImage.imageset"
+    if images.is_dir():
+        for src in sorted((ROOT / "tool/launch").glob("LaunchImage*.png")):
+            dst = images / src.name
+            if not dst.exists() or dst.read_bytes() != src.read_bytes():
+                dst.write_bytes(src.read_bytes())
+                say(f"updated {dst.relative_to(ROOT)}")
+
+
+def android_launch():
+    for d in ("drawable", "drawable-v21"):
+        patch_text(ROOT / f"android/app/src/main/res/{d}/launch_background.xml",
+                   r'<item android:drawable="[^"]*" />',
+                   '<item><color android:color="#EFE9D8" /></item>')
+
+
 def macos():
     patch_plist(ROOT / "macos/Runner/Info.plist", {
         "NSMicrophoneUsageDescription": MIC,
@@ -134,8 +160,10 @@ def android():
 def main():
     print("Patching platform projects")
     ios()
+    ios_launch()
     macos()
     android()
+    android_launch()
     print("Done")
 
 

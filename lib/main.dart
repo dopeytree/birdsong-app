@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
-import 'ui/home_shell.dart';
+import 'ui/splash.dart';
 
 const paper = Color(0xFFEFE9D8);
 const ink = Color(0xFF2A241C);
@@ -14,8 +14,8 @@ const caps = 'IM Fell English SC';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final app = await AppState.create();
-  runApp(BirdsongApp(app: app));
+  // The loading screen shows at once; the app starts up behind it.
+  runApp(BirdsongApp(boot: AppState.create()));
 }
 
 ThemeData birdsongTheme() {
@@ -53,9 +53,9 @@ ThemeData birdsongTheme() {
 }
 
 class BirdsongApp extends StatelessWidget {
-  const BirdsongApp({super.key, required this.app});
+  const BirdsongApp({super.key, required this.boot});
 
-  final AppState app;
+  final Future<AppState> boot;
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +63,7 @@ class BirdsongApp extends StatelessWidget {
       title: 'Birdsong',
       debugShowCheckedModeBanner: false,
       theme: birdsongTheme(),
-      home: HomeShell(app: app),
+      home: Boot(boot: boot),
     );
   }
 }

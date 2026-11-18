@@ -1,24 +1,162 @@
 {
   "about": "What the app relies on inside the Birdsong web page (assets/web/index.html). The app never edits that page: lib/server/local_server.dart adds a little script and CSS when serving it, and lib/server/local_api.dart answers the BirdNET-Go calls it makes. tool/sync_web.py and test/web_contract_test.dart check every new copy of the page against this list. If upstream renames something, change the app's injection (or ask upstream for a proper hook), then update this file.",
   "hooks": [
-    {"find": "id=\"stationOpts\"", "used_by": "local_server.dart: hidden, closed (no server field in the app)"},
-    {"find": "id=\"cardOpts\"", "used_by": "local_server.dart: hidden"},
-    {"find": "id=\"showOpts\"", "used_by": "local_server.dart: opened"},
-    {"find": "id=\"pl\"", "used_by": "local_server.dart: plate number hidden"},
-    {"find": "id=\"plateno\"", "used_by": "local_server.dart: padded clear of the menu and mic buttons"},
-    {"find": "id=\"openSettings\"", "used_by": "local_server.dart: renamed Display"},
-    {"find": "id=\"settings\"", "used_by": "local_server.dart: its h3 renamed Display"},
-    {"find": "id=\"subDate\"", "used_by": "local_server.dart: session date, time and place"},
-    {"find": "id=\"plate\"", "used_by": "local_server.dart: watched to re-mark live birds"},
-    {"find": "function renderHeading", "used_by": "local_server.dart: wrapped so the session line survives redraws"},
-    {"find": "function refresh", "used_by": "plate_view.dart: refresh(false) after new detections"},
-    {"find": "const figures = new Map", "used_by": "local_server.dart: figures.get(sci).button gets .live"},
-    {"find": "b.className = \"bird\"", "used_by": "local_server.dart: .bird.live glow CSS"},
-    {"find": "localStorage.getItem(\"birdplate.\" + k)", "used_by": "local_server.dart: birdplate.server/station cleared, markAt defaulted"},
-    {"find": "value=\"below\"", "used_by": "local_server.dart: markAt default 'below' in listen mode"},
-    {"find": "params.get(\"period\")", "used_by": "plate_view.dart: ?period=all"},
-    {"find": "[\"hide\", false]", "used_by": "plate_view.dart: ?hide=periods"},
-    {"find": "fetch(\"source.json\"", "used_by": "local_server.dart: /source.json"}
+    {
+      "find": "id=\"stationOpts\"",
+      "used_by": "local_server.dart: hidden, closed (no server field in the app)"
+    },
+    {
+      "find": "id=\"cardOpts\"",
+      "used_by": "local_server.dart: hidden"
+    },
+    {
+      "find": "id=\"showOpts\"",
+      "used_by": "local_server.dart: opened"
+    },
+    {
+      "find": "id=\"pl\"",
+      "used_by": "local_server.dart: plate number hidden"
+    },
+    {
+      "find": "id=\"plateno\"",
+      "used_by": "local_server.dart: plate number line (number hidden)"
+    },
+    {
+      "find": "id=\"openSettings\"",
+      "used_by": "local_server.dart: hidden; its options are in the app menu (Settings > Display)"
+    },
+    {
+      "find": "id=\"settings\"",
+      "used_by": "local_server.dart: its h3 renamed Display"
+    },
+    {
+      "find": "id=\"subDate\"",
+      "used_by": "local_server.dart: session date, time and place"
+    },
+    {
+      "find": "id=\"plate\"",
+      "used_by": "local_server.dart: watched to re-mark live birds"
+    },
+    {
+      "find": "function renderHeading",
+      "used_by": "local_server.dart: wrapped so the session line survives redraws"
+    },
+    {
+      "find": "function refresh",
+      "used_by": "plate_view.dart: refresh(false) after new detections"
+    },
+    {
+      "find": "const figures = new Map",
+      "used_by": "local_server.dart: figures.get(sci).button gets .live"
+    },
+    {
+      "find": "b.className = \"bird\"",
+      "used_by": "local_server.dart: .bird.live glow CSS"
+    },
+    {
+      "find": "localStorage.getItem(\"birdplate.\" + k)",
+      "used_by": "local_server.dart: birdplate.server/station cleared, markAt defaulted"
+    },
+    {
+      "find": "params.get(\"period\")",
+      "used_by": "plate_view.dart: ?period=all"
+    },
+    {
+      "find": "[\"hide\", false]",
+      "used_by": "plate_view.dart: ?hide=periods"
+    },
+    {
+      "find": "fetch(\"source.json\"",
+      "used_by": "local_server.dart: /source.json"
+    },
+    {
+      "find": "let fit = ",
+      "used_by": "page_control.dart: reads Fit on one screen"
+    },
+    {
+      "find": "const store = {",
+      "used_by": "page_control.dart: reads skulls/wings/eggs"
+    },
+    {
+      "find": "const opt = {}",
+      "used_by": "page_control.dart: reads the Display options"
+    },
+    {
+      "find": "id=\"fitOpt\"",
+      "used_by": "page_control.dart: sets Fit on one screen"
+    },
+    {
+      "find": "id=\"partsOpt\"",
+      "used_by": "page_control.dart: sets skulls, wings and eggs"
+    },
+    {
+      "find": "id=\"lim\"",
+      "used_by": "page_control.dart: sets Limit species"
+    },
+    {
+      "find": "id=\"markAt\"",
+      "used_by": "page_control.dart: sets how the latest is marked"
+    },
+    {
+      "find": "id=\"sizeBy\"",
+      "used_by": "page_control.dart: sets Size by"
+    },
+    {
+      "find": "data-opt=\"title\"",
+      "used_by": "page_control.dart: shows/hides title"
+    },
+    {
+      "find": "data-opt=\"date\"",
+      "used_by": "page_control.dart: shows/hides date"
+    },
+    {
+      "find": "data-opt=\"totals\"",
+      "used_by": "page_control.dart: shows/hides totals"
+    },
+    {
+      "find": "data-opt=\"periods\"",
+      "used_by": "page_control.dart: shows/hides periods"
+    },
+    {
+      "find": "data-opt=\"index\"",
+      "used_by": "page_control.dart: shows/hides index"
+    },
+    {
+      "find": "data-opt=\"plate\"",
+      "used_by": "page_control.dart: shows/hides plate"
+    },
+    {
+      "find": "data-opt=\"mark\"",
+      "used_by": "page_control.dart: shows/hides mark"
+    },
+    {
+      "find": "src=\"art/artwork/classic/birds/cardinalis-cardinalis.webp\"",
+      "used_by": "local_server.dart: served from assets/app/cardinal.webp"
+    },
+    {
+      "find": "<option value=\"calls\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<option value=\"time\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<option value=\"equal\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<option value=\"centre\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<option value=\"below\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<option value=\"fade\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    }
   ],
   "endpoints": [
     "/api/v2/analytics/species/daily",
