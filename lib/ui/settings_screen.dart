@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
@@ -29,6 +31,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _lat;
   late final TextEditingController _lon;
   final _limit = TextEditingController();
+
+  /// The page's version, from assets/web/UPSTREAM.json (tool/sync_web.py).
+  late final Future<String?> _webVersion = rootBundle
+      .loadString('assets/web/UPSTREAM.json')
+      .then((t) => (jsonDecode(t) as Map)['version'] as String?)
+      .catchError((Object _) => null);
 
   /// The plate's Display options as the page has them; null until read.
   Map<String, Object?>? _display;
@@ -82,6 +90,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
             children: [
+              _displaySection(context, listen),
+              const SizedBox(height: 8),
               SegmentedButton<AppMode>(
                 segments: const [
                   ButtonSegment(value: AppMode.listen, label: Text('Listen here & now')),
@@ -93,16 +103,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 8),
               if (listen) ...[
-                _displaySection(context, listen),
                 _listening(context),
                 _models(context),
                 _location(context),
                 _data(context),
-              ] else ...[
+              ] else
                 _remote(context),
-                _displaySection(context, listen),
-              ],
-              _about(context),
+              const Divider(height: 32),
+              _credits(context, listen),
+              const Divider(height: 1),
+              _support(context),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: app.engine.running
+                      ? null
+                      : () {
+                          s.update((x) => x.onboarded = false);
+                          Navigator.of(context).pop();
+                        },
+                  child: const Text('Show the welcome again'),
+                ),
+              ),
             ],
           );
         },
@@ -447,38 +471,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _about(BuildContext context) {
+  Widget _link(String label, String url) => TextButton(
+        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+        onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+        child: Text(label),
+      );
+
+  /// As the page's own Credits.
+  Widget _credits(BuildContext context, bool listen) {
     final theme = Theme.of(context);
-    return _section(context, 'About', [
+    final detections = listen
+        ? 'BirdNET, run on this device (${specById(s.plateModel)?.family ?? 'the chosen model'})'
+        : s.stationDigits.isNotEmpty
+            ? 'BirdWeather'
+            : 'BirdNET-Go';
+    return _section(context, 'Credits', [
+      FutureBuilder<String?>(
+        future: _webVersion,
+        builder: (context, snap) => Text(
+          'Birdsong${snap.data == null ? '' : ' v${snap.data}'}. Created by Ed Stone. '
+          'Detections by $detections. Bird cut-outs from the Fugleramme project by '
+          'Arne Giacomo, after Gould, the von Wright brothers, Audubon and others, used under '
+          'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Further plates from '
+          'Nederlandsche Vogelen (Nozeman & Sepp, Amsterdam, 1770\u20131829), digitised by the '
+          'Koninklijke Bibliotheek, with others from public-domain works held on Wikimedia Commons.',
+          style: theme.textTheme.bodyMedium,
+        ),
+      ),
+      const SizedBox(height: 4),
+      Wrap(
+        children: [
+          _link('Ed Stone', 'https://ed-stone.co.uk'),
+          _link('Fugleramme', 'https://github.com/arnegiacomo/fugleramme'),
+          _link('BirdNET', 'https://birdnet.cornell.edu'),
+        ],
+      ),
+    ]);
+  }
+
+  /// As the page's own Support.
+  Widget _support(BuildContext context) {
+    final theme = Theme.of(context);
+    return _section(context, 'Support', [
       const Center(child: Cardinal(height: 110)),
       const SizedBox(height: 12),
       const SupportQuote(size: 15),
       const SizedBox(height: 16),
       Text(
-        'Birdsong by Ed Stone. Bird cut-outs from Fugleramme by Arne Giacomo, after Gould, '
-        'the von Wright brothers, Audubon and others (CC BY-SA 4.0). Descriptions from '
-        'Wikipedia (CC BY-SA). Detections by BirdNET.',
-        style: theme.textTheme.bodySmall,
+        'One hopes you are enjoying Birdsong. If something is amiss, or it does not yet do '
+        'what you want of it, say so on GitHub.',
+        style: theme.textTheme.bodyMedium,
       ),
-      Wrap(
-        spacing: 8,
-        children: [
-          TextButton(
-            onPressed: () => launchUrl(Uri.parse('https://github.com/dopeytree/birdsong/issues'),
-                mode: LaunchMode.externalApplication),
-            child: const Text('Something amiss? Say on GitHub'),
-          ),
-          TextButton(
-            onPressed: app.engine.running
-                ? null
-                : () {
-                    s.update((x) => x.onboarded = false);
-                    Navigator.of(context).pop();
-                  },
-            child: const Text('Show the welcome again'),
-          ),
-        ],
-      ),
+      _link('GitHub', 'https://github.com/dopeytree/birdsong/issues'),
     ]);
   }
 
