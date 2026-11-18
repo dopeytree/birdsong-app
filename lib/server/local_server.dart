@@ -210,7 +210,10 @@ class LocalServer {
   // in an earlier build is forgotten: left in place it would send the page
   // off to that address instead of asking this app.
   static const _headExtra = '<script>try{localStorage.removeItem("birdplate.server");'
-      'localStorage.removeItem("birdplate.station")}catch(e){}</script>'
+      'localStorage.removeItem("birdplate.station");'
+      // Listen here starts with the dot beneath the creature; Display changes it.
+      'if(/[?&]bs=listen/.test(location.search)&&localStorage.getItem("birdplate.markAt")==null)'
+      'localStorage.setItem("birdplate.markAt",JSON.stringify("below"))}catch(e){}</script>'
       '<style>#stationOpts,#cardOpts{display:none}'
       // No plate number in the app; room on the right for the microphone.
       '#pl{display:none}#plateno{padding-right:3.4rem}'

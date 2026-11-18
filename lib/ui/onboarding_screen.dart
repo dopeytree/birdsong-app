@@ -16,7 +16,7 @@ class OnboardingScreen extends StatefulWidget {
 
   final AppState app;
 
-  /// Called with the tab to land on: 0 the plate, 1 Listen.
+  /// Called with the tab to land on (0 is the plate).
   final ValueChanged<int> onDone;
 
   @override
@@ -121,7 +121,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (_locAllowed == true) x.useGeomodel = true;
       x.onboarded = true;
     });
-    widget.onDone(1);
+    widget.onDone(0);
     app.engine.start();
   }
 
@@ -210,7 +210,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _choice(
           selected: _mode == AppMode.listen,
           icon: Icons.hearing,
-          title: 'This device listens',
+          title: 'Listen here & now',
           body: 'Identifies birds through the microphone, on the device. '
               'Nothing else needed, and no audio leaves it.',
           onTap: () => setState(() => _mode = AppMode.listen),
@@ -218,7 +218,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _choice(
           selected: _mode == AppMode.station,
           icon: Icons.router,
-          title: 'I have a station',
+          title: 'A remote station',
           body: 'Show what your BirdNET-Go or a BirdWeather station has heard.',
           onTap: () => setState(() => _mode = AppMode.station),
         ),

@@ -23,10 +23,10 @@ class Settings extends ChangeNotifier {
   String birdweatherStation = '';
 
   /// Listen here: minimum score for a detection.
-  double threshold = 0.5;
+  double threshold = 0.65;
 
   /// Listen here: seconds between analyses.
-  double hopSeconds = 3.0;
+  double hopSeconds = 1.0;
 
   /// Listen here: the same species from the same model within this many
   /// seconds counts as the same call.
@@ -77,9 +77,16 @@ class Settings extends ChangeNotifier {
     final active = j['activeModels'];
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
+    // Settings saved before defaults v2 still carry the first test build's
+    // defaults (3 s, 50 %); move those, and only those, to the new ones.
+    if (((j['defaults'] as num?) ?? 1) < 2) {
+      if (hopSeconds == 3.0) hopSeconds = 1.0;
+      if (threshold == 0.5) threshold = 0.65;
+    }
   }
 
   Map<String, dynamic> toJson() => {
+        'defaults': 2,
         'onboarded': onboarded,
         'mode': mode.name,
         'birdnetUrl': birdnetUrl,

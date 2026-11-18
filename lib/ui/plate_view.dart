@@ -39,7 +39,7 @@ class _PlateViewState extends State<PlateView> {
   // Listen here: the page's period buttons give way to sessions, and
   // period=all lets the session decide what is drawn.
   Uri get _url => Uri.parse(_s.mode == AppMode.listen
-      ? '${app.server.origin}/?period=all&hide=periods'
+      ? '${app.server.origin}/?period=all&hide=periods&bs=listen'
       : '${app.server.origin}/');
 
   @override
@@ -308,7 +308,7 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
                           padding: EdgeInsets.all(11),
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : Icon(widget.listening ? Icons.stop_rounded : Icons.mic,
+                      : Icon(widget.listening ? Icons.mic_off : Icons.mic,
                           color: Colors.white, size: 22),
                 ),
               ),

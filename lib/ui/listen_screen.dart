@@ -22,12 +22,12 @@ class ListenScreen extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text('Listen here', style: theme.textTheme.headlineSmall),
+            Text('Listen here & now', style: theme.textTheme.headlineSmall),
             if (station)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
-                child: Text('The plate is showing your station. Switch to "Listen here" '
-                    'under Settings to see what this device hears on the plate.'),
+                child: Text('The plate is showing your remote station. Switch to '
+                    '"Listen here & now" under Settings to see what this device hears on the plate.'),
               ),
             const SizedBox(height: 12),
             Row(

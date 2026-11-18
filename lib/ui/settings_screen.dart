@@ -68,9 +68,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 8),
             SegmentedButton<AppMode>(
               segments: const [
-                ButtonSegment(value: AppMode.station, label: Text('Station'), icon: Icon(Icons.router)),
-                ButtonSegment(value: AppMode.listen, label: Text('Listen here'), icon: Icon(Icons.hearing)),
+                ButtonSegment(value: AppMode.listen, label: Text('Listen here & now')),
+                ButtonSegment(value: AppMode.station, label: Text('Remote station')),
               ],
+              showSelectedIcon: false,
               selected: {s.mode},
               onSelectionChanged: (v) => s.update((x) => x.mode = v.first),
             ),
@@ -79,7 +80,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               TextField(
                 controller: _url,
                 decoration: const InputDecoration(
-                  labelText: 'BirdNET-Go address',
+                  labelText: 'Remote station: BirdNET-Go address',
                   hintText: 'http://192.168.1.50:8080',
                 ),
                 keyboardType: TextInputType.url,
@@ -105,7 +106,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: theme.textTheme.bodySmall),
               const Divider(height: 32),
             ],
-            Text('Listen here', style: theme.textTheme.titleMedium),
+            // Everything below this point only applies to listening here.
+            if (s.mode == AppMode.listen) ...[
+            Text('Listen here & now', style: theme.textTheme.titleMedium),
             _slider(
               'Threshold ${(s.threshold * 100).round()}%',
               s.threshold, 0.05, 0.95, 18,
@@ -193,6 +196,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: const Text('Forget everything heard here'),
               ),
             ),
+            ],
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
