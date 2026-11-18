@@ -223,7 +223,8 @@ class LocalServer {
       // No plate number in the app; room on the right for the microphone.
       // The page's Settings/Display button too: its options are in the
       // app's menu (Settings > Display).
-      '#pl{display:none}#openSettings{display:none}'
+      // (Both live in #plateno, so the whole corner goes.)
+      '#plateno{display:none!important}'
 
       // A creature being heard right now glows, and the dot on it (over its
       // centre, or beneath it) breathes out a ring, in the plate's madder.
