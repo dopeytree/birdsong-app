@@ -249,13 +249,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final downloading = m.isDownloading(spec);
     final locked = app.engine.running;
     final active = s.activeModels.contains(spec.id);
-    return Column(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            if (installed)
-              Checkbox(
+            SizedBox(
+              width: 48,
+              child: !installed
+                  ? null
+                  : Checkbox(
                 value: active,
                 onChanged: locked
                     ? null
@@ -266,9 +271,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           // A model that listens alone is the one the plate draws.
                           if (x.activeModels.length == 1) x.plateModel = x.activeModels.first;
                         }),
-              )
-            else
-              const SizedBox(width: 48),
+                    ),
+            ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -309,6 +313,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Text(m.errors[spec.id]!, style: TextStyle(color: theme.colorScheme.error)),
           ),
       ],
+      ),
     );
   }
 
