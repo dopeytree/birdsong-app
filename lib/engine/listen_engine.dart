@@ -32,6 +32,10 @@ class ModelReport {
   int get averageMillis => runs == 0 ? 0 : totalMillis ~/ runs;
 }
 
+/// A session's plate holds at most this many species; the next new one
+/// starts a fresh session.
+const maxSessionSpecies = 42;
+
 /// Listens to the microphone and runs every active model over it.
 class ListenEngine extends ChangeNotifier {
   ListenEngine(this.settings, this.models, this.store);
@@ -296,9 +300,11 @@ class ListenEngine extends ChangeNotifier {
   }
 
   Future<void> _detected(LoadedModel m, SpeciesLabel l, double score, DateTime now) async {
-    final key = '${m.spec.id}|${l.sci}';
     final plate = settings.plateModel;
-    if (plate == 'all' || plate == m.spec.id) _lastHeard[l.sci] = now;
+    final onPlate = plate == 'all' || plate == m.spec.id;
+    if (onPlate && _sessionFull(l.sci)) await _nextSession(now);
+    final key = '${m.spec.id}|${l.sci}';
+    if (onPlate) _lastHeard[l.sci] = now;
     final open = _open[key];
     if (open != null &&
         now.difference(open.at).inMilliseconds < settings.repeatSeconds * 1000) {
@@ -312,6 +318,26 @@ class ListenEngine extends ChangeNotifier {
         model: m.spec.id, sci: l.sci, common: l.common, confidence: score, at: now);
     _open[key] = d;
     unawaited(_saveClip(d, m));
+  }
+
+  /// A new species for this session, which already holds [maxSessionSpecies]
+  /// on its plate?
+  bool _sessionFull(String sci) {
+    final ses = session;
+    if (ses == null) return false;
+    final heard = {for (final d in store.forPlate(settings.plateModel, session: ses)) d.sci};
+    return !heard.contains(sci) && heard.length >= maxSessionSpecies;
+  }
+
+  /// Close the full session and carry on listening in a new one, at the same
+  /// place, starting with the bird that didn't fit.
+  Future<void> _nextSession(DateTime now) async {
+    final old = session!;
+    await store.endSession(old, at: now.subtract(const Duration(milliseconds: 1)));
+    session = await store.startSession(at: now, lat: old.lat, lon: old.lon);
+    _open.clear();
+    _lastHeard.clear();
+    notifyListeners();
   }
 
   /// The window that was heard, a second either side, as WAV and spectrogram.

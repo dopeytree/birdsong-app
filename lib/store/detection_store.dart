@@ -204,8 +204,8 @@ class DetectionStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Session> startSession() async {
-    final x = Session(id: _nextSessionId++, start: DateTime.now());
+  Future<Session> startSession({DateTime? at, double? lat, double? lon}) async {
+    final x = Session(id: _nextSessionId++, start: at ?? DateTime.now(), lat: lat, lon: lon);
     sessions.add(x);
     _selectedId = x.id;
     await _appendSession(x);
@@ -215,8 +215,8 @@ class DetectionStore extends ChangeNotifier {
 
   /// Close a session. One that heard nothing and lasted under a minute is
   /// dropped, so a mistaken tap on the microphone leaves no trace.
-  Future<void> endSession(Session x) async {
-    x.end = DateTime.now();
+  Future<void> endSession(Session x, {DateTime? at}) async {
+    x.end = at ?? DateTime.now();
     final heard = all.any((d) => x.contains(d.at));
     if (!heard && x.end!.difference(x.start) < const Duration(minutes: 1)) {
       sessions.remove(x);

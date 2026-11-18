@@ -142,5 +142,14 @@ void main() {
       expect(s.contains(DateTime(2026, 11, 18, 8)), isFalse);
       expect(s.contains(DateTime(2026, 11, 18, 6, 30)), isTrue);
     });
+
+    test('a full session hands over without sharing the moment', () {
+      final now = DateTime(2026, 11, 18, 7);
+      final old = Session(id: 1, start: DateTime(2026, 11, 18, 6),
+          end: now.subtract(const Duration(milliseconds: 1)));
+      final next = Session(id: 2, start: now);
+      expect(old.contains(now), isFalse);
+      expect(next.contains(now), isTrue);
+    });
   });
 }
