@@ -79,7 +79,7 @@ class ListenScreen extends StatelessWidget {
                       Text(
                           r.runs == 0
                               ? 'Waiting for ${r.spec.windowSeconds.toStringAsFixed(0)} s of audio'
-                              : '${r.millis} ms last window · ${r.averageMillis} ms average · ${r.runs} windows',
+                              : '${r.millis} ms last window · ${r.averageMillis} ms average · ${r.runs} windows · ${r.backend}',
                           style: theme.textTheme.bodySmall),
                       if (r.error != null)
                         Text(r.error!, style: TextStyle(color: theme.colorScheme.error)),

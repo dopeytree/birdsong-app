@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import 'listen_screen.dart';
 import 'models_screen.dart';
+import 'onboarding_screen.dart';
 import 'plate_view.dart';
 import 'settings_screen.dart';
 
@@ -21,6 +22,18 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final app = widget.app;
+    return ListenableBuilder(
+      listenable: app.settings,
+      builder: (context, _) {
+        if (!app.settings.onboarded) {
+          return OnboardingScreen(app: app, onDone: (tab) => setState(() => _tab = tab));
+        }
+        return _shell(app);
+      },
+    );
+  }
+
+  Widget _shell(AppState app) {
     return Scaffold(
       body: SafeArea(
         child: IndexedStack(

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
@@ -25,6 +24,9 @@ class ModelReport {
   int totalMillis = 0;
   List<(String name, double score)> top = const [];
   String? error;
+
+  /// 'Core ML' or 'CPU': what the model is actually running on.
+  String backend = 'CPU';
 
   int get averageMillis => runs == 0 ? 0 : totalMillis ~/ runs;
 }
@@ -136,14 +138,26 @@ class ListenEngine extends ChangeNotifier {
       final spec = specById(id);
       if (spec == null || !models.isInstalled(spec)) continue;
       final report = reports[id] = ModelReport(spec);
+      Future<LoadedModel> load(bool coreMl) => LoadedModel.load(
+            spec: spec,
+            modelFile: models.fileFor(spec.model),
+            labelsFile: models.fileFor(spec.labels),
+            names: spec.namesFromSharedLabels ? names : const {},
+            coreMl: coreMl,
+          );
       try {
-        _loaded.add(await LoadedModel.load(
-          spec: spec,
-          modelFile: models.fileFor(spec.model),
-          labelsFile: models.fileFor(spec.labels),
-          names: spec.namesFromSharedLabels ? names : const {},
-          coreMl: settings.useCoreMl,
-        ));
+        if (settings.useCoreMl) {
+          try {
+            _loaded.add(await load(true));
+            report.backend = 'Core ML';
+          } catch (e) {
+            debugPrint('${spec.id}: Core ML refused it, using the CPU ($e)');
+            _loaded.add(await load(false));
+            report.backend = 'CPU (Core ML could not load this model)';
+          }
+        } else {
+          _loaded.add(await load(false));
+        }
       } catch (e) {
         report.error = 'Could not load: $e';
       }

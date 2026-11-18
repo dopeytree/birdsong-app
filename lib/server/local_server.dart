@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -53,9 +52,7 @@ class LocalServer {
     final path = req.uri.path;
     res.headers.set('Cache-Control', 'no-store');
 
-    if (path == '/' || path == '/index.html') {
-      return _asset(res, 'assets/web/index.html', 'text/html; charset=utf-8');
-    }
+    if (path == '/' || path == '/index.html') return _page(res);
     if (path.startsWith('/fonts/')) {
       final name = path.substring('/fonts/'.length);
       if (name.contains('..') || name.contains('/')) return _notFound(res);
@@ -197,6 +194,35 @@ class LocalServer {
       res.statusCode = HttpStatus.badGateway;
       return _json(res, {'errors': [{'message': 'BirdWeather did not answer: $e'}]});
     }
+  }
+
+  // ---- the page, tailored for the app -------------------------------------
+
+  // The app's own Settings tab decides where detections come from, so the
+  // page's Station section (a BirdNET-Go address, a BirdWeather number) and
+  // its Home Assistant card builder are hidden, and any address typed there
+  // in an earlier build is forgotten: left in place it would send the page
+  // off to that address instead of asking this app.
+  static const _headExtra = '<script>try{localStorage.removeItem("birdplate.server");'
+      'localStorage.removeItem("birdplate.station")}catch(e){}</script>'
+      '<style>#stationOpts,#cardOpts{display:none}</style>';
+  static const _bodyExtra = '<script>(function(){var s=document.getElementById("stationOpts"),'
+      'o=document.getElementById("showOpts");if(s)s.open=false;if(o)o.open=true;})();</script>';
+
+  String? _pageHtml;
+
+  Future<void> _page(HttpResponse res) async {
+    var html = _pageHtml;
+    if (html == null) {
+      html = await rootBundle.loadString('assets/web/index.html');
+      html = html.replaceFirst('</head>', '$_headExtra</head>');
+      final at = html.lastIndexOf('</body>');
+      if (at >= 0) html = html.replaceRange(at, at, _bodyExtra);
+      _pageHtml = html;
+    }
+    res.headers.set(HttpHeaders.contentTypeHeader, 'text/html; charset=utf-8');
+    res.add(utf8.encode(html));
+    await res.close();
   }
 
   // ---- helpers ------------------------------------------------------------

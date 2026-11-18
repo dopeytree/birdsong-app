@@ -193,7 +193,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: const Text('Forget everything heard here'),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: locked ? null : () => s.update((x) => x.onboarded = false),
+                child: const Text('Show the welcome screens again'),
+              ),
+            ),
+            const SizedBox(height: 8),
             Text('Page served at ${app.server.origin}', style: theme.textTheme.bodySmall),
           ],
         );

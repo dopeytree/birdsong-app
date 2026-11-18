@@ -11,6 +11,9 @@ class Settings extends ChangeNotifier {
 
   final File _file;
 
+  /// False until the welcome screens have been finished or skipped.
+  bool onboarded = false;
+
   AppMode mode = AppMode.listen;
 
   /// Station mode: BirdNET-Go address, e.g. http://192.168.1.50:8080
@@ -58,6 +61,7 @@ class Settings extends ChangeNotifier {
   }
 
   void _fromJson(Map<String, dynamic> j) {
+    onboarded = (j['onboarded'] as bool?) ?? onboarded;
     mode = j['mode'] == 'station' ? AppMode.station : AppMode.listen;
     birdnetUrl = (j['birdnetUrl'] as String?) ?? birdnetUrl;
     birdweatherStation = (j['birdweatherStation'] as String?) ?? birdweatherStation;
@@ -76,6 +80,7 @@ class Settings extends ChangeNotifier {
   }
 
   Map<String, dynamic> toJson() => {
+        'onboarded': onboarded,
         'mode': mode.name,
         'birdnetUrl': birdnetUrl,
         'birdweatherStation': birdweatherStation,

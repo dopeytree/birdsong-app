@@ -52,6 +52,9 @@ flutter test
 
 ## Using it
 
+0. First launch walks you through it: choose *This device listens* or
+   *I have a station*, download a model, switch on Core ML, allow the
+   microphone. Settings > *Show the welcome screens again* repeats it.
 1. **Models** tab: download one or more models. Start with
    *BirdNET+ V3.0 Global 10K, FP16* (67 MB), the build BirdNET Live ships.
 2. Tick **Listen** on each model to run. Every window goes through every
