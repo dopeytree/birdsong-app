@@ -83,7 +83,7 @@ def ios():
                r'\.iOS\("[\d.]+"\)', f'.iOS("{IOS_MIN}")')
 
 
-PAPER = (0xEF, 0xE9, 0xD8)
+PAPER = (0xEE, 0xE5, 0xCE)
 
 
 def ios_launch():
@@ -106,7 +106,7 @@ def android_launch():
     for d in ("drawable", "drawable-v21"):
         patch_text(ROOT / f"android/app/src/main/res/{d}/launch_background.xml",
                    r'<item android:drawable="[^"]*" />',
-                   '<item><color android:color="#EFE9D8" /></item>')
+                   '<item><color android:color="#EEE5CE" /></item>')
 
 
 def macos():

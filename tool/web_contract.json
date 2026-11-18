@@ -156,6 +156,18 @@
     {
       "find": "<option value=\"fade\"",
       "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<h1>Birdsong</h1>",
+      "used_by": "local_server.dart: session number #2/3 after the title"
+    },
+    {
+      "find": "<dialog id=\"detail\">",
+      "used_by": "local_server.dart: pop-ups open hide the app buttons"
+    },
+    {
+      "find": "--paper:#eee5ce",
+      "used_by": "main.dart: app paper colour matches the page"
     }
   ],
   "endpoints": [

@@ -225,6 +225,8 @@ class LocalServer {
       // app's menu (Settings > Display).
       // (Both live in #plateno, so the whole corner goes.)
       '#plateno{display:none!important}'
+      // The session number after the title: Birdsong #2/3.
+      '#bsCount{margin-left:.35em;color:var(--sepia)}#bsCount:empty{display:none}'
 
       // A creature being heard right now glows, and the dot on it (over its
       // centre, or beneath it) breathes out a ring, in the plate's madder.
@@ -253,9 +255,17 @@ class LocalServer {
       'f.button.classList.toggle("live",live.has(sci));}}catch(e){}}'
       'new MutationObserver(function(){if(live.size)mark();})'
       '.observe(document.getElementById("plate")||document.body,{childList:true});'
-      'var ses=null;window.birdsongSession=function(x){ses=x;showSession();};'
+      'var ses=null,num="";window.birdsongSession=function(x,n){ses=x;num=n||"";showSession();};'
       'function showSession(){var d=document.getElementById("subDate");'
-      'if(d&&ses)d.textContent=ses+" ";}'
+      'if(d&&ses)d.textContent=ses+" ";'
+      'var h=document.querySelector("header h1");if(h){var c=document.getElementById("bsCount");'
+      'if(!c){c=document.createElement("span");c.id="bsCount";h.appendChild(c);}c.textContent=num;}}'
+      // Tell the app when one of the page's pop-ups opens or closes, so its
+      // buttons and arrows can step aside.
+      'function popups(){var open=!!document.querySelector("dialog[open]");'
+      'try{window.BirdsongHost&&BirdsongHost.postMessage(open?"popup-open":"popup-closed");}catch(e){}}'
+      'document.querySelectorAll("dialog").forEach(function(d){'
+      'new MutationObserver(popups).observe(d,{attributes:true,attributeFilter:["open"]});});'
       'try{var rh=renderHeading;renderHeading=function(){rh();showSession();};}catch(e){}'
       '})();</script>';
 

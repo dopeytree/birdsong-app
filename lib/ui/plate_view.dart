@@ -36,6 +36,10 @@ class _PlateViewState extends State<PlateView> {
   String _livePushed = '';
   String _sessionPushed = '';
 
+  /// One of the page's own pop-ups (a creature's card, its dialog) is open:
+  /// the app's buttons and arrows step aside.
+  bool _popup = false;
+
   AppState get app => widget.app;
   Settings get _s => app.settings;
 
@@ -53,7 +57,12 @@ class _PlateViewState extends State<PlateView> {
     _station = '${_s.birdnetBase}|${_s.stationDigits}';
     _web = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel('BirdsongHost', onMessageReceived: (m) {
+        final open = m.message == 'popup-open';
+        if (open != _popup && mounted) setState(() => _popup = open);
+      })
       ..setNavigationDelegate(NavigationDelegate(onPageFinished: (_) {
+        if (_popup) setState(() => _popup = false);
         _livePushed = '';
         _sessionPushed = '';
         _pushLive();
@@ -125,14 +134,16 @@ class _PlateViewState extends State<PlateView> {
         : ses.live
             ? ''
             : ', place unknown';
-    final n = store.sessions.length;
-    final which = n > 1 ? ' Session ${store.selectedIndex + 1} of $n.' : '';
-    return '$when$where.$which';
+    return '$when$where.';
   }
 
   void _pushSession() {
     if (_s.mode != AppMode.listen) return;
-    final js = jsonEncode(_sessionText());
+    final store = app.store;
+    final n = store.sessions.length;
+    // Which session, after the title: Birdsong #2/3.
+    final count = n > 0 && store.selectedIndex >= 0 ? '#${store.selectedIndex + 1}/$n' : '';
+    final js = '${jsonEncode(_sessionText())},${jsonEncode(count)}';
     if (js == _sessionPushed) return;
     _sessionPushed = js;
     _web
@@ -171,7 +182,7 @@ class _PlateViewState extends State<PlateView> {
             WebViewWidget(controller: _web),
             // A station plate keeps a reload button; Listen here refreshes
             // itself as birds are heard.
-            if (!listen)
+            if (!listen && !_popup)
               Positioned(
                 right: 16,
                 bottom: 16,
@@ -181,28 +192,29 @@ class _PlateViewState extends State<PlateView> {
                   onPressed: () => _web.reload(),
                 ),
               ),
-            Positioned(
-              right: 8,
-              top: 8,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'Settings',
-                    icon: const Icon(Icons.menu),
-                    color: Theme.of(context).colorScheme.primary,
-                    onPressed: widget.openSettings,
-                  ),
-                  if (listen)
-                    _MicButton(
-                      listening: app.engine.running,
-                      busy: app.engine.starting,
-                      onPressed: _toggleListening,
+            if (!_popup)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (listen)
+                      _MicButton(
+                        listening: app.engine.running,
+                        busy: app.engine.starting,
+                        onPressed: _toggleListening,
+                      ),
+                    IconButton(
+                      tooltip: 'Settings',
+                      icon: const Icon(Icons.menu),
+                      color: Theme.of(context).colorScheme.primary,
+                      onPressed: widget.openSettings,
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            if (listen) ...[
+            if (listen && !_popup) ...[
               if (n > 1) ...[
                 Align(
                   alignment: Alignment.centerLeft,

@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'app_state.dart';
 import 'ui/splash.dart';
 
-const paper = Color(0xFFEFE9D8);
+// The page's own --paper, so the app's screens match the plate.
+const paper = Color(0xFFEEE5CE);
 const ink = Color(0xFF2A241C);
 const madder = Color(0xFF9C3B2E);
 
@@ -49,6 +50,8 @@ ThemeData birdsongTheme() {
     fontFamily: serif,
     textTheme: text,
     scaffoldBackgroundColor: paper,
+    appBarTheme: const AppBarTheme(
+        backgroundColor: paper, surfaceTintColor: Colors.transparent, scrolledUnderElevation: 0),
   );
 }
 
