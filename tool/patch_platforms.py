@@ -93,6 +93,11 @@ def ios_launch():
     r, g, b = (round(c / 255, 4) for c in PAPER)
     patch_text(board, r'(<color key="backgroundColor") red="[\d.]+" green="[\d.]+" blue="[\d.]+"',
                rf'\1 red="{r}" green="{g}" blue="{b}"')
+    # The cardinal a little above the middle, as the loading screen has it
+    # (cardinalLift in lib/ui/splash.dart).
+    patch_text(board, r'(<constraint firstItem="YRO-k0-Ey4" firstAttribute="centerY" '
+               r'secondItem="Ze5-6b-2t3" secondAttribute="centerY")( constant="[-\d.]+")?',
+               r'\1 constant="-56"')
     images = ROOT / "ios/Runner/Assets.xcassets/LaunchImage.imageset"
     if images.is_dir():
         for src in sorted((ROOT / "tool/launch").glob("LaunchImage*.png")):

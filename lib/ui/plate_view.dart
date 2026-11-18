@@ -7,7 +7,7 @@ import 'package:plate_share/plate_share.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../app_state.dart';
-import '../main.dart' show ink;
+import '../main.dart' show ink, sepia;
 import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
@@ -195,9 +195,9 @@ class _PlateViewState extends State<PlateView> {
     ));
   }
 
-  // The arrows' own height is 48.
+  // The arrows' own height is 40 (compact).
   double _arrowTop(BuildContext context) =>
-      (_plateMid ?? MediaQuery.sizeOf(context).height / 2) - 24;
+      (_plateMid ?? MediaQuery.sizeOf(context).height / 2) - 20;
 
   // Hidden while that line is scrolled out of view.
   bool _arrowsShown(BuildContext context) {
@@ -338,10 +338,12 @@ class _Arrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (onPressed == null) return const SizedBox.shrink();
+    // Small and quiet, in the sepia of the index line they sit on.
     return IconButton(
       tooltip: tooltip,
-      iconSize: 28,
-      color: ink,
+      iconSize: 20,
+      visualDensity: VisualDensity.compact,
+      color: sepia.withValues(alpha: 0.75),
       icon: Icon(icon),
       onPressed: onPressed,
     );

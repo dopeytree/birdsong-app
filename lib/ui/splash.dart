@@ -10,6 +10,9 @@ import 'home_shell.dart';
 /// in the same place, so one hands over to the other without a jump.
 const cardinalHeight = 175.0;
 
+/// How far above the middle the cardinal sits (the launch screen matches).
+const cardinalLift = 56.0;
+
 /// The northern cardinal and the line from the page's Support section.
 class Cardinal extends StatelessWidget {
   const Cardinal({super.key, this.height = cardinalHeight});
@@ -69,11 +72,16 @@ class Splash extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, box) => Stack(
           children: [
-            const Center(child: Cardinal()),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: box.maxHeight / 2 - cardinalLift - cardinalHeight / 2,
+              child: const Center(child: Cardinal()),
+            ),
             Positioned(
               left: 36,
               right: 36,
-              top: box.maxHeight / 2 + cardinalHeight / 2 + 28,
+              top: box.maxHeight / 2 - cardinalLift + cardinalHeight / 2 + 28,
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 340),
@@ -126,12 +134,34 @@ class _BootState extends State<Boot> {
   Object? _error;
   bool _tapped = false;
   bool _plateLoaded = false;
+  bool _onboarded = true;
+
+  // "Show the welcome again": back to the cardinal first, then the setup.
+  void _settingsChanged() {
+    final now = _app!.settings.onboarded;
+    if (_onboarded && !now && mounted) {
+      setState(() {
+        _tapped = false;
+        _plateLoaded = false;
+      });
+    }
+    _onboarded = now;
+  }
+
+  @override
+  void dispose() {
+    _app?.settings.removeListener(_settingsChanged);
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
     widget.boot.then((a) {
-      if (mounted) setState(() => _app = a);
+      if (!mounted) return;
+      setState(() => _app = a);
+      _onboarded = a.settings.onboarded;
+      a.settings.addListener(_settingsChanged);
     }, onError: (Object e, StackTrace _) {
       if (mounted) setState(() => _error = e);
     });
