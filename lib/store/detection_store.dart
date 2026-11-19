@@ -134,6 +134,7 @@ class Session {
     this.models = const [],
     this.weather,
     this.folder,
+    this.locationSource,
   })  : uuid = uuid ?? newUuid(),
         utcOffsetMinutes = utcOffsetMinutes ?? start.timeZoneOffset.inMinutes;
 
@@ -150,6 +151,9 @@ class Session {
 
   double? lat;
   double? lon;
+
+  /// Where [lat] and [lon] came from: gps, or settings (typed in by hand).
+  String? locationSource;
 
   /// manual, speciesLimit, interrupted or legacy.
   String? stopReason;
@@ -194,6 +198,7 @@ class Session {
         'utcOffsetMinutes': utcOffsetMinutes,
         if (lat != null) 'latitude': lat,
         if (lon != null) 'longitude': lon,
+        if (locationSource != null) 'locationSource': locationSource,
         if (stopReason != null) 'stopReason': stopReason,
         // When the microphone was on. One span for now; pauses would add more.
         'listening': [
@@ -216,6 +221,7 @@ class Session {
         utcOffsetMinutes: j['utcOffsetMinutes'] as int?,
         lat: (j['latitude'] as num?)?.toDouble(),
         lon: (j['longitude'] as num?)?.toDouble(),
+        locationSource: j['locationSource'] as String?,
         stopReason: j['stopReason'] as String?,
         settings: Map<String, dynamic>.from(j['settings'] as Map? ?? const {}),
         models: [

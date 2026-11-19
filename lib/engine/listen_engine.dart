@@ -355,7 +355,9 @@ class ListenEngine extends ChangeNotifier {
         lon: old.lon,
         settings: old.settings,
         models: old.models);
-    session!.weather = old.weather;
+    session!
+      ..weather = old.weather
+      ..locationSource = old.locationSource;
     _open.clear();
     _lastHeard.clear();
     notifyListeners();
@@ -383,29 +385,24 @@ class ListenEngine extends ChangeNotifier {
   /// permission the first time; listening goes on without it.
   Future<void> _locate(Session ses) async {
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        locationNote = 'Location Services are off, so this session has no place.';
+      final pos = await _gps();
+      if (pos != null) {
+        ses.lat = pos.$1;
+        ses.lon = pos.$2;
+        ses.locationSource = 'gps';
+        locationNote = null;
+      } else if (settings.latitude != null && settings.longitude != null) {
+        // No GPS: the place typed in Settings stands in, and says so.
+        ses.lat = settings.latitude;
+        ses.lon = settings.longitude;
+        ses.locationSource = 'settings';
+      } else {
         return;
       }
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-      if (perm != LocationPermission.whileInUse && perm != LocationPermission.always) {
-        locationNote = 'Location not allowed, so this session has no place.';
-        return;
-      }
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 20),
-        ),
-      );
-      ses.lat = pos.latitude;
-      ses.lon = pos.longitude;
-      locationNote = null;
       _geoScores = null; // the location filter now knows where we are
       await store.saveSession(ses);
       if (settings.recordWeather) {
-        final w = await fetchWeather(pos.latitude, pos.longitude, at: ses.start);
+        final w = await fetchWeather(ses.lat!, ses.lon!, at: ses.start);
         if (w != null) {
           ses.weather = w;
           await store.saveSession(ses);
@@ -415,6 +412,32 @@ class ListenEngine extends ChangeNotifier {
       locationNote = 'Could not get a location: $e';
     } finally {
       notifyListeners();
+    }
+  }
+
+  /// The phone's position, or null (with [locationNote] saying why).
+  Future<(double, double)?> _gps() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        locationNote = 'Location Services are off, so this session has no GPS place.';
+        return null;
+      }
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm != LocationPermission.whileInUse && perm != LocationPermission.always) {
+        locationNote = 'Location not allowed, so this session has no GPS place.';
+        return null;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      return (pos.latitude, pos.longitude);
+    } catch (e) {
+      locationNote = 'Could not get a GPS place: $e';
+      return null;
     }
   }
 
