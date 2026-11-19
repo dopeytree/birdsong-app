@@ -102,6 +102,16 @@
         if (sp) openDetail(sp);
       } catch (e) {}
     };
+    // Listen here draws one session, so "since records began" means this session.
+    var when = document.getElementById("latestWhen");
+    if (when && /[?&]bs=listen\b/.test(location.search)) {
+      var reword = function () {
+        var t = when.textContent;
+        if (t.indexOf("since records began") >= 0) when.textContent = t.replace("since records began", "this session");
+      };
+      new MutationObserver(reword).observe(when, { childList: true, characterData: true, subtree: true });
+      reword();
+    }
     ["latestFig", "latestName", "latestSci"].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
