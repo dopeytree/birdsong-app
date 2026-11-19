@@ -216,6 +216,18 @@
     {
       "find": "body.no-index main>section{display:none}",
       "used_by": "plate-extras.js: fold and session arrows hide with the index"
+    },
+    {
+      "find": "let latestOf = \"\";",
+      "used_by": "plate-extras.js: modes 6 and 7 open the shown bird's card"
+    },
+    {
+      "find": "async function openDetail(sp)",
+      "used_by": "plate-extras.js: modes 6 and 7 open the shown bird's card"
+    },
+    {
+      "find": "<div id=\"latestFig\"></div>",
+      "used_by": "plate-extras.js: tap the single bird to open its card"
     }
   ],
   "endpoints": [

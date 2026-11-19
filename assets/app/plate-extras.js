@@ -14,20 +14,25 @@
   }
 
   /* ---- Tap "Index of species" to fold the list away (and back) ----------
-     A small arrow on the line above the heading says which way it goes: down
-     while the list shows (tap to fold it away), up once folded (tap to bring
-     it back). The collage takes the room and is laid out afresh. */
+     While the list shows, a small down arrow sits below it (tap to fold it
+     away); once folded, an up arrow sits on the line above the heading (tap
+     to bring it back). The collage takes the room and is laid out afresh. */
   if (heading) {
     heading.classList.add("bsIx");
     heading.setAttribute("role", "button");
     heading.setAttribute("tabindex", "0");
     var arrow = document.createElement("div");
-    arrow.className = "bsIxArrow";
+    arrow.className = "bsIxArrow bsIxUp";
+    arrow.textContent = "\u2303";
     arrow.setAttribute("aria-hidden", "true");
     heading.parentNode.insertBefore(arrow, heading);
+    var down = document.createElement("div");
+    down.className = "bsIxArrow bsIxDown";
+    down.textContent = "\u2304";
+    down.setAttribute("aria-hidden", "true");
+    index.parentNode.insertBefore(down, index.nextSibling);
     var setFolded = function (on) {
       document.body.classList.toggle("bs-noindex", on);
-      arrow.textContent = on ? "\u2303" : "\u2304";
       heading.setAttribute("aria-expanded", String(!on));
       try { localStorage.setItem("birdplate.bsIndexFolded", on ? "1" : "0"); } catch (e) {}
     };
@@ -40,11 +45,12 @@
     };
     heading.addEventListener("click", toggle);
     arrow.addEventListener("click", toggle);
+    down.addEventListener("click", toggle);
     heading.addEventListener("keydown", function (e) {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
     });
 
-    /* ---- The session arrows, either side of the words ------------------
+    /* ---- The session arrows, at the outer ends of the heading's rules -----
        The app says which way there are sessions to go (birdsongSteps) and
        steps when one is tapped. Where the heading is not on show (a mode
        without the index), the app draws its own pair instead. */
@@ -80,6 +86,28 @@
     report();
   } else {
     tell("arrows:app");
+  }
+
+  /* ---- Modes 6 and 7: the one bird opens its card ---------------------
+     The page's latest and top views show a single bird with no way into
+     its details; a tap on the picture or the name opens the same card the
+     collage does. The page's own names (species, latestOf, openDetail) are
+     shared with this script. */
+  var single = document.getElementById("latest");
+  if (single) {
+    var open = function () {
+      try {
+        if (typeof openDetail !== "function" || !latestOf) return;
+        var sp = species.find(function (x) { return x.sci === latestOf; });
+        if (sp) openDetail(sp);
+      } catch (e) {}
+    };
+    ["latestFig", "latestName", "latestSci"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.style.cursor = "pointer";
+      el.addEventListener("click", open);
+    });
   }
 
   /* ---- Pinch to zoom the collage (touch screens) ------------------------
