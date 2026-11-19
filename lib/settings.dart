@@ -32,29 +32,25 @@ class Settings extends ChangeNotifier {
   String get birdnetUrl => station?.birdnetUrl ?? '';
   String get birdweatherStation => station?.birdweather ?? '';
 
-  /// Where the plate's source button goes next: Listen here, then each
-  /// station in turn, then back to Listen here.
-  void nextSource() => update((x) {
+  /// The plate's station button: from Listen here, the station last shown;
+  /// on a station, the next saved one, round again.
+  void nextStation() => update((x) {
         if (x.stations.isEmpty) return;
         if (x.mode == AppMode.listen) {
           x.mode = AppMode.station;
-          x.stationId = x.stations.first.id;
+          x.stationId = x.station!.id;
           return;
         }
         final i = x.stations.indexWhere((st) => st.id == x.station?.id);
-        if (i < 0 || i == x.stations.length - 1) {
-          x.mode = AppMode.listen;
-        } else {
-          x.stationId = x.stations[i + 1].id;
-        }
+        x.stationId = x.stations[(i + 1) % x.stations.length].id;
       });
 
-  /// The source after the current one, for the button's tooltip.
-  String get nextSourceName {
+  /// Where the station button goes next, for its tooltip.
+  String get nextStationName {
     if (stations.isEmpty) return 'Add a station';
-    if (mode == AppMode.listen) return stations.first.name;
+    if (mode == AppMode.listen) return station!.name;
     final i = stations.indexWhere((st) => st.id == station?.id);
-    return i < 0 || i == stations.length - 1 ? 'Listen here & now' : stations[i + 1].name;
+    return stations[(i + 1) % stations.length].name;
   }
 
   /// Saves a new station, or [replace]s one, and switches to it.

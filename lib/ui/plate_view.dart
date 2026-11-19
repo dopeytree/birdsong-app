@@ -342,15 +342,22 @@ class _PlateViewState extends State<PlateView> {
     _say(mode.name, seconds: 2);
   }
 
-  // Listen here, then each saved station, then back: a tap each. With no
-  // station saved yet, it asks for one.
-  void _nextSource() {
+  void _listenHere() {
+    if (_s.mode == AppMode.listen) return;
+    _s.update((x) => x.mode = AppMode.listen);
+    _say('Listen here & now', seconds: 2);
+  }
+
+  // To the remote station; on one already, the next saved station. With
+  // none saved yet, it asks for one.
+  void _toStation() {
     if (_s.stations.isEmpty) {
       editStation(context, _s);
       return;
     }
-    _s.nextSource();
-    _say(_s.mode == AppMode.listen ? 'Listen here & now' : _s.station!.name, seconds: 2);
+    if (_s.mode == AppMode.station && _s.stations.length == 1) return;
+    _s.nextStation();
+    _say(_s.station!.name, seconds: 2);
   }
 
   Future<void> _share() async {
@@ -404,13 +411,24 @@ class _PlateViewState extends State<PlateView> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Both sources, always there: the one shown in madder.
+                    IconButton(
+                      tooltip: listen ? 'Listening here & now' : 'Listen here & now',
+                      icon: const Icon(Icons.mic_none_outlined),
+                      color: listen ? Theme.of(context).colorScheme.primary : sepia.withValues(alpha: 0.55),
+                      onPressed: _listenHere,
+                    ),
                     IconButton(
                       tooltip: _s.stations.isEmpty
                           ? 'Add a remote station'
-                          : '${listen ? 'Listening here' : _s.station!.name} · next: ${_s.nextSourceName}',
-                      icon: Icon(listen ? Icons.mic_none_outlined : Icons.sensors),
-                      color: Theme.of(context).colorScheme.primary,
-                      onPressed: _nextSource,
+                          : listen
+                              ? 'Remote station: ${_s.station!.name}'
+                              : _s.stations.length > 1
+                                  ? '${_s.station!.name} · next: ${_s.nextStationName}'
+                                  : _s.station!.name,
+                      icon: const Icon(Icons.sensors),
+                      color: listen ? sepia.withValues(alpha: 0.55) : Theme.of(context).colorScheme.primary,
+                      onPressed: _toStation,
                     ),
                     // On a station the record button stays while a recording
                     // runs here, so it can still be stopped.

@@ -48,22 +48,23 @@ void main() {
     expect(both.birdnetUrl, '');
   });
 
-  test('the source button goes here, each station, then back here', () async {
+  test('the station button goes to the last station, then steps between stations', () async {
     final s = await loadWith({'mode': 'listen'});
     s.putStation(Station.fromInput('Garden', 'http://192.168.1.50:8080'));
     s.putStation(Station.fromInput('Allotment', 'https://app.birdweather.com/stations/1234'));
     s.update((x) => x.mode = AppMode.listen);
-    final seen = <String>[];
-    for (var i = 0; i < 4; i++) {
-      s.nextSource();
-      seen.add(s.mode == AppMode.listen ? 'here' : s.station!.name);
-    }
-    expect(seen, ['Garden', 'Allotment', 'here', 'Garden']);
+    s.nextStation();
+    expect(s.mode, AppMode.station);
+    expect(s.station!.name, 'Allotment');   // the one last shown
+    s.nextStation();
+    expect(s.station!.name, 'Garden');
+    s.nextStation();
+    expect(s.station!.name, 'Allotment');
     // and it is all saved
     await s.saved;
     final again = await Settings.load(root);
     expect(again.stations.map((x) => x.name), ['Garden', 'Allotment']);
-    expect(again.station!.name, 'Garden');
+    expect(again.station!.name, 'Allotment');
   });
 
   test('a station is read from a number, a BirdWeather page or an address', () {
