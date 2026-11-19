@@ -228,6 +228,14 @@
     {
       "find": "<div id=\"latestFig\"></div>",
       "used_by": "plate-extras.js: tap the single bird to open its card"
+    },
+    {
+      "find": "const figures = new Map();",
+      "used_by": "plate-extras.js: marks whole (uncut) plates for the multiply blend"
+    },
+    {
+      "find": "if (tot / (W * H) > .5) return null;",
+      "used_by": "plate-extras.js: the plates this gives up on are drawn whole and need the blend"
     }
   ],
   "endpoints": [

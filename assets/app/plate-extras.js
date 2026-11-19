@@ -147,6 +147,29 @@
     });
   }
 
+  /* ---- A plate that would not lift off its page --------------------------
+     The page cuts each creature out of its plate, but gives up when the
+     creature fills more than half the picture (a bat on its rock, say) and
+     draws the whole plate instead, white paper and all. The detail card
+     melts that paper into the page with a multiply blend; this gives the
+     collage the same, on the figure itself (each figure is placed with a
+     transform, which would keep a blend on its picture from reaching the
+     page). Marks those figures "whole", the class the page will set itself
+     once the fix is upstream; see docs/upstream-whole-plate-blend.md. */
+  var markWhole = function () {
+    if (typeof figures === "undefined" || !figures.forEach) return;
+    figures.forEach(function (rec) {
+      var b = rec.button, el = b && b.firstElementChild, p = rec.plate;
+      var whole = !!(el && el.tagName === "IMG" && p && !p.ready && !p.photo && !rec.blank);
+      if (b && b.classList.contains("whole") !== whole) b.classList.toggle("whole", whole);
+    });
+  };
+  if (plate) {
+    new MutationObserver(markWhole).observe(plate,
+      { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    markWhole();
+  }
+
   /* ---- Pinch to zoom the collage (touch screens) ------------------------
      Two fingers zoom about their midpoint, one finger pans once zoomed in,
      a double tap goes back. While a gesture runs, and just after, taps and

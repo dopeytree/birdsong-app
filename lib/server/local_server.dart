@@ -254,6 +254,9 @@ class LocalServer {
       // would shrink it to one column of names; keep it as wide as before
       'body.no-plate:not(.latest)>main>section{width:100%;box-sizing:border-box;padding-bottom:.8rem}'
       'body.no-plate .bsIxArrow{display:none!important}body.no-plate.bs-noindex #index{display:block}'
+      // a whole plate's paper melts into the page, as in the detail card;
+      // while pinched, the collage is its own layer, so give it paper to melt into
+      '.bird.whole{mix-blend-mode:multiply}body.bs-zoomed #plate{background:var(--paper)}'
       '#bsZoomBox{overflow:hidden;touch-action:pan-x pan-y}body.bs-zoomed #bsZoomBox{touch-action:none}'
       'body{padding:max(env(safe-area-inset-top),var(--bs-top,0px)) max(env(safe-area-inset-right),var(--bs-right,0px))'
       ' max(env(safe-area-inset-bottom),var(--bs-bottom,0px)) max(env(safe-area-inset-left),var(--bs-left,0px))}'
