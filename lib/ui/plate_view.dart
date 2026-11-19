@@ -342,10 +342,13 @@ class _PlateViewState extends State<PlateView> {
     _say(mode.name, seconds: 2);
   }
 
-  void _listenHere() {
-    if (_s.mode == AppMode.listen) return;
-    _s.update((x) => x.mode = AppMode.listen);
-    _say('Listen here & now', seconds: 2);
+  // The microphone: not recording, it moves to Listen here and starts;
+  // recording, it stops (wherever the plate is).
+  Future<void> _mic() async {
+    if (!app.engine.running && _s.mode != AppMode.listen) {
+      _s.update((x) => x.mode = AppMode.listen);
+    }
+    await _toggleListening();
   }
 
   // To the remote station; on one already, the next saved station. With
@@ -411,12 +414,14 @@ class _PlateViewState extends State<PlateView> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Both sources, always there: the one shown in madder.
-                    IconButton(
-                      tooltip: listen ? 'Listening here & now' : 'Listen here & now',
-                      icon: const Icon(Icons.mic_none_outlined),
-                      color: listen ? Theme.of(context).colorScheme.primary : sepia.withValues(alpha: 0.55),
-                      onPressed: _listenHere,
+                    // Both sources, always there: the one shown in madder. The
+                    // microphone also records: a tap starts (moving to Listen
+                    // here), a tap on the slashed microphone stops.
+                    _MicButton(
+                      listening: app.engine.running,
+                      busy: app.engine.starting,
+                      shown: listen || app.engine.running,
+                      onPressed: _mic,
                     ),
                     IconButton(
                       tooltip: _s.stations.isEmpty
@@ -430,14 +435,6 @@ class _PlateViewState extends State<PlateView> {
                       color: listen ? sepia.withValues(alpha: 0.55) : Theme.of(context).colorScheme.primary,
                       onPressed: _toStation,
                     ),
-                    // On a station the record button stays while a recording
-                    // runs here, so it can still be stopped.
-                    if (listen || app.engine.running || app.engine.starting)
-                      _MicButton(
-                        listening: app.engine.running,
-                        busy: app.engine.starting,
-                        onPressed: _toggleListening,
-                      ),
                     IconButton(
                       tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
                       icon: const Icon(Icons.dashboard_outlined),
@@ -585,13 +582,16 @@ class _Note extends StatelessWidget {
   }
 }
 
-/// Round record button; while listening it turns to a stop button with a
-/// slow pulse around it.
+/// The microphone: plain when idle, slashed while recording (a tap stops
+/// it), with a slow pulse around it; a spinner while it starts. Madder when
+/// it is the plate on show or recording, faded otherwise.
 class _MicButton extends StatefulWidget {
-  const _MicButton({required this.listening, required this.busy, required this.onPressed});
+  const _MicButton(
+      {required this.listening, required this.busy, required this.shown, required this.onPressed});
 
   final bool listening;
   final bool busy;
+  final bool shown;
   final VoidCallback onPressed;
 
   @override
@@ -624,10 +624,11 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     final red = Theme.of(context).colorScheme.primary;
+    final color = widget.shown ? red : sepia.withValues(alpha: 0.55);
     const size = 40.0;
     return SizedBox(
-      width: size + 16,
-      height: size + 16,
+      width: size + 8,
+      height: size + 8,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -635,38 +636,30 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
             AnimatedBuilder(
               animation: _pulse,
               builder: (context, _) => Container(
-                width: size + 16 * _pulse.value,
-                height: size + 16 * _pulse.value,
+                width: size * 0.8 + 14 * _pulse.value,
+                height: size * 0.8 + 14 * _pulse.value,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: red.withValues(alpha: 0.35 * (1 - _pulse.value)),
+                  color: red.withValues(alpha: 0.25 * (1 - _pulse.value)),
                 ),
               ),
             ),
-          Semantics(
-            button: true,
-            label: widget.listening ? 'Stop recording' : 'Record',
-            child: Material(
-              color: red,
-              shape: const CircleBorder(),
-              elevation: 1,
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: widget.busy ? null : widget.onPressed,
-                child: SizedBox(
-                  width: size,
-                  height: size,
-                  child: widget.busy
-                      ? const Padding(
-                          padding: EdgeInsets.all(11),
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : Icon(widget.listening ? Icons.stop_rounded : Icons.fiber_manual_record,
-                          color: Colors.white, size: widget.listening ? 24 : 20),
+          widget.busy
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: red),
+                )
+              : IconButton(
+                  tooltip: widget.listening
+                      ? 'Stop recording'
+                      : widget.shown
+                          ? 'Record here & now'
+                          : 'Listen here & now, and record',
+                  icon: Icon(widget.listening ? Icons.mic_off_outlined : Icons.mic_none_outlined),
+                  color: color,
+                  onPressed: widget.onPressed,
                 ),
-              ),
-            ),
-          ),
         ],
       ),
     );
