@@ -428,6 +428,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _setDisplay(String key, Object value) {
     setState(() => _display = {...?_display, key: value});
+    // Size by is also the plate button's modes 1 to 3.
+    if (key == 'sizeBy') {
+      final n = plateModes.indexWhere((m) => m.sizeBy == value) + 1;
+      if (n > 0) s.update((x) => x.plateMode = n);
+    }
     app.page?.set(key, value);
   }
 

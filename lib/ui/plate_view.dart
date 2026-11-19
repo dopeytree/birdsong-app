@@ -50,6 +50,10 @@ class _PlateViewState extends State<PlateView> {
 
   final _shareKey = GlobalKey();
 
+  /// The page is showing the session arrows beside "Index of species"; the
+  /// app's own pair is only for modes without that line.
+  bool _arrowsInPage = false;
+
   // ---- notes at the top of the plate ---------------------------------------
   // The app's short messages (a session started or ended, the size order
   // chosen, a photo saved), under the buttons rather than at the bottom.
@@ -133,9 +137,27 @@ class _PlateViewState extends State<PlateView> {
 
   // Listen here: the page's period buttons give way to sessions, and
   // period=all lets the session decide what is drawn.
-  Uri get _url => Uri.parse(_s.mode == AppMode.listen
-      ? '${app.server.origin}/?period=all&hide=periods&bs=listen'
-      : '${app.server.origin}/');
+  Uri get _url {
+    final mode = plateModes[_s.plateMode - 1];
+    final q = <String>[
+      if (_s.mode == AppMode.listen) ...['period=all', 'bs=listen'],
+      // Listen here steps through sessions, not periods; mode 4 drops the index too.
+      if (_s.mode == AppMode.listen || mode.query.startsWith('hide='))
+        'hide=${[if (_s.mode == AppMode.listen) 'periods', if (mode.query == 'hide=index') 'index'].join(',')}',
+      if (mode.query.isNotEmpty && !mode.query.startsWith('hide=')) mode.query,
+    ];
+    return Uri.parse('${app.server.origin}/${q.isEmpty ? '' : '?${q.join('&')}'}');
+  }
+
+  // The page as last asked for; a mode that keeps the same address (1 to 3)
+  // changes the page in place instead of reloading it.
+  String _loaded = '';
+
+  void _load() {
+    final u = _url;
+    _loaded = u.toString();
+    _web.loadRequest(u);
+  }
 
   @override
   void initState() {
@@ -146,6 +168,15 @@ class _PlateViewState extends State<PlateView> {
     _web = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel('BirdsongHost', onMessageReceived: (m) {
+        if (m.message == 'step:-1' || m.message == 'step:1') {
+          app.store.step(m.message == 'step:1' ? 1 : -1);
+          return;
+        }
+        if (m.message == 'arrows:page' || m.message == 'arrows:app') {
+          final inPage = m.message == 'arrows:page';
+          if (inPage != _arrowsInPage && mounted) setState(() => _arrowsInPage = inPage);
+          return;
+        }
         if (m.message.startsWith('plate:')) {
           final mid = double.tryParse(m.message.substring(6));
           if (mid != _plateMid && mounted) setState(() => _plateMid = mid);
@@ -170,9 +201,11 @@ class _PlateViewState extends State<PlateView> {
         _sessionPushed = '';
         _pushLive();
         _pushSession();
+        final mode = plateModes[_s.plateMode - 1];
+        if (mode.sizeBy != null) app.page?.set('sizeBy', mode.sizeBy!);
         widget.onLoaded?.call();
-      }))
-      ..loadRequest(_url);
+      }));
+    _load();
     app.page = PageControl(_web);
     // iOS: stop WebKit adding its own safe-area insets, so the page fills
     // the screen and pads itself.
@@ -205,7 +238,9 @@ class _PlateViewState extends State<PlateView> {
       _mode = _s.mode;
       _plateModel = _s.plateModel;
       _station = station;
-      _web.loadRequest(_url);
+      _load();
+    } else if (_url.toString() != _loaded) {
+      _load();
     }
   }
 
@@ -259,10 +294,13 @@ class _PlateViewState extends State<PlateView> {
     // Which session, after the title: Birdsong #2/3.
     final count = n > 0 && store.selectedIndex >= 0 ? '#${store.selectedIndex + 1}/$n' : '';
     final js = '${jsonEncode(_sessionText())},${jsonEncode(count)},${jsonEncode(_placeText())}';
-    if (js == _sessionPushed) return;
-    _sessionPushed = js;
+    final i = store.selectedIndex;
+    final steps = '${n > 1 && i > 0},${n > 1 && i >= 0 && i < n - 1}';
+    if ('$js|$steps' == _sessionPushed) return;
+    _sessionPushed = '$js|$steps';
     _web
-        .runJavaScript('window.birdsongSession&&window.birdsongSession($js)')
+        .runJavaScript('window.birdsongSession&&window.birdsongSession($js);'
+            'window.birdsongSteps&&window.birdsongSteps($steps)')
         .catchError((Object _) {});
   }
 
@@ -291,17 +329,15 @@ class _PlateViewState extends State<PlateView> {
     return mid == null || (mid > 24 && mid < MediaQuery.sizeOf(context).height - 24);
   }
 
-  // Noisiest species, then recent ramblings, then no pecking order, round
-  // again: the plate's Size by, a tap away.
-  Future<void> _cycleSize() async {
-    final page = app.page;
-    if (page == null) return;
-    final now = (await page.read())?['sizeBy'];
-    const order = ['calls', 'time', 'equal'];
-    final next = order[(order.indexOf(now is String ? now : 'calls') + 1) % order.length];
-    await page.set('sizeBy', next);
+  // The plate's modes, 1 to 7, a tap each: three ways of sizing the collage,
+  // then the collage alone, the index alone, the latest bird, the most heard.
+  Future<void> _nextMode() async {
+    final next = _s.plateMode % plateModes.length + 1;
+    final mode = plateModes[next - 1];
+    _s.update((x) => x.plateMode = next);   // 4 to 7 reload the page with their view
+    if (mode.sizeBy != null) await app.page?.set('sizeBy', mode.sizeBy!);
     if (!mounted) return;
-    _say(PageControl.sizeBy[next]!, seconds: 2);
+    _say('$next  ${mode.name}', seconds: 2);
   }
 
   Future<void> _share() async {
@@ -372,10 +408,9 @@ class _PlateViewState extends State<PlateView> {
                         onPressed: _toggleListening,
                       ),
                     IconButton(
-                      tooltip: 'Size the birds by…',
-                      icon: const Icon(Icons.autorenew),
-                      color: Theme.of(context).colorScheme.primary,
-                      onPressed: _cycleSize,
+                      tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
+                      icon: _ModeNumber(_s.plateMode),
+                      onPressed: _nextMode,
                     ),
                     if (PlateShare.supported)
                       PopupMenuButton<String>(
@@ -433,7 +468,7 @@ class _PlateViewState extends State<PlateView> {
                   ),
                 ),
               ),
-            if (listen && !_popup && n > 1 && _arrowsShown(context)) ...[
+            if (listen && !_popup && n > 1 && !_arrowsInPage && _arrowsShown(context)) ...[
               Positioned(
                 left: safe.left,
                 top: _arrowTop(context),
@@ -519,6 +554,26 @@ class _Note extends StatelessWidget {
 
 /// Round microphone button; while listening it turns to a stop button with
 /// a slow pulse around it.
+/// The plate mode's number in a small ring.
+class _ModeNumber extends StatelessWidget {
+  const _ModeNumber(this.n);
+
+  final int n;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme.primary;
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: c, width: 1.6)),
+      child: Text('$n',
+          style: TextStyle(fontFamily: serif, fontSize: 15, height: 1.0, color: c, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
 class _MicButton extends StatefulWidget {
   const _MicButton({required this.listening, required this.busy, required this.onPressed});
 
@@ -577,7 +632,7 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
             ),
           Semantics(
             button: true,
-            label: widget.listening ? 'Stop listening' : 'Start listening',
+            label: widget.listening ? 'Stop recording' : 'Record',
             child: Material(
               color: red,
               shape: const CircleBorder(),
@@ -593,8 +648,8 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
                           padding: EdgeInsets.all(11),
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : Icon(widget.listening ? Icons.mic_off : Icons.mic,
-                          color: Colors.white, size: 22),
+                      : Icon(widget.listening ? Icons.stop_rounded : Icons.fiber_manual_record,
+                          color: Colors.white, size: widget.listening ? 24 : 20),
                 ),
               ),
             ),

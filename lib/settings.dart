@@ -45,6 +45,9 @@ class Settings extends ChangeNotifier {
   /// Note the weather when a session starts (MET Norway, rough position).
   bool recordWeather = true;
 
+  /// What the plate shows, 1 to 7 (see [plateModes]), from its number button.
+  int plateMode = 1;
+
   /// Models that listen. Each window goes through every one of them.
   Set<String> activeModels = {'bnl-v3-10k'};
 
@@ -78,6 +81,7 @@ class Settings extends ChangeNotifier {
     geoThreshold = (j['geoThreshold'] as num?)?.toDouble() ?? geoThreshold;
     useCoreMl = (j['useCoreMl'] as bool?) ?? useCoreMl;
     recordWeather = (j['recordWeather'] as bool?) ?? recordWeather;
+    plateMode = ((j['plateMode'] as num?)?.toInt() ?? plateMode).clamp(1, plateModes.length);
     final active = j['activeModels'];
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
@@ -118,6 +122,7 @@ class Settings extends ChangeNotifier {
         'geoThreshold': geoThreshold,
         'useCoreMl': useCoreMl,
         'recordWeather': recordWeather,
+        'plateMode': plateMode,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
       };
@@ -145,3 +150,27 @@ class Settings extends ChangeNotifier {
 
   String get stationDigits => birdweatherStation.replaceAll(RegExp(r'\D'), '');
 }
+
+/// The plate's modes, numbered on its button. 1 to 3 size the collage; 4 to 7
+/// use the page's own Home Assistant card views (?view=, ?hide=).
+class PlateMode {
+  const PlateMode(this.name, {this.sizeBy, this.query = ''});
+
+  final String name;
+
+  /// For 1 to 3: the page's Size by (calls, time, equal).
+  final String? sizeBy;
+
+  /// Extra address parameters for the page.
+  final String query;
+}
+
+const plateModes = <PlateMode>[
+  PlateMode('Noisiest species', sizeBy: 'calls'),
+  PlateMode('Recent ramblings', sizeBy: 'time'),
+  PlateMode('No pecking order', sizeBy: 'equal'),
+  PlateMode('The collage, no index', query: 'hide=index'),
+  PlateMode('The index alone', query: 'view=index&show=title,date'),
+  PlateMode('The latest bird, and when', query: 'view=latest&show=time,title,date'),
+  PlateMode('Most heard this session', query: 'view=top&show=title,date'),
+];

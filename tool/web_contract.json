@@ -200,6 +200,22 @@
     {
       "find": "<div id=\"plate\">",
       "used_by": "plate-extras.js: wrapped in #bsZoomBox for pinch zoom"
+    },
+    {
+      "find": "const SINGLE = { latest: \"Latest bird\", top: \"Top\"",
+      "used_by": "settings.dart plateModes 6 and 7: ?view=latest and ?view=top"
+    },
+    {
+      "find": "?view=plate | index | latest",
+      "used_by": "settings.dart plateModes 4 and 5: ?view=index, ?hide=index, ?show="
+    },
+    {
+      "find": "for (const [key, on] of [[\"hide\", false], [\"show\", true]])",
+      "used_by": "settings.dart plateModes: hide= and show= parts"
+    },
+    {
+      "find": "body.no-index main>section{display:none}",
+      "used_by": "plate-extras.js: fold and session arrows hide with the index"
     }
   ],
   "endpoints": [

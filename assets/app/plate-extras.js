@@ -9,21 +9,25 @@
   var heading = index && index.previousElementSibling && index.previousElementSibling.tagName === "H2"
     ? index.previousElementSibling : null;
   function relayout() { dispatchEvent(new Event("resize")); }
+  function tell(msg) {
+    try { if (window.BirdsongHost) window.BirdsongHost.postMessage(msg); } catch (e) {}
+  }
 
   /* ---- Tap "Index of species" to fold the list away (and back) ----------
-     Folded, a small ^ shows on a line above the heading (tapping it opens
-     the list too); the collage takes the room and is laid out afresh. */
+     A small arrow on the line above the heading says which way it goes: down
+     while the list shows (tap to fold it away), up once folded (tap to bring
+     it back). The collage takes the room and is laid out afresh. */
   if (heading) {
     heading.classList.add("bsIx");
     heading.setAttribute("role", "button");
     heading.setAttribute("tabindex", "0");
     var arrow = document.createElement("div");
     arrow.className = "bsIxArrow";
-    arrow.textContent = "⌃";
     arrow.setAttribute("aria-hidden", "true");
     heading.parentNode.insertBefore(arrow, heading);
     var setFolded = function (on) {
       document.body.classList.toggle("bs-noindex", on);
+      arrow.textContent = on ? "\u2303" : "\u2304";
       heading.setAttribute("aria-expanded", String(!on));
       try { localStorage.setItem("birdplate.bsIndexFolded", on ? "1" : "0"); } catch (e) {}
     };
@@ -39,6 +43,43 @@
     heading.addEventListener("keydown", function (e) {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
     });
+
+    /* ---- The session arrows, either side of the words ------------------
+       The app says which way there are sessions to go (birdsongSteps) and
+       steps when one is tapped. Where the heading is not on show (a mode
+       without the index), the app draws its own pair instead. */
+    var step = function (dir, glyph, label) {
+      var b = document.createElement("span");
+      b.className = "bsStep";
+      b.textContent = glyph;
+      b.setAttribute("role", "button");
+      b.setAttribute("aria-label", label);
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();          // not a fold of the index
+        if (!b.classList.contains("off")) tell("step:" + dir);
+      });
+      return b;
+    };
+    var prev = step(-1, "\u2039", "Earlier session"), next = step(1, "\u203A", "Later session");
+    heading.insertBefore(prev, heading.firstChild);
+    heading.appendChild(next);
+    window.birdsongSteps = function (canPrev, canNext) {
+      prev.classList.toggle("off", !canPrev);
+      next.classList.toggle("off", !canNext);
+      document.body.classList.toggle("bs-steps", canPrev || canNext);
+    };
+    var shown = null;
+    var report = function () {
+      var on = heading.offsetParent !== null;
+      if (on === shown) return;
+      shown = on;
+      tell(on ? "arrows:page" : "arrows:app");
+    };
+    addEventListener("resize", report);
+    setInterval(report, 1000);
+    report();
+  } else {
+    tell("arrows:app");
   }
 
   /* ---- Pinch to zoom the collage (touch screens) ------------------------
