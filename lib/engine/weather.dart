@@ -45,6 +45,8 @@ Future<Map<String, dynamic>?> fetchWeather(double lat, double lon, {DateTime? at
     double? num_(Object? v) => (v as num?)?.toDouble();
     return {
       'source': 'MET Norway Locationforecast 2.0 (CC BY 4.0)',
+      // The forecast for the hour the session began, not a station reading.
+      'kind': 'forecast',
       'fetchedAt': DateTime.now().toUtc().toIso8601String(),
       'observedAt': DateTime.parse(best['time'] as String).toUtc().toIso8601String(),
       'latitude': rLat,

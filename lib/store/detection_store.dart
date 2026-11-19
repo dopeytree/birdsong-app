@@ -397,6 +397,10 @@ class DetectionStore extends ChangeNotifier {
     // Renumber after anything already in folders, so ids stay unique.
     final idMap = <int, int>{};
     for (final x in oldSessions) {
+      // Already moved by a run that stopped part way: keep that one.
+      if (sessions.any((s) => s.stopReason == 'legacy' && s.start.isAtSameMomentAs(x.start))) {
+        continue;
+      }
       final moved = Session(
         id: _nextSessionId++,
         start: x.start,

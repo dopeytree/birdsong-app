@@ -95,6 +95,20 @@ void main() {
     expect(again.all, hasLength(2));
   });
 
+  test('a migration stopped part way is not repeated', () async {
+    final legacy = Directory('${root.path}/detections');
+    await legacy.create(recursive: true);
+    final line = jsonEncode({'id': 1, 'model': 'm', 'sci': 'Strix aluco', 'common': 'Tawny Owl',
+        'confidence': 0.9, 'at': DateTime(2026, 11, 18, 22).toIso8601String(), 'clip': false});
+    await File('${legacy.path}/detections.jsonl').writeAsString('$line\n');
+    await DetectionStore.open(root);
+    // As if the app was killed before the old log was renamed.
+    await File('${legacy.path}/detections.jsonl.migrated').rename('${legacy.path}/detections.jsonl');
+    final again = await DetectionStore.open(root);
+    expect(again.sessions, hasLength(1));
+    expect(again.all, hasLength(1));
+  });
+
   test('weather reads as a few words', () {
     expect(weatherWords({'temperatureC': 8.4, 'symbol': 'lightrainshowers_day'}),
         '8°C, light rain showers');
