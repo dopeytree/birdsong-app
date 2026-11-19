@@ -247,6 +247,8 @@ class LocalServer {
       '.bsIxUp{display:none}body.bs-noindex .bsIxUp{display:block}body.bs-noindex .bsIxDown{display:none}'
       '.bsIxDown{margin:.3rem 0 0}'
       // the session arrows sit outside the heading's two rules: ‹ —— Index —— ›
+      // a little more room between "Index of species" and the names under it
+      '.bsIx{margin-bottom:1.6rem}body.fit .bsIx{margin-bottom:.85rem}'
       '.bsStep{display:none;cursor:pointer;color:var(--sepia);font-size:1.25em;line-height:1;padding:0 .2rem}'
       'body.bs-steps .bsIx{display:flex;align-items:center;justify-content:center}'
       'body.bs-steps .bsStep{display:block}'
