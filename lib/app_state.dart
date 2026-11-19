@@ -28,7 +28,9 @@ class AppState {
     await dir.create(recursive: true);
     final settings = await Settings.load(dir);
     final models = ModelManager(Directory('${dir.path}/models'));
-    final store = await DetectionStore.open(Directory('${dir.path}/detections'));
+    // Session folders under <app data>/sessions; older data in detections/
+    // is moved across on first launch.
+    final store = await DetectionStore.open(dir);
     final engine = ListenEngine(settings, models, store);
     final server = LocalServer(settings, store, plateModel: () => settings.plateModel);
     await server.start();

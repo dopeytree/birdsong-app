@@ -42,6 +42,9 @@ class Settings extends ChangeNotifier {
   /// Run models on Apple's Core ML (Neural Engine or GPU) instead of the CPU.
   bool useCoreMl = false;
 
+  /// Note the weather when a session starts (MET Norway, rough position).
+  bool recordWeather = true;
+
   /// Models that listen. Each window goes through every one of them.
   Set<String> activeModels = {'bnl-v3-10k'};
 
@@ -74,6 +77,7 @@ class Settings extends ChangeNotifier {
     longitude = (j['longitude'] as num?)?.toDouble();
     geoThreshold = (j['geoThreshold'] as num?)?.toDouble() ?? geoThreshold;
     useCoreMl = (j['useCoreMl'] as bool?) ?? useCoreMl;
+    recordWeather = (j['recordWeather'] as bool?) ?? recordWeather;
     final active = j['activeModels'];
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
@@ -84,6 +88,19 @@ class Settings extends ChangeNotifier {
       if (threshold == 0.5) threshold = 0.65;
     }
   }
+
+  /// The listening settings saved with each session, so its results can be
+  /// read later knowing how they were made.
+  Map<String, dynamic> get listeningSnapshot => {
+        'confidenceThreshold': threshold,
+        'hopSeconds': hopSeconds,
+        'repeatSeconds': repeatSeconds,
+        'animalsOnly': animalsOnly,
+        'locationFilter': useGeomodel,
+        if (useGeomodel) 'locationFilterThreshold': geoThreshold,
+        'coreMl': useCoreMl,
+        'plateModel': plateModel,
+      };
 
   Map<String, dynamic> toJson() => {
         'defaults': 2,
@@ -100,6 +117,7 @@ class Settings extends ChangeNotifier {
         'longitude': longitude,
         'geoThreshold': geoThreshold,
         'useCoreMl': useCoreMl,
+        'recordWeather': recordWeather,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
       };

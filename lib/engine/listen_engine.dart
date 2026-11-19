@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +7,7 @@ import 'package:record/record.dart';
 
 import '../settings.dart';
 import '../store/detection_store.dart';
+import 'weather.dart';
 import '../store/media.dart';
 import 'classifier.dart';
 import 'labels.dart';
@@ -131,7 +131,10 @@ class ListenEngine extends ChangeNotifier {
           Duration(milliseconds: (settings.hopSeconds * 1000).round()), (_) => _tick());
       running = true;
       _lastHeard.clear();
-      final ses = session = await store.startSession();
+      final ses = session = await store.startSession(
+        settings: settings.listeningSnapshot,
+        models: [for (final m in _loaded) _modelInfo(m)],
+      );
       unawaited(_locate(ses));
     } catch (e) {
       error = e.toString().replaceFirst('Bad state: ', '');
@@ -158,7 +161,7 @@ class ListenEngine extends ChangeNotifier {
     final ses = session;
     session = null;
     _lastHeard.clear();
-    if (ses != null) await store.endSession(ses);
+    if (ses != null) await store.endSession(ses, reason: 'manual');
     await _unload();
     notifyListeners();
   }
@@ -259,9 +262,12 @@ class ListenEngine extends ChangeNotifier {
           report.error = null;
           final top = p.top(5, keep: (i) => _keep(m, i));
           report.top = [for (final s in top) (m.labels[s.index].common, s.value)];
+          final ranked = [
+            for (final s in top) (sci: m.labels[s.index].sci, confidence: s.value.toDouble())
+          ];
           for (final s in top) {
             if (s.value < settings.threshold) break;
-            await _detected(m, m.labels[s.index], s.value, now);
+            await _detected(m, m.labels[s.index], s.value, now, ranked);
           }
         } catch (e) {
           report.error = e.toString();
@@ -299,7 +305,8 @@ class ListenEngine extends ChangeNotifier {
     }
   }
 
-  Future<void> _detected(LoadedModel m, SpeciesLabel l, double score, DateTime now) async {
+  Future<void> _detected(LoadedModel m, SpeciesLabel l, double score, DateTime now,
+      List<RankedScore> ranked) async {
     final plate = settings.plateModel;
     final onPlate = plate == 'all' || plate == m.spec.id;
     if (onPlate && _sessionFull(l.sci)) await _nextSession(now);
@@ -310,12 +317,19 @@ class ListenEngine extends ChangeNotifier {
         now.difference(open.at).inMilliseconds < settings.repeatSeconds * 1000) {
       if (score > open.confidence) {
         open.confidence = score;
+        open.scores = ranked;
         await store.save(open);
       }
       return;
     }
     final d = await store.add(
-        model: m.spec.id, sci: l.sci, common: l.common, confidence: score, at: now);
+        model: m.spec.id,
+        sci: l.sci,
+        common: l.common,
+        confidence: score,
+        at: now,
+        windowSeconds: m.spec.windowSeconds.toDouble(),
+        scores: ranked);
     _open[key] = d;
     unawaited(_saveClip(d, m));
   }
@@ -333,8 +347,15 @@ class ListenEngine extends ChangeNotifier {
   /// place, starting with the bird that didn't fit.
   Future<void> _nextSession(DateTime now) async {
     final old = session!;
-    await store.endSession(old, at: now.subtract(const Duration(milliseconds: 1)));
-    session = await store.startSession(at: now, lat: old.lat, lon: old.lon);
+    await store.endSession(old,
+        at: now.subtract(const Duration(milliseconds: 1)), reason: 'speciesLimit');
+    session = await store.startSession(
+        at: now,
+        lat: old.lat,
+        lon: old.lon,
+        settings: old.settings,
+        models: old.models);
+    session!.weather = old.weather;
     _open.clear();
     _lastHeard.clear();
     notifyListeners();
@@ -383,6 +404,13 @@ class ListenEngine extends ChangeNotifier {
       locationNote = null;
       _geoScores = null; // the location filter now knows where we are
       await store.saveSession(ses);
+      if (settings.recordWeather) {
+        final w = await fetchWeather(pos.latitude, pos.longitude, at: ses.start);
+        if (w != null) {
+          ses.weather = w;
+          await store.saveSession(ses);
+        }
+      }
     } catch (e) {
       locationNote = 'Could not get a location: $e';
     } finally {
@@ -391,14 +419,16 @@ class ListenEngine extends ChangeNotifier {
   }
 
   /// Disk used by recordings.
-  Future<int> clipBytes() async {
-    var n = 0;
-    if (!await store.clips.exists()) return 0;
-    await for (final f in store.clips.list()) {
-      if (f is File) n += await f.length();
-    }
-    return n;
-  }
+  Future<int> clipBytes() => store.clipBytes();
+
+  /// What a session records about each model listening.
+  static Map<String, dynamic> _modelInfo(LoadedModel m) => {
+        'id': m.spec.id,
+        'name': m.spec.name,
+        'licence': m.spec.licence,
+        'sampleRate': m.spec.sampleRate,
+        'windowSeconds': m.spec.windowSeconds,
+      };
 }
 
 Uint8List _spectrogram(Float32List clip) =>

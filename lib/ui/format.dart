@@ -36,3 +36,28 @@ String place(double lat, double lon) =>
 
 String megabytes(int bytes) =>
     bytes <= 0 ? 'size unknown' : '${(bytes / 1048576).toStringAsFixed(0)} MB';
+
+/// "8°C, light rain": the session's weather in a few words, or "".
+String weatherWords(Map<String, dynamic>? w) {
+  if (w == null) return '';
+  final t = (w['temperatureC'] as num?)?.round();
+  final sym = w['symbol'] as String?;
+  final sky = sym == null
+      ? null
+      : sym
+          .replaceAll(RegExp(r'_(day|night|polartwilight)$'), '')
+          .replaceAll('_', ' ')
+          .replaceAll('lightrain', 'light rain')
+          .replaceAll('heavyrain', 'heavy rain')
+          .replaceAll('lightsnow', 'light snow')
+          .replaceAll('heavysnow', 'heavy snow')
+          .replaceAll('lightsleet', 'light sleet')
+          .replaceAll('heavysleet', 'heavy sleet')
+          .replaceAll('rainshowers', 'rain showers')
+          .replaceAll('snowshowers', 'snow showers')
+          .replaceAll('sleetshowers', 'sleet showers')
+          .replaceAll('partlycloudy', 'partly cloudy')
+          .replaceAll('clearsky', 'clear')
+          .replaceAll('andthunder', ' and thunder');
+  return [if (t != null) '$t°C', if (sky != null && sky.isNotEmpty) sky].join(', ');
+}

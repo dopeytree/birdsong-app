@@ -364,6 +364,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       [
         _switch('Drop species unlikely here', s.useGeomodel,
             locked ? null : (v) => s.update((x) => x.useGeomodel = v)),
+        _switch('Note the weather (MET Norway)', s.recordWeather,
+            (v) => s.update((x) => x.recordWeather = v)),
         if (!geoReady)
           m.isDownloading(geomodel)
               ? LinearProgressIndicator(value: m.progress[geomodel.id])
@@ -495,7 +497,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Birdsong${snap.data == null ? '' : ' v${snap.data}'}. Created by Ed Stone. '
           'Detections by $detections. Bird cut-outs from the Fugleramme project by '
           'Arne Giacomo, after Gould, the von Wright brothers, Audubon and others, used under '
-          'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Further plates from '
+          'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Weather from MET Norway, CC BY 4.0. Further plates from '
           'Nederlandsche Vogelen (Nozeman & Sepp, Amsterdam, 1770\u20131829), digitised by the '
           'Koninklijke Bibliotheek, with others from public-domain works held on Wikimedia Commons.',
           style: theme.textTheme.bodyMedium,

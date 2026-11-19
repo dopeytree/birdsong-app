@@ -1,7 +1,30 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+
+/// The version of the session folder format written here. Bump it, and add
+/// a step to [DetectionStore._upgrade], when a file's meaning changes.
+const sessionSchemaVersion = 1;
+
+/// A fresh random UUID (version 4).
+String newUuid() {
+  final r = Random.secure();
+  final b = List<int>.generate(16, (_) => r.nextInt(256));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  String hex(int from, int to) =>
+      b.sublist(from, to).map((x) => x.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex(0, 4)}-${hex(4, 6)}-${hex(6, 8)}-${hex(8, 10)}-${hex(10, 16)}';
+}
+
+String _utc(DateTime t) => t.toUtc().toIso8601String();
+DateTime _local(String s) => DateTime.parse(s).toLocal();
+
+/// One runner-up a model gave for the same window.
+typedef RankedScore = ({String sci, double confidence});
 
 class Detection {
   Detection({
@@ -11,28 +34,78 @@ class Detection {
     required this.common,
     required this.confidence,
     required this.at,
+    String? uuid,
+    this.windowSeconds,
+    this.scores = const [],
     this.hasClip = false,
-  });
+    this.reviewStatus = 'unreviewed',
+  }) : uuid = uuid ?? newUuid();
 
+  /// Short local id, used in the plate's URLs (/api/v2/audio/<id>).
   final int id;
+  final String uuid;
   final String model;
   final String sci;
   final String common;
   double confidence;
+  /// When it was heard: the end of the window the model listened to.
   final DateTime at;
+
+  /// How long that window was, so it began [windowSeconds] before [at].
+  double? windowSeconds;
+
+  /// The model's best scores for that window, highest first (top 5).
+  List<RankedScore> scores;
   bool hasClip;
 
+  /// unreviewed, correct, wrong or unsure.
+  String reviewStatus;
+
+  String get clipPath => 'audio/$id.wav';
+  String get spectrogramPath => 'spectrograms/$id.bmp';
+
+  /// One line of detections.jsonl. Field names follow BirdNET Live's export.
   Map<String, dynamic> toJson() => {
         'id': id,
+        'uuid': uuid,
+        'timestamp': _utc(at),
+        if (windowSeconds != null) 'windowSeconds': windowSeconds,
+        'scientificName': sci,
+        'commonName': common,
+        'confidence': double.parse(confidence.toStringAsFixed(4)),
         'model': model,
-        'sci': sci,
-        'common': common,
-        'confidence': confidence,
-        'at': at.toIso8601String(),
-        'clip': hasClip,
+        if (scores.isNotEmpty)
+          'scores': [
+            for (final s in scores)
+              {'scientificName': s.sci, 'confidence': double.parse(s.confidence.toStringAsFixed(4))}
+          ],
+        'reviewStatus': reviewStatus,
+        if (hasClip) 'clip': clipPath,
+        if (hasClip) 'spectrogram': spectrogramPath,
       };
 
   static Detection fromJson(Map<String, dynamic> j) => Detection(
+        id: j['id'] as int,
+        uuid: j['uuid'] as String?,
+        model: j['model'] as String,
+        sci: j['scientificName'] as String,
+        common: j['commonName'] as String,
+        confidence: (j['confidence'] as num).toDouble(),
+        at: _local(j['timestamp'] as String),
+        windowSeconds: (j['windowSeconds'] as num?)?.toDouble(),
+        scores: [
+          for (final s in (j['scores'] as List? ?? const []))
+            (
+              sci: (s as Map)['scientificName'] as String,
+              confidence: (s['confidence'] as num).toDouble()
+            )
+        ],
+        hasClip: j['clip'] != null,
+        reviewStatus: (j['reviewStatus'] as String?) ?? 'unreviewed',
+      );
+
+  /// A line from the old detections.jsonl (before session folders).
+  static Detection fromLegacyJson(Map<String, dynamic> j) => Detection(
         id: j['id'] as int,
         model: j['model'] as String,
         sci: j['sci'] as String,
@@ -44,33 +117,117 @@ class Detection {
 }
 
 /// One stretch of listening, from Start to Stop, and where it happened.
-/// A detection belongs to the session whose time span holds it.
+/// A detection belongs to the session whose time span holds it. On disk a
+/// session is a folder: session.json, detections.jsonl, audio/,
+/// spectrograms/.
 class Session {
-  Session({required this.id, required this.start, this.end, this.lat, this.lon});
+  Session({
+    required this.id,
+    required this.start,
+    this.end,
+    this.lat,
+    this.lon,
+    String? uuid,
+    int? utcOffsetMinutes,
+    this.stopReason,
+    this.settings = const {},
+    this.models = const [],
+    this.weather,
+    this.folder,
+  })  : uuid = uuid ?? newUuid(),
+        utcOffsetMinutes = utcOffsetMinutes ?? start.timeZoneOffset.inMinutes;
 
+  /// Short local id, for the plate's arrows.
   final int id;
+  final String uuid;
   final DateTime start;
 
   /// Null while still listening.
   DateTime? end;
 
+  /// The clock's offset from UTC where and when the session began.
+  final int utcOffsetMinutes;
+
   double? lat;
   double? lon;
+
+  /// manual, speciesLimit, interrupted or legacy.
+  String? stopReason;
+
+  /// The listening settings in force (threshold, hop, repeat, filters).
+  Map<String, dynamic> settings;
+
+  /// The models listening: id, name, licence, sample rate, window.
+  List<Map<String, dynamic>> models;
+
+  /// Conditions when the session began; see engine/weather.dart.
+  Map<String, dynamic>? weather;
+
+  /// Folder name under sessions/, set when first written.
+  String? folder;
 
   bool get live => end == null;
   bool get hasPlace => lat != null && lon != null;
 
   bool contains(DateTime t) => !t.isBefore(start) && (end == null || !t.isAfter(end!));
 
-  Map<String, dynamic> toJson() => {
+  /// "2026-11-18T2219Z_a91e4c": the start in UTC and the start of the UUID,
+  /// so folders sort by time and never collide.
+  String get folderName {
+    final u = start.toUtc();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${u.year}-${two(u.month)}-${two(u.day)}T${two(u.hour)}${two(u.minute)}${two(u.second)}Z'
+        '_${uuid.substring(0, 6)}';
+  }
+
+  Map<String, dynamic> toJson(List<Detection> inside) => {
+        'schemaVersion': sessionSchemaVersion,
+        'app': {
+          'name': 'Birdsong',
+          'platform': Platform.operatingSystem,
+          'osVersion': Platform.operatingSystemVersion,
+        },
         'id': id,
-        'start': start.toIso8601String(),
-        'end': end?.toIso8601String(),
-        'lat': lat,
-        'lon': lon,
+        'uuid': uuid,
+        'startTime': _utc(start),
+        'endTime': end == null ? null : _utc(end!),
+        'utcOffsetMinutes': utcOffsetMinutes,
+        if (lat != null) 'latitude': lat,
+        if (lon != null) 'longitude': lon,
+        if (stopReason != null) 'stopReason': stopReason,
+        // When the microphone was on. One span for now; pauses would add more.
+        'listening': [
+          {'startTime': _utc(start), 'endTime': end == null ? null : _utc(end!)}
+        ],
+        if (settings.isNotEmpty) 'settings': settings,
+        if (models.isNotEmpty) 'models': models,
+        if (weather != null) 'weather': weather,
+        'summary': {
+          'detections': inside.length,
+          'species': {for (final d in inside) d.sci}.length,
+        },
       };
 
-  static Session fromJson(Map<String, dynamic> j) => Session(
+  static Session fromJson(Map<String, dynamic> j, String folder) => Session(
+        id: j['id'] as int,
+        uuid: j['uuid'] as String?,
+        start: _local(j['startTime'] as String),
+        end: j['endTime'] == null ? null : _local(j['endTime'] as String),
+        utcOffsetMinutes: j['utcOffsetMinutes'] as int?,
+        lat: (j['latitude'] as num?)?.toDouble(),
+        lon: (j['longitude'] as num?)?.toDouble(),
+        stopReason: j['stopReason'] as String?,
+        settings: Map<String, dynamic>.from(j['settings'] as Map? ?? const {}),
+        models: [
+          for (final m in (j['models'] as List? ?? const []))
+            Map<String, dynamic>.from(m as Map)
+        ],
+        weather: j['weather'] == null ? null : Map<String, dynamic>.from(j['weather'] as Map),
+        folder: folder,
+      );
+
+  /// A line from the old sessions.jsonl.
+  static Session fromLegacyJson(Map<String, dynamic> j) => Session(
         id: j['id'] as int,
         start: DateTime.parse(j['start'] as String),
         end: j['end'] == null ? null : DateTime.parse(j['end'] as String),
@@ -99,13 +256,34 @@ List<(DateTime, DateTime)> groupIntoSpans(List<DateTime> times, Duration gap) {
   return spans;
 }
 
-/// Detections heard on this device, kept in memory and appended to a JSON
-/// lines file, with the listening sessions beside them. Plenty for a test
-/// build; a release would use SQLite.
-class DetectionStore extends ChangeNotifier {
-  DetectionStore._(this.dir);
+/// Write [text] to [file] safely: to a .pending file first, then renamed
+/// over the old one, so a crash mid-write never leaves half a file.
+Future<void> _writeAtomic(File file, String text) async {
+  final pending = File('${file.path}.pending');
+  await pending.writeAsString(text, flush: true);
+  await pending.rename(file.path);
+}
 
-  final Directory dir;
+/// The listening sessions and their detections, one folder per session:
+///
+///   sessions/2026-11-18T221904Z_a91e4c/
+///     session.json        the session (see [Session.toJson])
+///     detections.jsonl    one detection per line (see [Detection.toJson])
+///     audio/<id>.wav      the clip around each detection
+///     spectrograms/<id>.bmp
+///
+/// Everything is held in memory too. A session's files are rewritten as a
+/// whole, shortly after a change and at once when it ends.
+class DetectionStore extends ChangeNotifier {
+  DetectionStore._(this.root);
+
+  /// The app's data folder; sessions live in [sessionsDir] inside it.
+  final Directory root;
+  Directory get sessionsDir => Directory('${root.path}/sessions');
+
+  /// Before session folders: detections/detections.jsonl and sessions.jsonl.
+  Directory get _legacyDir => Directory('${root.path}/detections');
+
   final List<Detection> all = [];
   int _nextId = 1;
 
@@ -114,66 +292,173 @@ class DetectionStore extends ChangeNotifier {
   int _nextSessionId = 1;
   int? _selectedId;
 
-  File get _log => File('${dir.path}/detections.jsonl');
-  File get _sessionLog => File('${dir.path}/sessions.jsonl');
-  Directory get clips => Directory('${dir.path}/clips');
+  final Set<Session> _dirty = {};
+  Timer? _flushTimer;
 
-  static Future<DetectionStore> open(Directory dir) async {
-    final s = DetectionStore._(dir);
-    await s.clips.create(recursive: true);
-    if (await s._log.exists()) {
-      final byId = <int, Detection>{};
-      for (final line in await s._log.readAsLines()) {
-        if (line.trim().isEmpty) continue;
-        try {
-          final d = Detection.fromJson(jsonDecode(line) as Map<String, dynamic>);
-          byId[d.id] = d; // a later line for the same id is an update
-        } catch (_) {}
-      }
-      s.all.addAll(byId.values.toList()..sort((a, b) => a.at.compareTo(b.at)));
-      if (s.all.isNotEmpty) {
-        s._nextId = s.all.map((d) => d.id).reduce((a, b) => a > b ? a : b) + 1;
-      }
-    }
-    await s._loadSessions();
+  static Future<DetectionStore> open(Directory root) async {
+    final s = DetectionStore._(root);
+    await s.sessionsDir.create(recursive: true);
+    await s._load();
+    await s._migrateLegacy();
+    await s._closeInterrupted();
+    s.sessions.sort((a, b) => a.start.compareTo(b.start));
+    s.all.sort((a, b) => a.at.compareTo(b.at));
     return s;
   }
 
-  Future<void> _loadSessions() async {
-    final byId = <int, Session?>{};
-    if (await _sessionLog.exists()) {
-      for (final line in await _sessionLog.readAsLines()) {
+  Directory dirOf(Session x) => Directory('${sessionsDir.path}/${x.folder ??= x.folderName}');
+
+  Future<void> _load() async {
+    await for (final e in sessionsDir.list()) {
+      if (e is! Directory) continue;
+      final file = File('${e.path}/session.json');
+      if (!await file.exists()) continue;
+      try {
+        final j = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+        final x = Session.fromJson(_upgrade(j), e.uri.pathSegments.where((p) => p.isNotEmpty).last);
+        sessions.add(x);
+        _nextSessionId = max(_nextSessionId, x.id + 1);
+        final lines = File('${e.path}/detections.jsonl');
+        if (await lines.exists()) {
+          for (final line in await lines.readAsLines()) {
+            if (line.trim().isEmpty) continue;
+            try {
+              final d = Detection.fromJson(jsonDecode(line) as Map<String, dynamic>);
+              all.add(d);
+              _nextId = max(_nextId, d.id + 1);
+            } catch (_) {}
+          }
+        }
+      } catch (e) {
+        debugPrint('session ${file.path}: $e');
+      }
+    }
+  }
+
+  /// Bring an older session.json up to [sessionSchemaVersion].
+  Map<String, dynamic> _upgrade(Map<String, dynamic> j) {
+    // Version 1 is the first; later versions add steps here.
+    return j;
+  }
+
+  /// A session left open by a crash or a force-quit ends at its last call.
+  Future<void> _closeInterrupted() async {
+    for (final x in sessions.where((x) => x.live).toList()) {
+      final inside = inSession(x);
+      x.end = inside.isEmpty ? x.start : inside.last.at;
+      x.stopReason = 'interrupted';
+      await _write(x);
+    }
+  }
+
+  /// Move the old single-file logs into session folders, once. The old
+  /// files are kept, renamed *.migrated, as a backup.
+  Future<void> _migrateLegacy() async {
+    final log = File('${_legacyDir.path}/detections.jsonl');
+    final sesLog = File('${_legacyDir.path}/sessions.jsonl');
+    if (!await log.exists() && !await sesLog.exists()) return;
+
+    final byId = <int, Detection>{};
+    if (await log.exists()) {
+      for (final line in await log.readAsLines()) {
+        if (line.trim().isEmpty) continue;
+        try {
+          final d = Detection.fromLegacyJson(jsonDecode(line) as Map<String, dynamic>);
+          byId[d.id] = d; // a later line for the same id is an update
+        } catch (_) {}
+      }
+    }
+    final old = byId.values.toList()..sort((a, b) => a.at.compareTo(b.at));
+
+    final sesById = <int, Session?>{};
+    if (await sesLog.exists()) {
+      for (final line in await sesLog.readAsLines()) {
         if (line.trim().isEmpty) continue;
         try {
           final j = jsonDecode(line) as Map<String, dynamic>;
           final id = j['id'] as int;
-          byId[id] = j['deleted'] == true ? null : Session.fromJson(j);
-          if (id >= _nextSessionId) _nextSessionId = id + 1;
+          sesById[id] = j['deleted'] == true ? null : Session.fromLegacyJson(j);
         } catch (_) {}
       }
     }
-    sessions.addAll(byId.values.whereType<Session>().toList()
-      ..sort((a, b) => a.start.compareTo(b.start)));
-
-    // A session left open by a crash or a force-quit ends at its last call.
-    for (final ses in sessions.where((x) => x.live).toList()) {
-      final inside = all.where((d) => ses.contains(d.at));
-      ses.end = inside.isEmpty ? ses.start : inside.last.at;
-      await _appendSession(ses);
+    final oldSessions = sesById.values.whereType<Session>().toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+    for (final x in oldSessions.where((x) => x.live)) {
+      final inside = old.where((d) => x.contains(d.at));
+      x.end = inside.isEmpty ? x.start : inside.last.at;
     }
-
     // Detections from before sessions existed: one session per stretch.
-    final loose = [for (final d in all) if (!sessions.any((x) => x.contains(d.at))) d.at];
+    final loose = [for (final d in old) if (!oldSessions.any((x) => x.contains(d.at))) d.at];
     for (final (from, to) in groupIntoSpans(loose, legacySessionGap)) {
-      final ses = Session(id: _nextSessionId++, start: from, end: to);
-      sessions.add(ses);
-      await _appendSession(ses);
+      oldSessions.add(Session(id: 0, start: from, end: to));
     }
-    sessions.sort((a, b) => a.start.compareTo(b.start));
+    oldSessions.sort((a, b) => a.start.compareTo(b.start));
+
+    // Renumber after anything already in folders, so ids stay unique.
+    final idMap = <int, int>{};
+    for (final x in oldSessions) {
+      final moved = Session(
+        id: _nextSessionId++,
+        start: x.start,
+        end: x.end,
+        lat: x.lat,
+        lon: x.lon,
+        stopReason: 'legacy',
+      );
+      sessions.add(moved);
+      final dir = dirOf(moved);
+      await Directory('${dir.path}/audio').create(recursive: true);
+      await Directory('${dir.path}/spectrograms').create(recursive: true);
+      for (final d in old.where((d) => moved.contains(d.at))) {
+        final n = idMap[d.id] ??= _nextId++;
+        final nd = Detection(
+            id: n, model: d.model, sci: d.sci, common: d.common, confidence: d.confidence, at: d.at);
+        for (final (from, to) in [
+          (File('${_legacyDir.path}/clips/${d.id}.wav'), File('${dir.path}/${nd.clipPath}')),
+          (File('${_legacyDir.path}/clips/${d.id}.bmp'), File('${dir.path}/${nd.spectrogramPath}')),
+        ]) {
+          if (await from.exists()) {
+            await from.rename(to.path);
+            if (to.path.endsWith('.wav')) nd.hasClip = true;
+          }
+        }
+        all.add(nd);
+      }
+      await _write(moved);
+    }
+    if (await log.exists()) await log.rename('${log.path}.migrated');
+    if (await sesLog.exists()) await sesLog.rename('${sesLog.path}.migrated');
+    debugPrint('Moved ${old.length} detections into ${oldSessions.length} session folders');
   }
 
-  Future<void> _appendSession(Session x) => _sessionLog
-      .writeAsString('${jsonEncode(x.toJson())}\n', mode: FileMode.append, flush: true);
+  // ---- writing --------------------------------------------------------------
+
+  Future<void> _write(Session x) async {
+    final dir = dirOf(x);
+    await dir.create(recursive: true);
+    final inside = inSession(x);
+    await _writeAtomic(File('${dir.path}/detections.jsonl'),
+        inside.map((d) => '${jsonEncode(d.toJson())}\n').join());
+    await _writeAtomic(File('${dir.path}/session.json'),
+        const JsonEncoder.withIndent('  ').convert(x.toJson(inside)));
+  }
+
+  /// Write a session soon; changes within the next second share one write.
+  void _touch(Session x) {
+    _dirty.add(x);
+    _flushTimer ??= Timer(const Duration(seconds: 1), () => unawaited(flush()));
+  }
+
+  /// Write every changed session now.
+  Future<void> flush() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    final todo = _dirty.toList();
+    _dirty.clear();
+    for (final x in todo) {
+      if (sessions.contains(x)) await _write(x);
+    }
+  }
 
   // ---- sessions -------------------------------------------------------------
 
@@ -204,37 +489,61 @@ class DetectionStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Session> startSession({DateTime? at, double? lat, double? lon}) async {
-    final x = Session(id: _nextSessionId++, start: at ?? DateTime.now(), lat: lat, lon: lon);
+  Future<Session> startSession({
+    DateTime? at,
+    double? lat,
+    double? lon,
+    Map<String, dynamic> settings = const {},
+    List<Map<String, dynamic>> models = const [],
+  }) async {
+    final x = Session(
+        id: _nextSessionId++,
+        start: at ?? DateTime.now(),
+        lat: lat,
+        lon: lon,
+        settings: settings,
+        models: models);
     sessions.add(x);
     _selectedId = x.id;
-    await _appendSession(x);
+    await _write(x);
     notifyListeners();
     return x;
   }
 
   /// Close a session. One that heard nothing and lasted under a minute is
-  /// dropped, so a mistaken tap on the microphone leaves no trace.
-  Future<void> endSession(Session x, {DateTime? at}) async {
+  /// dropped, folder and all, so a mistaken tap on the microphone leaves no
+  /// trace.
+  Future<void> endSession(Session x, {DateTime? at, String reason = 'manual'}) async {
     x.end = at ?? DateTime.now();
+    x.stopReason = reason;
     final heard = all.any((d) => x.contains(d.at));
     if (!heard && x.end!.difference(x.start) < const Duration(minutes: 1)) {
       sessions.remove(x);
+      _dirty.remove(x);
       if (_selectedId == x.id) _selectedId = null;
-      await _sessionLog.writeAsString('${jsonEncode({'id': x.id, 'deleted': true})}\n',
-          mode: FileMode.append, flush: true);
+      final dir = dirOf(x);
+      if (await dir.exists()) await dir.delete(recursive: true);
     } else {
-      await _appendSession(x);
+      _dirty.remove(x);
+      await _write(x);
     }
     notifyListeners();
   }
 
+  /// Record a change to a session (its place or weather found).
   Future<void> saveSession(Session x) async {
-    await _appendSession(x);
+    _touch(x);
     notifyListeners();
   }
 
   List<Detection> inSession(Session x) => all.where((d) => x.contains(d.at)).toList();
+
+  Session? sessionOf(Detection d) {
+    for (var i = sessions.length - 1; i >= 0; i--) {
+      if (sessions[i].contains(d.at)) return sessions[i];
+    }
+    return null;
+  }
 
   // ---- detections -----------------------------------------------------------
 
@@ -244,27 +553,50 @@ class DetectionStore extends ChangeNotifier {
     required String common,
     required double confidence,
     required DateTime at,
+    double? windowSeconds,
+    List<RankedScore> scores = const [],
   }) async {
     final d = Detection(
-        id: _nextId++, model: model, sci: sci, common: common, confidence: confidence, at: at);
+        id: _nextId++,
+        model: model,
+        sci: sci,
+        common: common,
+        confidence: confidence,
+        at: at,
+        windowSeconds: windowSeconds,
+        scores: scores);
     all.add(d);
-    await _append(d);
+    // Heard with no session open (shouldn't happen): give it one.
+    final x = sessionOf(d) ??
+        await startSession(at: at).then((s) async {
+          await endSession(s, at: at, reason: 'manual');
+          return s;
+        });
+    _touch(x);
     notifyListeners();
     return d;
   }
 
   /// Record a change to a detection already stored (a clip saved, a higher
-  /// confidence on a repeated call).
+  /// confidence on a repeated call, a review).
   Future<void> save(Detection d) async {
-    await _append(d);
+    final x = sessionOf(d);
+    if (x != null) _touch(x);
     notifyListeners();
   }
 
-  Future<void> _append(Detection d) =>
-      _log.writeAsString('${jsonEncode(d.toJson())}\n', mode: FileMode.append, flush: true);
+  /// Where a detection's clip and spectrogram go, inside its session folder.
+  File clipFile(int id) => _fileFor(id, (d) => d.clipPath);
+  File spectrogramFile(int id) => _fileFor(id, (d) => d.spectrogramPath);
 
-  File clipFile(int id) => File('${clips.path}/$id.wav');
-  File spectrogramFile(int id) => File('${clips.path}/$id.bmp');
+  File _fileFor(int id, String Function(Detection) path) {
+    final d = byId(id);
+    final x = d == null ? null : sessionOf(d);
+    if (d == null || x == null) return File('${sessionsDir.path}/missing/$id');
+    final f = File('${dirOf(x).path}/${path(d)}');
+    f.parent.createSync(recursive: true);
+    return f;
+  }
 
   Detection? byId(int id) {
     for (var i = all.length - 1; i >= 0; i--) {
@@ -281,17 +613,41 @@ class DetectionStore extends ChangeNotifier {
           (session == null || session.contains(d.at)))
       .toList();
 
-  Future<void> clear() async {
-    all.clear();
-    sessions.removeWhere((x) => !x.live);
-    _selectedId = null;
-    if (await _log.exists()) await _log.delete();
-    if (await _sessionLog.exists()) await _sessionLog.delete();
-    for (final x in sessions) {
-      await _appendSession(x);
+  /// Disk used by recordings and spectrograms.
+  Future<int> clipBytes() async {
+    var n = 0;
+    await for (final e in sessionsDir.list(recursive: true)) {
+      if (e is File && (e.path.endsWith('.wav') || e.path.endsWith('.bmp'))) {
+        n += await e.length();
+      }
     }
-    if (await clips.exists()) await clips.delete(recursive: true);
-    await clips.create(recursive: true);
+    return n;
+  }
+
+  /// Forget everything except a session still listening (which is emptied).
+  Future<void> clear() async {
+    await flush();
+    for (final x in sessions.where((x) => !x.live).toList()) {
+      final dir = dirOf(x);
+      if (await dir.exists()) await dir.delete(recursive: true);
+      sessions.remove(x);
+    }
+    all.clear();
+    _selectedId = null;
+    for (final x in sessions) {
+      final dir = dirOf(x);
+      for (final sub in ['audio', 'spectrograms']) {
+        final d = Directory('${dir.path}/$sub');
+        if (await d.exists()) await d.delete(recursive: true);
+      }
+      await _write(x);
+    }
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    unawaited(flush());
+    super.dispose();
   }
 }

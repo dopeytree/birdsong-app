@@ -92,6 +92,27 @@ gallery uses (`tphakala/BirdNET-Plus-V3.0`, `tphakala/BirdNET-v3.0-Models`,
 with its authors before a release; "Powered by BirdNET" credit is required
 for BirdNET models.
 
+## Where detections are kept
+
+One folder per listening session, in the app's private storage
+(`<app data>/sessions/`), in BirdNET Live's field names:
+
+```
+sessions/2026-11-18T221904Z_a91e4c/
+  session.json        uuid, start and end (UTC), place, settings, models,
+                      weather, stop reason, summary; schemaVersion 1
+  detections.jsonl    one detection per line: timestamp, scientificName,
+                      commonName, confidence, model, top-5 scores, clip
+  audio/<id>.wav      the clip around each detection
+  spectrograms/<id>.bmp
+```
+
+Files are written whole (to `.pending`, then renamed). The older
+`detections/detections.jsonl` and `sessions.jsonl` are moved into folders on
+first launch and kept as `*.migrated`. Weather comes from MET Norway's
+Locationforecast (CC BY 4.0), with the position rounded to about 10 km; it
+can be turned off under Settings > Location filter.
+
 ## Testing on the iPhone
 
 `Run on iPhone.command` installs over the Birdsong already on the phone and

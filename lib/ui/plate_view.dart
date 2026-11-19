@@ -247,7 +247,8 @@ class _PlateViewState extends State<PlateView> {
   String _placeText() {
     final ses = app.store.selected;
     if (ses == null) return '';
-    if (ses.hasPlace) return 'At ${place(ses.lat!, ses.lon!)}.';
+    final w = weatherWords(ses.weather);
+    if (ses.hasPlace) return 'At ${place(ses.lat!, ses.lon!)}${w.isEmpty ? '' : ', $w'}.';
     return ses.live ? '' : 'Place unknown.';
   }
 
