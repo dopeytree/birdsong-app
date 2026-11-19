@@ -1,0 +1,31 @@
+#!/bin/zsh -l
+# Double-click in Finder. Creates the private GitHub repo dopeytree/birdsong-app
+# (once) with your own GitHub CLI login, then pushes every branch to it.
+# Run it again any time to push new work. Log: github-log.txt beside this file.
+cd "$(dirname "$0")"
+{
+  echo "=== $(date)"
+  [ -f ~/.zshrc ] && source ~/.zshrc >/dev/null 2>&1
+  export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "STATUS: no-gh  (brew install gh, then: gh auth login)"
+  elif ! gh auth status >/dev/null 2>&1; then
+    echo "STATUS: gh-not-logged-in  (run: gh auth login)"
+  else
+    gh auth setup-git >/dev/null 2>&1
+    if ! git remote get-url origin >/dev/null 2>&1; then
+      if gh repo view dopeytree/birdsong-app >/dev/null 2>&1; then
+        git remote add origin https://github.com/dopeytree/birdsong-app.git
+      else
+        gh repo create dopeytree/birdsong-app --private \
+          --description "Birdsong as an iPhone, iPad, Mac and Android app: the plate, with BirdNET on the device" \
+          --source=. --remote=origin && echo "STATUS: repo-created"
+      fi
+    fi
+    git push -u origin --all && git push origin --tags && echo "STATUS: pushed"
+    gh repo view dopeytree/birdsong-app --json visibility,url,defaultBranchRef \
+      -q '"visibility: \(.visibility)  default: \(.defaultBranchRef.name)  \(.url)"'
+    git branch -vv
+  fi
+  echo "=== done $(date)"
+} 2>&1 | tee github-log.txt
