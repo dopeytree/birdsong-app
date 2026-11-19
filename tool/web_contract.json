@@ -203,11 +203,11 @@
     },
     {
       "find": "const SINGLE = { latest: \"Latest bird\", top: \"Top\"",
-      "used_by": "settings.dart plateModes 6 and 7: ?view=latest and ?view=top"
+      "used_by": "settings.dart plateModes d and e: ?view=latest and ?view=top"
     },
     {
       "find": "?view=plate | index | latest",
-      "used_by": "settings.dart plateModes 4 and 5: ?view=index, ?hide=index, ?show="
+      "used_by": "settings.dart plateModes b and c: ?hide=index, ?view=index, ?show="
     },
     {
       "find": "for (const [key, on] of [[\"hide\", false], [\"show\", true]])",
@@ -219,11 +219,11 @@
     },
     {
       "find": "let latestOf = \"\";",
-      "used_by": "plate-extras.js: modes 6 and 7 open the shown bird's card"
+      "used_by": "plate-extras.js: modes d and e open the shown bird's card"
     },
     {
       "find": "async function openDetail(sp)",
-      "used_by": "plate-extras.js: modes 6 and 7 open the shown bird's card"
+      "used_by": "plate-extras.js: modes d and e open the shown bird's card"
     },
     {
       "find": "<div id=\"latestFig\"></div>",

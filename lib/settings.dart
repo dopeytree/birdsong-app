@@ -45,7 +45,9 @@ class Settings extends ChangeNotifier {
   /// Note the weather when a session starts (MET Norway, rough position).
   bool recordWeather = true;
 
-  /// What the plate shows, 1 to 7 (see [plateModes]), from its number button.
+  /// What the plate shows: its place, 1 to 7, in [plateModes], lettered a to
+  /// g on its button. Saved by the mode's [PlateMode.key], so a new order of
+  /// the modes keeps the one chosen.
   int plateMode = 1;
 
   /// Models that listen. Each window goes through every one of them.
@@ -81,7 +83,13 @@ class Settings extends ChangeNotifier {
     geoThreshold = (j['geoThreshold'] as num?)?.toDouble() ?? geoThreshold;
     useCoreMl = (j['useCoreMl'] as bool?) ?? useCoreMl;
     recordWeather = (j['recordWeather'] as bool?) ?? recordWeather;
-    plateMode = ((j['plateMode'] as num?)?.toInt() ?? plateMode).clamp(1, plateModes.length);
+    // plateView, by key; or plateMode, its number in the first order (1 to 7).
+    const firstOrder = ['calls', 'time', 'equal', 'noindex', 'index', 'latest', 'top'];
+    final oldN = (j['plateMode'] as num?)?.toInt();
+    final key = j['plateView'] as String? ??
+        (oldN != null && oldN >= 1 && oldN <= firstOrder.length ? firstOrder[oldN - 1] : null);
+    final at = plateModes.indexWhere((m) => m.key == key);
+    if (at >= 0) plateMode = at + 1;
     final active = j['activeModels'];
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
@@ -122,7 +130,7 @@ class Settings extends ChangeNotifier {
         'geoThreshold': geoThreshold,
         'useCoreMl': useCoreMl,
         'recordWeather': recordWeather,
-        'plateMode': plateMode,
+        'plateView': plateModes[plateMode - 1].key,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
       };
@@ -151,31 +159,39 @@ class Settings extends ChangeNotifier {
   String get stationDigits => birdweatherStation.replaceAll(RegExp(r'\D'), '');
 }
 
-/// The plate's modes, numbered on its button. 1 to 3 size the collage; 4 to 7
-/// use the page's own Home Assistant card views (?view=, ?hide=).
+/// The plate's modes, lettered a to g on its button ([plateLetter]). Those
+/// with a [PlateMode.sizeBy] set the collage's Size by; the others use the
+/// page's own Home Assistant card views (?view=, ?hide=).
 class PlateMode {
-  const PlateMode(this.name, {this.sizeBy, this.query = '', this.currentOnly = false});
+  const PlateMode(this.key, this.name, {this.sizeBy, this.query = '', this.currentOnly = false});
+
+  /// Saved in settings.json as plateView; never changes.
+  final String key;
 
   final String name;
 
-  /// For 1 to 3: the page's Size by (calls, time, equal).
+  /// For a, f and g: the page's Size by (calls, time, equal).
   final String? sizeBy;
 
   /// Extra address parameters for the page.
   final String query;
 
-  /// A panel of the session being viewed, with no session arrows (6 and 7):
+  /// A panel of the session being viewed, with no session arrows (d and e):
   /// pick the session in another mode, then come here.
   final bool currentOnly;
 }
 
 const plateModes = <PlateMode>[
-  PlateMode('Noisiest species', sizeBy: 'calls'),
-  PlateMode('Recent ramblings', sizeBy: 'time'),
-  PlateMode('No pecking order', sizeBy: 'equal'),
-  PlateMode('The collage, no index', query: 'hide=index'),
-  PlateMode('The index alone', query: 'view=index&show=title,date'),
-  PlateMode('The latest bird, and when',
+  PlateMode('calls', 'Noisiest species', sizeBy: 'calls'),                       // a
+  PlateMode('noindex', 'The collage, no index', query: 'hide=index'),             // b
+  PlateMode('index', 'The index alone', query: 'view=index&show=title,date'),     // c
+  PlateMode('latest', 'The latest bird, and when',                                // d
       query: 'view=latest&show=time,title,date', currentOnly: true),
-  PlateMode('Most heard this session', query: 'view=top&show=title,date', currentOnly: true),
+  PlateMode('top', 'Most heard this session',                                     // e
+      query: 'view=top&show=title,date', currentOnly: true),
+  PlateMode('time', 'Recent ramblings', sizeBy: 'time'),                          // f
+  PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                        // g
 ];
+
+/// Mode [n] (1 to 7) as its letter on the plate's button: a to g.
+String plateLetter(int n) => String.fromCharCode(0x60 + n);

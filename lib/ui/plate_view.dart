@@ -141,7 +141,7 @@ class _PlateViewState extends State<PlateView> {
     final mode = plateModes[_s.plateMode - 1];
     final q = <String>[
       if (_s.mode == AppMode.listen) ...['period=all', 'bs=listen'],
-      // Listen here steps through sessions, not periods; mode 4 drops the index too.
+      // Listen here steps through sessions, not periods; mode b drops the index too.
       if (_s.mode == AppMode.listen || mode.query.startsWith('hide='))
         'hide=${[if (_s.mode == AppMode.listen) 'periods', if (mode.query == 'hide=index') 'index'].join(',')}',
       if (mode.query.isNotEmpty && !mode.query.startsWith('hide=')) mode.query,
@@ -149,7 +149,7 @@ class _PlateViewState extends State<PlateView> {
     return Uri.parse('${app.server.origin}/${q.isEmpty ? '' : '?${q.join('&')}'}');
   }
 
-  // The page as last asked for; a mode that keeps the same address (1 to 3)
+  // The page as last asked for; a mode that keeps the same address (a, f, g)
   // changes the page in place instead of reloading it.
   String _loaded = '';
 
@@ -329,15 +329,16 @@ class _PlateViewState extends State<PlateView> {
     return mid == null || (mid > 24 && mid < MediaQuery.sizeOf(context).height - 24);
   }
 
-  // The plate's modes, 1 to 7, a tap each: three ways of sizing the collage,
-  // then the collage alone, the index alone, the latest bird, the most heard.
+  // The plate's modes, a to g, a tap each: the noisiest collage, the collage
+  // alone, the index alone, the latest bird, the most heard, then the two
+  // other ways of sizing the collage.
   Future<void> _nextMode() async {
     final next = _s.plateMode % plateModes.length + 1;
     final mode = plateModes[next - 1];
-    _s.update((x) => x.plateMode = next);   // 4 to 7 reload the page with their view
+    _s.update((x) => x.plateMode = next);   // b to e reload the page with their view
     if (mode.sizeBy != null) await app.page?.set('sizeBy', mode.sizeBy!);
     if (!mounted) return;
-    _say('$next  ${mode.name}', seconds: 2);
+    _say('${plateLetter(next)}  ${mode.name}', seconds: 2);
   }
 
   Future<void> _share() async {
@@ -553,9 +554,7 @@ class _Note extends StatelessWidget {
   }
 }
 
-/// Round microphone button; while listening it turns to a stop button with
-/// a slow pulse around it.
-/// The plate mode's number in a small ring.
+/// The plate mode's letter in a small ring.
 class _ModeNumber extends StatelessWidget {
   const _ModeNumber(this.n);
 
@@ -569,12 +568,14 @@ class _ModeNumber extends StatelessWidget {
       height: 24,
       alignment: Alignment.center,
       decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: c, width: 1.6)),
-      child: Text('$n',
+      child: Text(plateLetter(n),
           style: TextStyle(fontFamily: serif, fontSize: 15, height: 1.0, color: c, fontWeight: FontWeight.w600)),
     );
   }
 }
 
+/// Round record button; while listening it turns to a stop button with a
+/// slow pulse around it.
 class _MicButton extends StatefulWidget {
   const _MicButton({required this.listening, required this.busy, required this.onPressed});
 

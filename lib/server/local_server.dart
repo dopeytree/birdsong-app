@@ -246,7 +246,7 @@ class LocalServer {
       'body.bs-steps .bsStep{display:block}'
       '.bsStep:first-child{order:-1}.bsStep:last-child{order:1}'
       '.bsStep.off{visibility:hidden}'
-      // Mode 5, the index alone: in the middle of the window (plate-extras.js),
+      // Mode c, the index alone: in the middle of the window (plate-extras.js),
       // never folded (there would be nothing left), and no fold arrows.
       'body.no-plate:not(.latest){display:flex;flex-direction:column;box-sizing:border-box}'
       'body.no-plate:not(.latest)>main{flex:1 0 auto;display:flex;flex-direction:column;justify-content:center}'

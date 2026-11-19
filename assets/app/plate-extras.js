@@ -89,7 +89,7 @@
     tell("arrows:app");
   }
 
-  /* ---- Mode 5: the index alone, centred on the window -----------------
+  /* ---- Mode c: the index alone, centred on the window -----------------
      CSS centres it in the room under the title; a matching space below
      (as much as the title takes, if there is room) puts it in the middle of
      the whole window instead. A long index just scrolls as before. */
@@ -115,7 +115,7 @@
     balance();
   }
 
-  /* ---- Modes 6 and 7: the one bird opens its card ---------------------
+  /* ---- Modes d and e: the one bird opens its card ---------------------
      The page's latest and top views show a single bird with no way into
      its details; a tap on the picture or the name opens the same card the
      collage does. The page's own names (species, latestOf, openDetail) are
