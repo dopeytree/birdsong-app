@@ -246,11 +246,13 @@ class LocalServer {
       'body.bs-steps .bsStep{display:block}'
       '.bsStep:first-child{order:-1}.bsStep:last-child{order:1}'
       '.bsStep.off{visibility:hidden}'
-      // Mode 5, the index alone: in the middle of the room under the title,
+      // Mode 5, the index alone: in the middle of the window (plate-extras.js),
       // never folded (there would be nothing left), and no fold arrows.
       'body.no-plate:not(.latest){display:flex;flex-direction:column;box-sizing:border-box}'
       'body.no-plate:not(.latest)>main{flex:1 0 auto;display:flex;flex-direction:column;justify-content:center}'
-      'body.no-plate:not(.latest)>main>section{padding-bottom:1.5rem}'
+      // the page centres the section with auto margins, which in a flex column
+      // would shrink it to one column of names; keep it as wide as before
+      'body.no-plate:not(.latest)>main>section{width:100%;box-sizing:border-box;padding-bottom:.8rem}'
       'body.no-plate .bsIxArrow{display:none!important}body.no-plate.bs-noindex #index{display:block}'
       '#bsZoomBox{overflow:hidden;touch-action:pan-x pan-y}body.bs-zoomed #bsZoomBox{touch-action:none}'
       'body{padding:max(env(safe-area-inset-top),var(--bs-top,0px)) max(env(safe-area-inset-right),var(--bs-right,0px))'
