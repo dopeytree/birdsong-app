@@ -109,6 +109,24 @@ void main() {
     expect(again.all, hasLength(1));
   });
 
+  test('a session cut off by a quit is closed at its last call, or dropped if empty', () async {
+    final store = await DetectionStore.open(root);
+    final heard = await store.startSession(at: DateTime(2026, 11, 19, 6));
+    await store.add(model: 'm', sci: 'Turdus merula', common: 'Blackbird', confidence: 0.8,
+        at: DateTime(2026, 11, 19, 6, 5));
+    await store.flush();
+    // The app stops; a second session had just begun and heard nothing.
+    final empty = Session(id: 99, start: DateTime(2026, 11, 19, 7));
+    await Directory('${store.sessionsDir.path}/${empty.folderName}').create();
+    await File('${store.sessionsDir.path}/${empty.folderName}/session.json')
+        .writeAsString(jsonEncode(empty.toJson(const [])));
+    final again = await DetectionStore.open(root);
+    expect(again.sessions, hasLength(1));
+    expect(again.sessions.single.uuid, heard.uuid);
+    expect(again.sessions.single.stopReason, 'interrupted');
+    expect(again.sessions.single.end, DateTime(2026, 11, 19, 6, 5));
+  });
+
   test('weather reads as a few words', () {
     expect(weatherWords({'temperatureC': 8.4, 'symbol': 'lightrainshowers_day'}),
         '8°C, light rain showers');

@@ -351,7 +351,14 @@ class DetectionStore extends ChangeNotifier {
   Future<void> _closeInterrupted() async {
     for (final x in sessions.where((x) => x.live).toList()) {
       final inside = inSession(x);
-      x.end = inside.isEmpty ? x.start : inside.last.at;
+      if (inside.isEmpty) {
+        // Nothing heard before the app stopped: leave no empty folder.
+        sessions.remove(x);
+        final dir = dirOf(x);
+        if (await dir.exists()) await dir.delete(recursive: true);
+        continue;
+      }
+      x.end = inside.last.at;
       x.stopReason = 'interrupted';
       await _write(x);
     }
