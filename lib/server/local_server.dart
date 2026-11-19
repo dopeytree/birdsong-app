@@ -64,6 +64,10 @@ class LocalServer {
     if (path == '/art/artwork/classic/birds/cardinalis-cardinalis.webp') {
       return _asset(res, 'assets/app/cardinal.webp', 'image/webp');
     }
+    // The app's own additions to the page: folding the index, pinch zoom.
+    if (path == '/app/plate-extras.js') {
+      return _asset(res, 'assets/app/plate-extras.js', 'text/javascript; charset=utf-8');
+    }
     if (path == '/source.json') return _json(res, _source());
     if (path == '/healthz') {
       res.write('ok\n');
@@ -229,6 +233,11 @@ class LocalServer {
       '#bsCount{margin-left:.35em;color:var(--sepia)}#bsCount:empty{display:none}'
       '#bsPlace:empty{display:none}'
       'html{background:var(--paper)}'
+      // plate-extras.js: the folding index and the zoomable collage.
+      '.bsIx{cursor:pointer;-webkit-user-select:none;user-select:none}'
+      '.bsIxArrow{display:none;margin-left:.45em;font-family:var(--serif)}'
+      'body.bs-noindex .bsIxArrow{display:inline}body.bs-noindex #index{display:none}'
+      '#bsZoomBox{overflow:hidden;touch-action:pan-x pan-y}body.bs-zoomed #bsZoomBox{touch-action:none}'
       'body{padding:max(env(safe-area-inset-top),var(--bs-top,0px)) max(env(safe-area-inset-right),var(--bs-right,0px))'
       ' max(env(safe-area-inset-bottom),var(--bs-bottom,0px)) max(env(safe-area-inset-left),var(--bs-left,0px))}'
 
@@ -288,7 +297,7 @@ class LocalServer {
       // the body's safe-area padding; count it, so nothing scrolls.
       'try{var mo=measureOthers;measureOthers=function(){var c=getComputedStyle(document.body);'
       'return mo()+Math.ceil(parseFloat(c.paddingTop)+parseFloat(c.paddingBottom));};}catch(e){}'
-      '})();</script>';
+      '})();</script><script src="/app/plate-extras.js"></script>';
 
   String? _pageHtml;
 
@@ -301,7 +310,7 @@ class LocalServer {
       // is padded clear of them (--bs-* from the app, env() from WebKit).
       html = html.replaceFirst(
           'content="width=device-width, initial-scale=1"',
-          'content="width=device-width, initial-scale=1, viewport-fit=cover"');
+          'content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"');
       final at = html.lastIndexOf('</body>');
       if (at >= 0) html = html.replaceRange(at, at, _bodyExtra);
       _pageHtml = html;

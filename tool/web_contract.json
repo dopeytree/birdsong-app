@@ -188,6 +188,18 @@
     {
       "find": "addEventListener(\"resize\", () => { clearTimeout(rz); rz = setTimeout(layout, 150); });",
       "used_by": "plate_view.dart: a resize event re-fits the plate after the insets change"
+    },
+    {
+      "find": "id=\"tip\"",
+      "used_by": "plate-extras.js: the name label is held back during a pinch"
+    },
+    {
+      "find": "#tip.on{",
+      "used_by": "plate-extras.js: hides the label by removing .on"
+    },
+    {
+      "find": "<div id=\"plate\">",
+      "used_by": "plate-extras.js: wrapped in #bsZoomBox for pinch zoom"
     }
   ],
   "endpoints": [

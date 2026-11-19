@@ -92,6 +92,14 @@ gallery uses (`tphakala/BirdNET-Plus-V3.0`, `tphakala/BirdNET-v3.0-Models`,
 with its authors before a release; "Powered by BirdNET" credit is required
 for BirdNET models.
 
+## Testing on the iPhone
+
+`Run on iPhone.command` installs over the Birdsong already on the phone and
+keeps its sessions, recordings and models. `Run on iPhone as a copy.command`
+installs a separate app, "Birdsong HH:MM", with its own empty data, beside
+the others. A free Apple account allows three apps from this Mac on the
+phone at once and ten new app IDs a week, so delete old copies when done.
+
 ## Keeping the web page in step
 
 The plate is the Birdsong web page itself (dopeytree/birdsong, `html/`),

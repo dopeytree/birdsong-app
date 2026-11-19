@@ -14,6 +14,7 @@ and LAN stations, the ONNX Runtime ProGuard rule, minSdk 24.
 TEST BUILD: NSAllowsArbitraryLoads and cleartext everywhere are for testing
 against LAN stations; tighten both before a store release.
 """
+import os
 import plistlib
 import re
 import sys
@@ -66,10 +67,20 @@ def patch_text(path, pattern, repl, flags=0):
 PHOTOS = "Birdsong saves pictures of your plates to Photos when you ask it to."
 
 
+BUNDLE = "uk.co.edstone.birdsongApp"
+
+
 def ios():
+    # BIRDSONG_COPY=<MMDDHHMM> (Run on iPhone as a copy.command): a separate
+    # app with its own ID, name and data; unset puts the usual app back.
+    copy = os.environ.get("BIRDSONG_COPY", "").strip()
+    name = f"Birdsong {copy[4:6]}:{copy[6:8]}" if len(copy) == 8 else "Birdsong"
+    patch_text(ROOT / "ios/Runner.xcodeproj/project.pbxproj",
+               r"PRODUCT_BUNDLE_IDENTIFIER = " + re.escape(BUNDLE) + r"(\.copy\d+)?;",
+               f"PRODUCT_BUNDLE_IDENTIFIER = {BUNDLE}{'.copy' + copy if copy else ''};")
     patch_plist(ROOT / "ios/Runner/Info.plist", {
         "NSPhotoLibraryAddUsageDescription": PHOTOS,
-        "CFBundleDisplayName": "Birdsong",
+        "CFBundleDisplayName": name,
         "NSMicrophoneUsageDescription": MIC,
         "NSLocalNetworkUsageDescription": LAN,
         "NSLocationWhenInUseUsageDescription": LOC,

@@ -6,7 +6,8 @@ import 'package:plate_share/plate_share.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../app_state.dart';
-import '../main.dart' show paper, sepia;
+import '../engine/listen_engine.dart' show maxSessionSpecies;
+import '../main.dart' show ink, paper, rule, sepia, serif;
 import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
@@ -48,6 +49,66 @@ class _PlateViewState extends State<PlateView> {
   double? _plateMid;
 
   final _shareKey = GlobalKey();
+
+  // ---- notes at the top of the plate ---------------------------------------
+  // The app's short messages (a session started or ended, the size order
+  // chosen, a photo saved), under the buttons rather than at the bottom.
+  String? _note;
+  String? _noteAction;
+  VoidCallback? _noteDo;
+  bool _noteShown = false;
+  Timer? _noteTimer;
+
+  void _say(String text, {String? action, VoidCallback? onAction, int seconds = 3}) {
+    if (!mounted) return;
+    _noteTimer?.cancel();
+    setState(() {
+      _note = text;
+      _noteAction = action;
+      _noteDo = onAction;
+      _noteShown = true;
+    });
+    _noteTimer = Timer(Duration(seconds: seconds), () {
+      if (mounted) setState(() => _noteShown = false);
+    });
+  }
+
+  // Session started, ended, or full and carried on in a new one.
+  int? _sesId;
+  void _watchSession() {
+    final now = app.engine.session?.id;
+    if (now == _sesId) return;
+    final before = _sesId;
+    _sesId = now;
+    final store = app.store;
+    String number(int id) {
+      final i = store.sessions.indexWhere((x) => x.id == id);
+      return i < 0 ? '' : ' #${i + 1}';
+    }
+
+    if (before == null && now != null) {
+      _say('Listening: session${number(now)} started.');
+    } else if (before != null && now != null) {
+      _say('Session${number(before)} is full at $maxSessionSpecies species; '
+          'session${number(now)} started.', seconds: 5);
+    } else if (before != null) {
+      // The store closes (or drops) the session just after the engine stops.
+      Future.delayed(const Duration(milliseconds: 400), () {
+        final found = store.sessions.where((x) => x.id == before);
+        if (found.isEmpty) {
+          _say('Stopped. Nothing was heard, so no session was kept.');
+          return;
+        }
+        final ses = found.first;
+        final species = {
+          for (final d in store.forPlate(_s.plateModel, session: ses)) d.sci
+        }.length;
+        _say('Session${number(before)} ended: '
+            '${lasting((ses.end ?? DateTime.now()).difference(ses.start))}, '
+            '$species species.', seconds: 4);
+      });
+    }
+  }
 
   // The screen's safe-area insets, as last given to the page.
   EdgeInsets _insets = EdgeInsets.zero;
@@ -120,6 +181,8 @@ class _PlateViewState extends State<PlateView> {
     app.store.addListener(_storeChanged);
     app.engine.addListener(_pushLive);
     app.engine.addListener(_pushSession);
+    _sesId = app.engine.session?.id;
+    app.engine.addListener(_watchSession);
   }
 
   @override
@@ -131,6 +194,8 @@ class _PlateViewState extends State<PlateView> {
     app.store.removeListener(_storeChanged);
     app.engine.removeListener(_pushLive);
     app.engine.removeListener(_pushSession);
+    app.engine.removeListener(_watchSession);
+    _noteTimer?.cancel();
     super.dispose();
   }
 
@@ -209,12 +274,10 @@ class _PlateViewState extends State<PlateView> {
     await engine.start();
     if (!mounted || engine.error == null) return;
     final noModel = engine.error!.contains('Models');
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(engine.error!),
-      action: noModel
-          ? SnackBarAction(label: 'Models', onPressed: widget.openSettings)
-          : null,
-    ));
+    _say(engine.error!,
+        action: noModel ? 'Models' : null,
+        onAction: noModel ? widget.openSettings : null,
+        seconds: 6);
   }
 
   // The arrows' own height is 40 (compact).
@@ -237,14 +300,7 @@ class _PlateViewState extends State<PlateView> {
     final next = order[(order.indexOf(now is String ? now : 'calls') + 1) % order.length];
     await page.set('sizeBy', next);
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(PageControl.sizeBy[next]!),
-        duration: const Duration(milliseconds: 1200),
-        behavior: SnackBarBehavior.floating,
-        width: 240,
-      ));
+    _say(PageControl.sizeBy[next]!, seconds: 2);
   }
 
   Future<void> _share() async {
@@ -255,8 +311,7 @@ class _PlateViewState extends State<PlateView> {
       ok = await PlateShare.share(text: 'Heard with Birdsong', from: from);
     } catch (_) {}
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't take a picture of the plate.")));
+      _say("Couldn't take a picture of the plate.");
     }
   }
 
@@ -266,15 +321,11 @@ class _PlateViewState extends State<PlateView> {
       r = await PlateShare.saveToPhotos();
     } catch (_) {}
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      behavior: SnackBarBehavior.floating,
-      width: 320,
-      content: Text(switch (r) {
-        'saved' => 'Saved to Photos.',
-        'denied' => 'Birdsong may not add to Photos: allow it in Settings.',
-        _ => "Couldn't save the plate.",
-      }),
-    ));
+    _say(switch (r) {
+      'saved' => 'Saved to Photos.',
+      'denied' => 'Birdsong may not add to Photos: allow it in Settings.',
+      _ => "Couldn't save the plate.",
+    });
   }
 
   @override
@@ -356,6 +407,31 @@ class _PlateViewState extends State<PlateView> {
                   ],
                 ),
               ),
+            if (_note != null)
+              Positioned(
+                left: 16 + safe.left,
+                right: 16 + safe.right,
+                top: 64 + safe.top,
+                child: IgnorePointer(
+                  ignoring: !_noteShown,
+                  child: AnimatedOpacity(
+                    opacity: _noteShown && !_popup ? 1 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    child: Center(
+                      child: _Note(
+                        text: _note!,
+                        action: _noteAction,
+                        onAction: _noteDo == null
+                            ? null
+                            : () {
+                                setState(() => _noteShown = false);
+                                _noteDo!();
+                              },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             if (listen && !_popup && n > 1 && _arrowsShown(context)) ...[
               Positioned(
                 left: safe.left,
@@ -402,6 +478,40 @@ class _Arrow extends StatelessWidget {
       color: sepia.withValues(alpha: 0.75),
       icon: Icon(icon),
       onPressed: onPressed,
+    );
+  }
+}
+
+/// A short message on paper, ruled like the plate's pop-ups.
+class _Note extends StatelessWidget {
+  const _Note({required this.text, this.action, this.onAction});
+
+  final String text;
+  final String? action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: paper,
+      elevation: 3,
+      shadowColor: const Color(0x553C280A),
+      shape: const RoundedRectangleBorder(side: BorderSide(color: rule)),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 10, action == null ? 16 : 6, 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(text,
+                  style: const TextStyle(
+                      fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 16, color: ink)),
+            ),
+            if (action != null)
+              TextButton(onPressed: onAction, child: Text(action!)),
+          ],
+        ),
+      ),
     );
   }
 }
