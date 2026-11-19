@@ -235,8 +235,9 @@ class LocalServer {
       'html{background:var(--paper)}'
       // plate-extras.js: the folding index and the zoomable collage.
       '.bsIx{cursor:pointer;-webkit-user-select:none;user-select:none}'
-      '.bsIxArrow{display:none;margin-left:.45em;font-family:var(--serif)}'
-      'body.bs-noindex .bsIxArrow{display:inline}body.bs-noindex #index{display:none}'
+      '.bsIxArrow{display:none;text-align:center;line-height:1;margin:0 0 .1rem;cursor:pointer;'
+      'font-family:var(--serif);color:var(--sepia);-webkit-user-select:none;user-select:none}'
+      'body.bs-noindex .bsIxArrow{display:block}body.bs-noindex #index{display:none}'
       '#bsZoomBox{overflow:hidden;touch-action:pan-x pan-y}body.bs-zoomed #bsZoomBox{touch-action:none}'
       'body{padding:max(env(safe-area-inset-top),var(--bs-top,0px)) max(env(safe-area-inset-right),var(--bs-right,0px))'
       ' max(env(safe-area-inset-bottom),var(--bs-bottom,0px)) max(env(safe-area-inset-left),var(--bs-left,0px))}'

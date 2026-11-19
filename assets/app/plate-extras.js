@@ -11,17 +11,17 @@
   function relayout() { dispatchEvent(new Event("resize")); }
 
   /* ---- Tap "Index of species" to fold the list away (and back) ----------
-     Folded, the heading shows a small ^ ; the collage takes the room and is
-     laid out afresh either way. */
+     Folded, a small ^ shows on a line above the heading (tapping it opens
+     the list too); the collage takes the room and is laid out afresh. */
   if (heading) {
     heading.classList.add("bsIx");
     heading.setAttribute("role", "button");
     heading.setAttribute("tabindex", "0");
-    var arrow = document.createElement("span");
+    var arrow = document.createElement("div");
     arrow.className = "bsIxArrow";
     arrow.textContent = "⌃";
     arrow.setAttribute("aria-hidden", "true");
-    heading.appendChild(arrow);
+    heading.parentNode.insertBefore(arrow, heading);
     var setFolded = function (on) {
       document.body.classList.toggle("bs-noindex", on);
       heading.setAttribute("aria-expanded", String(!on));
@@ -35,6 +35,7 @@
       relayout();
     };
     heading.addEventListener("click", toggle);
+    arrow.addEventListener("click", toggle);
     heading.addEventListener("keydown", function (e) {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
     });
