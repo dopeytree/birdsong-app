@@ -89,6 +89,32 @@
     tell("arrows:app");
   }
 
+  /* ---- Mode 5: the index alone, centred on the window -----------------
+     CSS centres it in the room under the title; a matching space below
+     (as much as the title takes, if there is room) puts it in the middle of
+     the whole window instead. A long index just scrolls as before. */
+  var main = document.querySelector("main"), head = document.querySelector("header");
+  if (main && head) {
+    var lastPad = -1;
+    var balance = function () {
+      var only = document.body.classList.contains("no-plate") && !document.body.classList.contains("latest");
+      var pad = 0;
+      if (only) {
+        var sec = main.querySelector("section");
+        var bs = getComputedStyle(document.body);
+        var room = innerHeight - parseFloat(bs.paddingTop) - parseFloat(bs.paddingBottom) - head.offsetHeight;
+        pad = Math.max(0, Math.min(head.offsetHeight, room - (sec ? sec.offsetHeight : 0)));
+      }
+      pad = Math.round(pad);
+      if (pad === lastPad) return;
+      lastPad = pad;
+      main.style.paddingBottom = pad ? pad + "px" : "";
+    };
+    addEventListener("resize", balance);
+    setInterval(balance, 500);
+    balance();
+  }
+
   /* ---- Modes 6 and 7: the one bird opens its card ---------------------
      The page's latest and top views show a single bird with no way into
      its details; a tap on the picture or the name opens the same card the
