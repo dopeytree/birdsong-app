@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:plate_share/plate_share.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../app_state.dart';
-import '../main.dart' show ink, sepia;
+import '../main.dart' show paper, sepia;
 import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
@@ -63,7 +62,8 @@ class _PlateViewState extends State<PlateView> {
     _web
         .runJavaScript('(function(s){s.setProperty("--bs-top","${px(p.top)}");'
             's.setProperty("--bs-right","${px(p.right)}");s.setProperty("--bs-bottom","${px(p.bottom)}");'
-            's.setProperty("--bs-left","${px(p.left)}");})(document.documentElement.style)')
+            's.setProperty("--bs-left","${px(p.left)}");dispatchEvent(new Event("resize"));})'
+            '(document.documentElement.style)')
         .catchError((Object _) {});
   }
 
@@ -260,6 +260,23 @@ class _PlateViewState extends State<PlateView> {
     }
   }
 
+  Future<void> _save() async {
+    var r = 'failed';
+    try {
+      r = await PlateShare.saveToPhotos();
+    } catch (_) {}
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      width: 320,
+      content: Text(switch (r) {
+        'saved' => 'Saved to Photos.',
+        'denied' => 'Birdsong may not add to Photos: allow it in Settings.',
+        _ => "Couldn't save the plate.",
+      }),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final safe = MediaQuery.paddingOf(context);
@@ -309,14 +326,26 @@ class _PlateViewState extends State<PlateView> {
                       onPressed: _cycleSize,
                     ),
                     if (PlateShare.supported)
-                      IconButton(
+                      PopupMenuButton<String>(
                         key: _shareKey,
-                        tooltip: 'Share the plate',
-                        icon: Icon(Platform.isIOS || Platform.isMacOS
-                            ? Icons.ios_share
-                            : Icons.share),
-                        color: Theme.of(context).colorScheme.primary,
-                        onPressed: _share,
+                        tooltip: 'Share or save the plate',
+                        icon: Icon(Icons.ios_share,
+                            color: Theme.of(context).colorScheme.primary),
+                        color: paper,
+                        onSelected: (v) => v == 'save' ? _save() : _share(),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: 'share',
+                            child: ListTile(
+                                leading: Icon(Icons.ios_share), title: Text('Share…')),
+                          ),
+                          PopupMenuItem(
+                            value: 'save',
+                            child: ListTile(
+                                leading: Icon(Icons.photo_library_outlined),
+                                title: Text('Save to Photos')),
+                          ),
+                        ],
                       ),
                     IconButton(
                       tooltip: 'Settings',

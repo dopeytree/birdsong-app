@@ -176,6 +176,18 @@
     {
       "find": "content=\"width=device-width, initial-scale=1\"",
       "used_by": "local_server.dart: viewport-fit=cover added so the page fills the iPhone screen"
+    },
+    {
+      "find": "function measureOthers()",
+      "used_by": "local_server.dart: wrapped to count the safe-area padding"
+    },
+    {
+      "find": "plateEl.style.height = Math.max(140, innerHeight - measureOthers())",
+      "used_by": "local_server.dart: one-screen fit uses measureOthers"
+    },
+    {
+      "find": "addEventListener(\"resize\", () => { clearTimeout(rz); rz = setTimeout(layout, 150); });",
+      "used_by": "plate_view.dart: a resize event re-fits the plate after the insets change"
     }
   ],
   "endpoints": [

@@ -63,8 +63,12 @@ def patch_text(path, pattern, repl, flags=0):
         say(f"updated {path.relative_to(ROOT)} ({n} change{'s' if n != 1 else ''})")
 
 
+PHOTOS = "Birdsong saves pictures of your plates to Photos when you ask it to."
+
+
 def ios():
     patch_plist(ROOT / "ios/Runner/Info.plist", {
+        "NSPhotoLibraryAddUsageDescription": PHOTOS,
         "CFBundleDisplayName": "Birdsong",
         "NSMicrophoneUsageDescription": MIC,
         "NSLocalNetworkUsageDescription": LAN,
@@ -119,9 +123,11 @@ def macos():
         "NSMicrophoneUsageDescription": MIC,
         "NSLocationUsageDescription": LOC,
         "NSLocationWhenInUseUsageDescription": LOC,
+        "NSPhotoLibraryAddUsageDescription": PHOTOS,
         "NSAppTransportSecurity": ATS,
     })
     ent = {
+        "com.apple.security.personal-information.photos-library": True,
         "com.apple.security.app-sandbox": True,
         "com.apple.security.network.client": True,
         "com.apple.security.network.server": True,

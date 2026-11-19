@@ -9,6 +9,7 @@ import UIKit
 import FlutterMacOS
 import AppKit
 #endif
+import Photos
 import WebKit
 
 public class PlateSharePlugin: NSObject, FlutterPlugin {
@@ -24,6 +25,10 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    if call.method == "save" {
+      DispatchQueue.main.async { self.save(result: result) }
+      return
+    }
     if call.method == "fullBleed" {
       DispatchQueue.main.async { self.fullBleed(result: result) }
       return
@@ -50,6 +55,34 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       return url
     } catch {
       return nil
+    }
+  }
+
+  /// Adds the plate's picture to Photos (add-only access).
+  private func save(result: @escaping FlutterResult) {
+    snapshot { url in
+      guard let url = url else {
+        result("failed")
+        return
+      }
+      let add = {
+        PHPhotoLibrary.shared().performChanges({
+          PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: url)
+        }) { ok, _ in DispatchQueue.main.async { result(ok ? "saved" : "failed") } }
+      }
+      if #available(iOS 14, macOS 11, *) {
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+          if status == .authorized || status == .limited {
+            add()
+          } else {
+            DispatchQueue.main.async { result("denied") }
+          }
+        }
+      } else {
+        PHPhotoLibrary.requestAuthorization { status in
+          if status == .authorized { add() } else { DispatchQueue.main.async { result("denied") } }
+        }
+      }
     }
   }
 
@@ -81,13 +114,21 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
     result(true)
   }
 
-  private func share(text: String?, anchor: CGRect, result: @escaping FlutterResult) {
+  private func snapshot(_ done: @escaping (URL?) -> Void) {
     guard let window = keyWindow(), let web = findWebView(window) else {
+      done(nil)
+      return
+    }
+    web.takeSnapshot(with: nil) { image, _ in done(self.pngFile(image?.pngData())) }
+  }
+
+  private func share(text: String?, anchor: CGRect, result: @escaping FlutterResult) {
+    guard let window = keyWindow() else {
       result(false)
       return
     }
-    web.takeSnapshot(with: nil) { image, _ in
-      guard let image = image, let url = self.pngFile(image.pngData()) else {
+    snapshot { url in
+      guard let url = url else {
         result(false)
         return
       }
@@ -115,18 +156,31 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
     return nil
   }
 
-  private func share(text: String?, anchor: CGRect, result: @escaping FlutterResult) {
+  private func snapshot(_ done: @escaping (URL?) -> Void) {
     guard let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first,
       let view = window.contentView, let web = findWebView(view)
+    else {
+      done(nil)
+      return
+    }
+    web.takeSnapshot(with: nil) { image, _ in
+      guard let tiff = image?.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else {
+        done(nil)
+        return
+      }
+      done(self.pngFile(rep.representation(using: .png, properties: [:])))
+    }
+  }
+
+  private func share(text: String?, anchor: CGRect, result: @escaping FlutterResult) {
+    guard let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first,
+      let view = window.contentView
     else {
       result(false)
       return
     }
-    web.takeSnapshot(with: nil) { image, _ in
-      guard let image = image, let tiff = image.tiffRepresentation,
-        let rep = NSBitmapImageRep(data: tiff),
-        let url = self.pngFile(rep.representation(using: .png, properties: [:]))
-      else {
+    snapshot { url in
+      guard let url = url else {
         result(false)
         return
       }

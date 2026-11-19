@@ -284,6 +284,10 @@ class LocalServer {
       'new ResizeObserver(plateMid).observe(document.getElementById("plate")||document.body);'
       'setInterval(plateMid,1000);'
       'try{var rh=renderHeading;renderHeading=function(){rh();showSession();};}catch(e){}'
+      // "Fit everything on one screen" measures the header and index but not
+      // the body's safe-area padding; count it, so nothing scrolls.
+      'try{var mo=measureOthers;measureOthers=function(){var c=getComputedStyle(document.body);'
+      'return mo()+Math.ceil(parseFloat(c.paddingTop)+parseFloat(c.paddingBottom));};}catch(e){}'
       '})();</script>';
 
   String? _pageHtml;

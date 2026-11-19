@@ -10,6 +10,11 @@ class PlateShare {
   /// iPhone, iPad and Mac for now.
   static bool get supported => Platform.isIOS || Platform.isMacOS;
 
+  /// Saves the picture of the plate to Photos. Returns 'saved', 'denied'
+  /// (not allowed in Settings) or 'failed'.
+  static Future<String> saveToPhotos() async =>
+      await _channel.invokeMethod<String>('save') ?? 'failed';
+
   /// iOS: let the web view run under the status bar and the Dynamic Island
   /// (no automatic safe-area insets), in the page's paper colour. The page
   /// pads its own content. Elsewhere does nothing.
