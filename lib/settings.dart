@@ -154,7 +154,7 @@ class Settings extends ChangeNotifier {
 /// The plate's modes, numbered on its button. 1 to 3 size the collage; 4 to 7
 /// use the page's own Home Assistant card views (?view=, ?hide=).
 class PlateMode {
-  const PlateMode(this.name, {this.sizeBy, this.query = ''});
+  const PlateMode(this.name, {this.sizeBy, this.query = '', this.currentOnly = false});
 
   final String name;
 
@@ -163,6 +163,9 @@ class PlateMode {
 
   /// Extra address parameters for the page.
   final String query;
+
+  /// Shows the current session only: no session arrows (6 and 7).
+  final bool currentOnly;
 }
 
 const plateModes = <PlateMode>[
@@ -171,6 +174,7 @@ const plateModes = <PlateMode>[
   PlateMode('No pecking order', sizeBy: 'equal'),
   PlateMode('The collage, no index', query: 'hide=index'),
   PlateMode('The index alone', query: 'view=index&show=title,date'),
-  PlateMode('The latest bird, and when', query: 'view=latest&show=time,title,date'),
-  PlateMode('Most heard this session', query: 'view=top&show=title,date'),
+  PlateMode('The latest bird, and when',
+      query: 'view=latest&show=time,title,date', currentOnly: true),
+  PlateMode('Most heard this session', query: 'view=top&show=title,date', currentOnly: true),
 ];

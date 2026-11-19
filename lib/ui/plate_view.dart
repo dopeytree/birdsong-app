@@ -335,6 +335,7 @@ class _PlateViewState extends State<PlateView> {
     final next = _s.plateMode % plateModes.length + 1;
     final mode = plateModes[next - 1];
     _s.update((x) => x.plateMode = next);   // 4 to 7 reload the page with their view
+    if (mode.currentOnly) app.store.showLatest();
     if (mode.sizeBy != null) await app.page?.set('sizeBy', mode.sizeBy!);
     if (!mounted) return;
     _say('$next  ${mode.name}', seconds: 2);
@@ -468,7 +469,8 @@ class _PlateViewState extends State<PlateView> {
                   ),
                 ),
               ),
-            if (listen && !_popup && n > 1 && !_arrowsInPage && _arrowsShown(context)) ...[
+            if (listen && !_popup && n > 1 && !_arrowsInPage &&
+                !plateModes[_s.plateMode - 1].currentOnly && _arrowsShown(context)) ...[
               Positioned(
                 left: safe.left,
                 top: _arrowTop(context),
