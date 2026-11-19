@@ -383,18 +383,8 @@ class _PlateViewState extends State<PlateView> {
         return Stack(
           children: [
             WebViewWidget(controller: _web),
-            // A station plate keeps a reload button; Listen here refreshes
-            // itself as birds are heard.
-            if (!listen && !_popup)
-              Positioned(
-                right: 16 + safe.right,
-                bottom: 16 + safe.bottom,
-                child: IconButton.filledTonal(
-                  tooltip: 'Reload the plate',
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () => _web.reload(),
-                ),
-              ),
+            // No reload button: a station plate asks again every minute on
+            // its own (CONFIG.refreshSeconds), and Listen here as birds are heard.
             if (!_popup)
               Positioned(
                 right: 8 + safe.right,

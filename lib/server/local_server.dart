@@ -167,9 +167,15 @@ class LocalServer {
       }
       final back = await out.close();
       res.statusCode = back.statusCode;
+      // BirdNET-Go gzips its answers and this client unzips them, so the
+      // station's Content-Length (the zipped size) no longer fits the body:
+      // passed on, it made Dart drop every small answer half-sent (the
+      // card's recordings, facts and trend). Pass it on only for a body
+      // that arrives as it was sent, such as a recording.
+      final unzipped = back.compressionState == HttpClientResponseCompressionState.decompressed;
       for (final h in [
         HttpHeaders.contentTypeHeader,
-        HttpHeaders.contentLengthHeader,
+        if (!unzipped) HttpHeaders.contentLengthHeader,
         HttpHeaders.contentRangeHeader,
         HttpHeaders.acceptRangesHeader,
       ]) {
