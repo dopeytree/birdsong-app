@@ -34,4 +34,55 @@ void main() {
     // 2 was recent ramblings; it is f now.
     expect(plateLetter((await loadWith({'plateMode': 2})).plateMode), 'f');
   });
+
+  test('an old single station becomes the first saved station', () async {
+    final s = await loadWith({'mode': 'station', 'birdnetUrl': 'https://birdnet.example.net'});
+    expect(s.stations.length, 1);
+    expect(s.station!.name, 'BirdNET-Go');
+    expect(s.birdnetBase, 'https://birdnet.example.net');
+    expect(s.stationDigits, '');
+    // a BirdWeather number set as well was the one in use, and still is
+    final both = await loadWith({'birdnetUrl': 'http://10.0.0.2:8080', 'birdweatherStation': '1234'});
+    expect(both.stations.length, 2);
+    expect(both.stationDigits, '1234');
+    expect(both.birdnetUrl, '');
+  });
+
+  test('the source button goes here, each station, then back here', () async {
+    final s = await loadWith({'mode': 'listen'});
+    s.putStation(Station.fromInput('Garden', 'http://192.168.1.50:8080'));
+    s.putStation(Station.fromInput('Allotment', 'https://app.birdweather.com/stations/1234'));
+    s.update((x) => x.mode = AppMode.listen);
+    final seen = <String>[];
+    for (var i = 0; i < 4; i++) {
+      s.nextSource();
+      seen.add(s.mode == AppMode.listen ? 'here' : s.station!.name);
+    }
+    expect(seen, ['Garden', 'Allotment', 'here', 'Garden']);
+    // and it is all saved
+    await s.saved;
+    final again = await Settings.load(root);
+    expect(again.stations.map((x) => x.name), ['Garden', 'Allotment']);
+    expect(again.station!.name, 'Garden');
+  });
+
+  test('a station is read from a number, a BirdWeather page or an address', () {
+    expect(Station.fromInput('', '1234').kind, 'BirdWeather 1234');
+    expect(Station.fromInput('', 'https://app.birdweather.com/stations/987').birdweather, '987');
+    final b = Station.fromInput('', 'http://192.168.1.50:8080');
+    expect(b.kind, 'BirdNET-Go');
+    expect(b.name, 'BirdNET-Go');
+    expect(Station.fromInput('Garden', '1234').name, 'Garden');
+  });
+
+  test('removing the station on show moves to the next, or back here', () async {
+    final s = await loadWith({});
+    s.putStation(Station.fromInput('A', '1'));
+    s.putStation(Station.fromInput('B', '2'));
+    s.removeStation(s.station!.id);
+    expect(s.station!.name, 'A');
+    s.removeStation(s.station!.id);
+    expect(s.mode, AppMode.listen);
+    expect(s.stations, isEmpty);
+  });
 }

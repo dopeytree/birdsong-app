@@ -12,6 +12,7 @@ import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
 import 'splash.dart' show Cardinal, SupportQuote;
+import 'station_editor.dart';
 
 /// Everything that isn't the plate: where birds come from, listening,
 /// models, the location filter and stored data. Opened from the plate's
@@ -26,8 +27,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _url;
-  late final TextEditingController _station;
   late final TextEditingController _lat;
   late final TextEditingController _lon;
   final _limit = TextEditingController();
@@ -47,8 +46,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _url = TextEditingController(text: s.birdnetUrl);
-    _station = TextEditingController(text: s.birdweatherStation);
     _lat = TextEditingController(text: s.latitude?.toString() ?? '');
     _lon = TextEditingController(text: s.longitude?.toString() ?? '');
     app.page?.read().then((d) {
@@ -61,18 +58,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _url.dispose();
-    _station.dispose();
     _lat.dispose();
     _lon.dispose();
     _limit.dispose();
     super.dispose();
   }
-
-  void _saveStation() => s.update((x) {
-        x.birdnetUrl = _url.text.trim();
-        x.birdweatherStation = _station.text.trim();
-      });
 
   void _saveLocation() => s.update((x) {
         x.latitude = double.tryParse(_lat.text.trim());
@@ -97,12 +87,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 8),
               SegmentedButton<AppMode>(
                 segments: const [
-                  ButtonSegment(value: AppMode.listen, label: Text('Listen here & now')),
-                  ButtonSegment(value: AppMode.station, label: Text('Remote station')),
+                  ButtonSegment(
+                      value: AppMode.listen,
+                      icon: Icon(Icons.mic_none_outlined),
+                      label: Text('Listen here & now')),
+                  ButtonSegment(
+                      value: AppMode.station, icon: Icon(Icons.sensors), label: Text('Remote station')),
                 ],
                 selected: {s.mode},
                 showSelectedIcon: false,
-                onSelectionChanged: (v) => s.update((x) => x.mode = v.first),
+                onSelectionChanged: (v) {
+                  // a remote station with none saved yet: ask for one
+                  if (v.first == AppMode.station && s.stations.isEmpty) {
+                    editStation(context, s);
+                    return;
+                  }
+                  s.update((x) => x.mode = v.first);
+                },
               ),
               const SizedBox(height: 8),
               if (listen) ...[
@@ -155,33 +156,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// The saved stations: tap one to show it, edit or remove it, add more.
   Widget _remote(BuildContext context) {
+    final theme = Theme.of(context);
+    final shown = s.station?.id;
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
-            controller: _url,
-            decoration: const InputDecoration(
-                labelText: 'BirdNET-Go address', hintText: 'http://192.168.1.50:8080'),
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            onSubmitted: (_) => _saveStation(),
+          for (final st in s.stations)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.sensors,
+                  color: st.id == shown ? theme.colorScheme.primary : theme.disabledColor),
+              title: Text(st.name),
+              subtitle: Text(st.isBirdWeather ? st.kind : st.birdnetUrl,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              selected: st.id == shown,
+              onTap: () => s.update((x) {
+                x.stationId = st.id;
+                x.mode = AppMode.station;
+              }),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Edit',
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => editStation(context, s, station: st),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _confirmRemove(context, st),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: () => editStation(context, s),
+                icon: const Icon(Icons.add),
+                label: const Text('Add a station'),
+              ),
+              TextButton.icon(
+                onPressed: openBirdWeatherMap,
+                icon: const Icon(Icons.map_outlined, size: 18),
+                label: const Text('Find one on BirdWeather'),
+              ),
+            ],
           ),
-          TextField(
-            controller: _station,
-            decoration: const InputDecoration(
-                labelText: 'or BirdWeather station number', hintText: '12345'),
-            keyboardType: TextInputType.number,
-            onSubmitted: (_) => _saveStation(),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(onPressed: _saveStation, child: const Text('Save')),
           const SizedBox(height: 16),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmRemove(BuildContext context, Station st) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Remove ${st.name}?'),
+        content: const Text('Only the saved address goes; nothing on the station changes.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (ok == true) s.removeStation(st.id);
   }
 
   Widget _listening(BuildContext context) {

@@ -102,10 +102,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _finishStation() {
+    // a BirdWeather number wins when both are filled in, as before
+    final bw = _station.text.trim(), url = _url.text.trim();
+    final input = bw.isNotEmpty ? bw : url;
+    if (input.isNotEmpty) {
+      final current = s.station;
+      final same = current != null && current.input == input;
+      if (!same) s.putStation(Station.fromInput('', input));
+    }
     s.update((x) {
       x.mode = AppMode.station;
-      x.birdnetUrl = _url.text.trim();
-      x.birdweatherStation = _station.text.trim();
       x.onboarded = true;
     });
     widget.onDone(0);

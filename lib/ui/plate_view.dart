@@ -11,6 +11,7 @@ import '../main.dart' show ink, paper, rule, sepia, serif;
 import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
+import 'station_editor.dart';
 
 /// Birdsong's own page, served by the app's local server. In Listen here it
 /// shows one listening session at a time: small arrows either side step
@@ -341,6 +342,17 @@ class _PlateViewState extends State<PlateView> {
     _say(mode.name, seconds: 2);
   }
 
+  // Listen here, then each saved station, then back: a tap each. With no
+  // station saved yet, it asks for one.
+  void _nextSource() {
+    if (_s.stations.isEmpty) {
+      editStation(context, _s);
+      return;
+    }
+    _s.nextSource();
+    _say(_s.mode == AppMode.listen ? 'Listen here & now' : _s.station!.name, seconds: 2);
+  }
+
   Future<void> _share() async {
     final box = _shareKey.currentContext?.findRenderObject() as RenderBox?;
     final from = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
@@ -392,7 +404,17 @@ class _PlateViewState extends State<PlateView> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (listen)
+                    IconButton(
+                      tooltip: _s.stations.isEmpty
+                          ? 'Add a remote station'
+                          : '${listen ? 'Listening here' : _s.station!.name} · next: ${_s.nextSourceName}',
+                      icon: Icon(listen ? Icons.mic_none_outlined : Icons.sensors),
+                      color: Theme.of(context).colorScheme.primary,
+                      onPressed: _nextSource,
+                    ),
+                    // On a station the record button stays while a recording
+                    // runs here, so it can still be stopped.
+                    if (listen || app.engine.running || app.engine.starting)
                       _MicButton(
                         listening: app.engine.running,
                         busy: app.engine.starting,
