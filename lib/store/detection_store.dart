@@ -496,13 +496,6 @@ class DetectionStore extends ChangeNotifier {
 
   Session? get liveSession => sessions.isNotEmpty && sessions.last.live ? sessions.last : null;
 
-  /// Back to the latest session, as if the arrows had never been used.
-  void showLatest() {
-    if (_selectedId == null) return;
-    _selectedId = null;
-    notifyListeners();
-  }
-
   /// Move the plate [delta] sessions back (-1) or on (+1).
   void step(int delta) {
     final i = selectedIndex;

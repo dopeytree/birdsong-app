@@ -164,7 +164,8 @@ class PlateMode {
   /// Extra address parameters for the page.
   final String query;
 
-  /// Shows the current session only: no session arrows (6 and 7).
+  /// A panel of the session being viewed, with no session arrows (6 and 7):
+  /// pick the session in another mode, then come here.
   final bool currentOnly;
 }
 
