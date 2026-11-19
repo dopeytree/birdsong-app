@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:plate_share/plate_share.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -342,13 +343,31 @@ class _PlateViewState extends State<PlateView> {
     _say(mode.name, seconds: 2);
   }
 
-  // The microphone: not recording, it moves to Listen here and starts;
-  // recording, it stops (wherever the plate is).
-  Future<void> _mic() async {
-    if (!app.engine.running && _s.mode != AppMode.listen) {
+  // The microphone, a tap: while recording, stop; otherwise show Listen
+  // here (already there, a reminder that a hold records).
+  Future<void> _micTap() async {
+    if (app.engine.running) {
+      await _toggleListening();
+      return;
+    }
+    if (_s.mode != AppMode.listen) {
+      _s.update((x) => x.mode = AppMode.listen);
+      _say('Listen here & now', seconds: 2);
+    } else {
+      _say('Hold the microphone to record', seconds: 2);
+    }
+  }
+
+  // A hold: record a new session. It starts before the plate moves to
+  // Listen here, so the plate opens on the new session rather than drawing
+  // the last one first.
+  Future<void> _micHold() async {
+    if (app.engine.running || app.engine.starting) return;
+    HapticFeedback.mediumImpact();
+    await _toggleListening();
+    if (mounted && app.engine.running && _s.mode != AppMode.listen) {
       _s.update((x) => x.mode = AppMode.listen);
     }
-    await _toggleListening();
   }
 
   // To the remote station; on one already, the next saved station. With
@@ -415,13 +434,14 @@ class _PlateViewState extends State<PlateView> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Both sources, always there: the one shown in madder. The
-                    // microphone also records: a tap starts (moving to Listen
-                    // here), a tap on the slashed microphone stops.
+                    // microphone: a tap shows Listen here, a hold records a new
+                    // session, a tap on the slashed microphone stops.
                     _MicButton(
                       listening: app.engine.running,
                       busy: app.engine.starting,
                       shown: listen || app.engine.running,
-                      onPressed: _mic,
+                      onTap: _micTap,
+                      onHold: _micHold,
                     ),
                     IconButton(
                       tooltip: _s.stations.isEmpty
@@ -586,13 +606,19 @@ class _Note extends StatelessWidget {
 /// it), with a slow pulse around it; a spinner while it starts. Madder when
 /// it is the plate on show or recording, faded otherwise.
 class _MicButton extends StatefulWidget {
-  const _MicButton(
-      {required this.listening, required this.busy, required this.shown, required this.onPressed});
+  const _MicButton({
+    required this.listening,
+    required this.busy,
+    required this.shown,
+    required this.onTap,
+    required this.onHold,
+  });
 
   final bool listening;
   final bool busy;
   final bool shown;
-  final VoidCallback onPressed;
+  final VoidCallback onTap;
+  final VoidCallback onHold;
 
   @override
   State<_MicButton> createState() => _MicButtonState();
@@ -650,15 +676,32 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
                   height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2, color: red),
                 )
-              : IconButton(
-                  tooltip: widget.listening
+              // A tooltip that shows on hover only: on a touch screen a long
+              // press is the hold that records.
+              : Tooltip(
+                  triggerMode: TooltipTriggerMode.manual,
+                  message: widget.listening
                       ? 'Stop recording'
                       : widget.shown
-                          ? 'Record here & now'
-                          : 'Listen here & now, and record',
-                  icon: Icon(widget.listening ? Icons.mic_off_outlined : Icons.mic_none_outlined),
-                  color: color,
-                  onPressed: widget.onPressed,
+                          ? 'Hold to record'
+                          : 'Listen here & now · hold to record',
+                  child: Semantics(
+                    button: true,
+                    label: widget.listening ? 'Stop recording' : 'Listen here and now',
+                    onLongPressHint: widget.listening ? null : 'record a new session',
+                    child: InkResponse(
+                      radius: 22,
+                      onTap: widget.onTap,
+                      onLongPress: widget.listening ? null : widget.onHold,
+                      child: SizedBox(
+                        width: size,
+                        height: size,
+                        child: Icon(
+                            widget.listening ? Icons.mic_off_outlined : Icons.mic_none_outlined,
+                            color: color),
+                      ),
+                    ),
+                  ),
                 ),
         ],
       ),
