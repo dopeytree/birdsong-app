@@ -40,6 +40,7 @@
     try { folded = localStorage.getItem("birdplate.bsIndexFolded") === "1"; } catch (e) {}
     setFolded(folded);
     var toggle = function () {
+      if (document.body.classList.contains("no-plate")) return;   // the index alone: nothing to fold to
       setFolded(!document.body.classList.contains("bs-noindex"));
       relayout();
     };
