@@ -338,7 +338,7 @@ class _PlateViewState extends State<PlateView> {
     _s.update((x) => x.plateMode = next);   // b to e reload the page with their view
     if (mode.sizeBy != null) await app.page?.set('sizeBy', mode.sizeBy!);
     if (!mounted) return;
-    _say('${plateLetter(next)}  ${mode.name}', seconds: 2);
+    _say(mode.name, seconds: 2);
   }
 
   Future<void> _share() async {
@@ -400,7 +400,8 @@ class _PlateViewState extends State<PlateView> {
                       ),
                     IconButton(
                       tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
-                      icon: _ModeNumber(_s.plateMode),
+                      icon: const Icon(Icons.dashboard_outlined),
+                      color: Theme.of(context).colorScheme.primary,
                       onPressed: _nextMode,
                     ),
                     if (PlateShare.supported)
@@ -540,26 +541,6 @@ class _Note extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// The plate mode's letter in a small ring.
-class _ModeNumber extends StatelessWidget {
-  const _ModeNumber(this.n);
-
-  final int n;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).colorScheme.primary;
-    return Container(
-      width: 24,
-      height: 24,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: c, width: 1.6)),
-      child: Text(plateLetter(n),
-          style: TextStyle(fontFamily: serif, fontSize: 15, height: 1.0, color: c, fontWeight: FontWeight.w600)),
     );
   }
 }

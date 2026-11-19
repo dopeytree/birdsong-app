@@ -46,7 +46,7 @@ class Settings extends ChangeNotifier {
   bool recordWeather = true;
 
   /// What the plate shows: its place, 1 to 7, in [plateModes], lettered a to
-  /// g on its button. Saved by the mode's [PlateMode.key], so a new order of
+  /// g in the order the view button steps through them. Saved by the mode's [PlateMode.key], so a new order of
   /// the modes keeps the one chosen.
   int plateMode = 1;
 
@@ -159,7 +159,8 @@ class Settings extends ChangeNotifier {
   String get stationDigits => birdweatherStation.replaceAll(RegExp(r'\D'), '');
 }
 
-/// The plate's modes, lettered a to g on its button ([plateLetter]). Those
+/// The plate's modes, lettered a to g ([plateLetter]) in the order the view
+/// button (Icons.dashboard_outlined) steps through them. Those
 /// with a [PlateMode.sizeBy] set the collage's Size by; the others use the
 /// page's own Home Assistant card views (?view=, ?hide=).
 class PlateMode {
@@ -193,5 +194,5 @@ const plateModes = <PlateMode>[
   PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                        // g
 ];
 
-/// Mode [n] (1 to 7) as its letter on the plate's button: a to g.
+/// Mode [n] (1 to 7) as its letter, a to g: how the modes are named in the code and tests.
 String plateLetter(int n) => String.fromCharCode(0x60 + n);
