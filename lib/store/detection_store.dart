@@ -571,11 +571,11 @@ class DetectionStore extends ChangeNotifier {
         scores: scores);
     all.add(d);
     // Heard with no session open (shouldn't happen): give it one.
-    final x = sessionOf(d) ??
-        await startSession(at: at).then((s) async {
-          await endSession(s, at: at, reason: 'manual');
-          return s;
-        });
+    var x = sessionOf(d);
+    if (x == null) {
+      x = await startSession(at: at);
+      await endSession(x, at: at, reason: 'manual');
+    }
     _touch(x);
     notifyListeners();
     return d;
