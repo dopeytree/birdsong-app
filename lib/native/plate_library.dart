@@ -109,6 +109,10 @@ class PlateLibrary {
   Map<String, dynamic> _choices = {};
   Map<String, dynamic>? _wiki;
 
+  /// Offer plates of skulls, wings and eggs too (Settings), as the page's
+  /// "Offer skulls, wings and eggs among the plates". Never chosen first.
+  bool parts = false;
+
   static Future<PlateLibrary> open() async {
     final base = await getApplicationCacheDirectory();
     final dir = Directory('${base.path}/plates');
@@ -131,7 +135,7 @@ class PlateLibrary {
   /// found, treated in [style]. Null when there is none (or no connection
   /// and it isn't on the device yet). Asked once a run for each style.
   Future<PlateArt?> plateFor(String sci, String common, PlateStyle style) =>
-      _asked['${style.name}|$sci'] ??= _find(sci, common, style).catchError((Object e) {
+      _asked['${style.name}|${parts ? 'p' : ''}|$sci'] ??= _find(sci, common, style).catchError((Object e) {
         debugPrint('plate $sci: $e');
         return null;
       });
@@ -150,7 +154,7 @@ class PlateLibrary {
   }
 
   /// Every plate on offer for a species, best first: its cut-outs, then up
-  /// to eight from Commons. For the card's "other plates".
+  /// to twelve from Commons, as the page offers. For the card's "other plates".
   Future<List<PlateCandidate>> candidates(String sci, String common) async {
     await (_manifestLoad ??= _loadManifest());
     final aliased = _alias[sci];
@@ -323,9 +327,11 @@ class PlateLibrary {
   }
 
   /// What Commons has for a species, best first. The species' own
-  /// illustrations category, then its genus'.
+  /// illustrations category, then its genus', then its family's (mammals).
   Future<List<PlateCandidate>> _commonsPlates(String sci, String common) async {
-    final had = _found[sci];
+    // kept apart when skulls, wings and eggs are offered, as the page does
+    final key = '${parts ? 'p.' : ''}$sci';
+    final had = _found[key];
     final now = DateTime.now().millisecondsSinceEpoch;
     if (had is Map && had['v'] is List && now - ((had['t'] as num?) ?? 0) < 30 * 86400000) {
       return [
@@ -335,14 +341,19 @@ class PlateLibrary {
     }
     final genus = sci.split(RegExp(r'\s+')).first;
     var best = <PlateCandidate>[];
-    for (final (name, kin) in [(sci, ''), (genus, ' A plate of the same genus.')]) {
+    final family = _family[genus];
+    for (final (name, kin) in [
+      (sci, ''),
+      (genus, ' A plate of the same genus.'),
+      if (family != null) (family, ' A plate of the same family.'),
+    ]) {
       for (final cat in ['$name (illustrations)', '$name illustrations']) {
         best = await _commonsCategory(cat, sci, common, kin);
         if (best.isNotEmpty) break;
       }
       if (best.isNotEmpty) break;
     }
-    _found[sci] = {
+    _found[key] = {
       't': now,
       'v': [for (final c in best) c.toJson()]
     };
@@ -359,7 +370,7 @@ class PlateLibrary {
     final j = jsonDecode(utf8.decode(await _bytes(u)));
     final pages = (j is Map ? j['query'] : null) is Map ? (j['query']['pages'] as Map?) : null;
     if (pages == null) return [];
-    final scored = <(int, PlateCandidate)>[];
+    final scored = <(double, PlateCandidate)>[];
     for (final p in pages.values) {
       final ii = (p['imageinfo'] as List?)?.firstOrNull;
       if (ii is! Map) continue;
@@ -367,7 +378,7 @@ class PlateLibrary {
       if (!RegExp(r'^image/(jpeg|png|tiff)$').hasMatch(mime)) continue;
       if (((ii['width'] as num?) ?? 0) < 400 || ii['thumburl'] is! String) continue;
       final title = (p['title'] as String).replaceFirst(RegExp(r'^File:'), '');
-      final score = scorePlate(title, sci, common, wide: kin.isNotEmpty);
+      final score = scorePlate(title, sci, common, wide: kin.isNotEmpty, parts: parts);
       if (score < 0) continue;
       scored.add((
         score,
@@ -378,50 +389,103 @@ class PlateLibrary {
       ));
     }
     scored.sort((a, b) => b.$1.compareTo(a.$1));
-    return [for (final s in scored.take(8)) s.$2];
+    return [for (final s in scored.take(12)) s.$2];
   }
 
-  /// How well a Commons file suits the plate: -1 to pass it over. After the
-  /// web page's scoreCandidate, without its "parts" (eggs, skulls) option.
-  @visibleForTesting
-  static int scorePlate(String title, String sci, String common, {bool wide = false}) {
-    final low = title.toLowerCase(), squashed = low.replaceAll(RegExp(r'[\s_-]'), '');
-    if (RegExp(r'crossley|\bmap\b|stamp|mural|distribution|taxiderm|\.svg$|\.ogg$|\.pdf$|\.webm$| & |\begg|skull|skeleton|\bnest\b')
-        .hasMatch(low)) {
-      return -1;
+  /// A plate of a part rather than the whole creature: the page's
+  /// PLATE_PART. Naming the kinds leaves room to ask for one later.
+  static const plateParts = <(String, String)>[
+    ('skull', r'\bskulls?\b|\bskelet|\bcrania?\b|\bcranium\b'),
+    ('teeth', r'\bteeth\b|\btooth\b|dentition'),
+    ('anatomy', r'\bbrains?\b|viscera|anatom|dissect'),
+    ('wing', r'\bwings?\b|\bfeathers?\b|\bplumes?\b'),
+    ('foot', r'\bfoot\b|\bfeet\b|\bclaws?\b|\btalons?\b'),
+    ('head', r'\bheads?\b|\bkop\b|\beyes?\b'),
+    ('egg', r'\beggs?\b|\bnests?\b'),
+  ];
+
+  /// Which part a file's title says it shows, or '' for the whole creature.
+  static String plateKind(String title) {
+    for (final (kind, re) in plateParts) {
+      if (RegExp(re, caseSensitive: false).hasMatch(title)) return kind;
     }
-    bool has(String re) => RegExp(re).hasMatch(low);
-    var s = 0;
+    return '';
+  }
+
+  /// How well a Commons file suits the plate: -1 to pass it over. The web
+  /// page's scoreCandidate, line for line. A plate of a part (skull, wing,
+  /// egg...) is passed over unless [parts] (Settings: skulls, wings and
+  /// eggs), and then offered but never chosen first.
+  @visibleForTesting
+  static double scorePlate(String title, String sci, String common, {bool wide = false, bool parts = false}) {
+    final t = title.replaceFirst(RegExp(r'^File:'), '');
+    final low = t.toLowerCase(), squashed = low.replaceAll(RegExp(r'[\s_-]'), '');
+    bool has(String re, [String? s]) => RegExp(re, caseSensitive: false).hasMatch(s ?? t);
+    if (has(r'crossley|\bmap\b|stamp|mural|distribution|taxiderm|\.svg$|\.ogg$|\.pdf$|\.webm$| & ')) return -1;
+    final kind = plateKind(t);
+    if (kind.isNotEmpty && !parts) return -1;
+    var s = 0.0;
     if (has(r'albin|selby|frivald|bewick|edwards|donovan|lewin|martinet|natural history of birds|nederlandsche vogelen')) {
       s += 100; // figures on plain paper
     } else if (has('buffon')) {
-      s += has('oiseaux|birds') ? 100 : 55;
+      s += has('oiseaux|birds') ? 100 : 55; // he ran to mammals too, on busier pages
+    } else if (has('keulemans onze vogels')) {
+      s += 90;
     } else if (has('keulemans')) {
       s += 80;
     } else if (has('naumann')) {
       s += 75;
-    } else if (has('gould|jardine|macgillivray')) {
+    } else if (RegExp(r'^[A-Z][a-z]+ [a-z]+ 18\d\d\.jpe?g$').hasMatch(t)) {
+      s += 70;
+    } else if (has('gould')) {
       s += 60;
-    } else if (has('lilford|thorburn|audubon')) {
+    } else if (has('lilford|thorburn')) {
       s += 55;
-    } else if (has('brehm|lydekker|joseph wolf')) {
-      s += 50;
+    } else if (has('audubon')) {
+      s += 55;
+    } else if (has(r'jardine|naturalist.?s library|british quadrupeds|macgillivray')) {
+      s += 60;
+    } else if (has(r'british mammals|\bdobson\b|chiroptera')) {
+      s += 55;
+    } else if (has('brehm|mivart|lydekker|joseph wolf|harrison weir|royal natural history')) {
+      s += 50; // the same age, drawing animals
     } else if (has('wellcome|engraving|lithograph')) {
       s += 40;
+    } else if (has('zwarts')) {
+      s += 30;
+    } else if (has('iconographia zoologica')) {
+      s += 20;
     }
-    // Which animal it is matters more than who drew it.
+    // Which animal the plate is of matters more than who drew it: a famous
+    // hand on the wrong creature is no use here.
     final name = common.toLowerCase().replaceFirst(RegExp(r'\s*/.*$'), '').trim();
     final genus = sci.split(RegExp(r'\s+')).first.toLowerCase();
-    if (squashed.contains(sci.toLowerCase().replaceAll(' ', ''))) {
+    if (squashed.contains(sci.toLowerCase().replaceAll(RegExp(r'\s'), ''))) {
       s += wide ? 150 : 50;
     } else if (name.isNotEmpty && squashed.contains(name.replaceAll(RegExp(r'[\s_-]'), ''))) {
       s += wide ? 120 : 25;
     } else if (wide && genus.length > 5 && low.contains(genus.substring(0, 6))) {
       s += 40;
     }
-    if (has(' (and|et|und) ')) s -= 35; // two creatures to a page, as a rule
-    return s < 0 ? 0 : s;
+    if (has(' (and|et|und) ', low)) s -= 35; // two creatures to a page, as a rule
+    s = s < 0 ? 0 : s; // only the list above throws a plate out
+    return kind.isNotEmpty ? s / 100 : s; // a part is offered, never chosen first
   }
+
+  /// Commons files much of the older work beyond birds by genus or by
+  /// family; this is the way back up to them (the page's FAMILY).
+  static const _family = {
+    'Pipistrellus': 'Vespertilionidae', 'Myotis': 'Vespertilionidae', 'Nyctalus': 'Vespertilionidae',
+    'Plecotus': 'Vespertilionidae', 'Eptesicus': 'Vespertilionidae', 'Barbastella': 'Vespertilionidae',
+    'Rhinolophus': 'Rhinolophidae',
+    'Vulpes': 'Canidae', 'Canis': 'Canidae',
+    'Meles': 'Mustelidae', 'Martes': 'Mustelidae', 'Mustela': 'Mustelidae', 'Lutra': 'Mustelidae',
+    'Erinaceus': 'Erinaceidae', 'Talpa': 'Talpidae', 'Sorex': 'Soricidae',
+    'Sciurus': 'Sciuridae', 'Oryctolagus': 'Leporidae', 'Lepus': 'Leporidae',
+    'Capreolus': 'Cervidae', 'Cervus': 'Cervidae', 'Dama': 'Cervidae', 'Muntiacus': 'Cervidae',
+    'Apodemus': 'Muridae', 'Rattus': 'Muridae', 'Microtus': 'Cricetidae',
+    'Rana': 'Ranidae', 'Bufo': 'Bufonidae', 'Pelophylax': 'Ranidae',
+  };
 
   // ---- fetching, once ------------------------------------------------------
 

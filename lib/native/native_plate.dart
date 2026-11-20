@@ -46,8 +46,10 @@ import 'plate_library.dart';
 /// Pinch zoom is the app's (ZoomableCollage), and share and save take a
 /// picture of the plate without the buttons, as on the web plate.
 ///
-/// Not moved across yet: the map, the limit on species, skulls
-/// wings and eggs, the caption, remote stations (those still open
+/// So are the caption, Limit species, and skulls, wings and eggs among a
+/// bird's plates (Settings > Experimental).
+///
+/// Not moved across yet: the map, and remote stations (those still open
 /// the web plate).
 class NativePlate extends StatefulWidget {
   const NativePlate({super.key, required this.app, required this.openSettings, this.onLoaded});
@@ -82,6 +84,7 @@ class _NativePlateState extends State<NativePlate> {
   // Experimental) starts again; [_round] lets answers from before be told
   // apart and dropped.
   PlateStyle? _artStyle;
+  bool _artParts = false;
   int _round = 0;
 
   // The collage on show, as "session|style", once every one of its plates
@@ -115,13 +118,20 @@ class _NativePlateState extends State<NativePlate> {
 
   PlateStyle get _style => PlateStyle.named(app.settings.nativePlateStyle);
 
+  /// Which collage is on show: a new session, style, or offer of skulls,
+  /// wings and eggs is a new one, prepared afresh before it is drawn.
+  String _showingFor(Session? ses) =>
+      '${ses?.id}|${_style.name}|${app.settings.nativeParts ? 'parts' : ''}';
+
   /// Look for the plates of [rows] not asked for yet.
   void _ensure(List<_Row> rows) {
     final lib = _lib;
     if (lib == null) return;
-    final style = _style;
-    if (style != _artStyle) {
+    final style = _style, parts = app.settings.nativeParts;
+    if (style != _artStyle || parts != _artParts) {
       _artStyle = style;
+      _artParts = parts;
+      lib.parts = parts;
       _round++;
       _art.clear();
       _asking.clear();
@@ -350,13 +360,15 @@ class _NativePlateState extends State<NativePlate> {
       builder: (context, _) {
         final store = app.store, engine = app.engine;
         final ses = store.selected;
-        final rows = _rows(ses);
+        // Limit species: the most heard only, on the plate and in the index
+        final all = _rows(ses), limit = app.settings.nativeLimit;
+        final rows = limit > 0 && all.length > limit ? all.sublist(0, limit) : all;
         final onPlate = rows.take(maxOnPlate).toList();
         _ensure(onPlate);
         // the creature heard last (the page's newestSci)
         String? newest;
         DateTime? latest;
-        for (final r in rows) {
+        for (final r in all) {
           if (r.last != null && (latest == null || r.last!.isAfter(latest))) {
             latest = r.last;
             newest = r.sci;
@@ -364,7 +376,7 @@ class _NativePlateState extends State<NativePlate> {
         }
         final marked = app.settings.nativeMarkAt == 'none' ? null : newest;
         WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
-        final calls = rows.fold<int>(0, (n, r) => n + r.count);
+        final calls = all.fold<int>(0, (n, r) => n + r.count);
         final i = store.selectedIndex, n = store.sessions.length;
         final red = Theme.of(context).colorScheme.primary;
         final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
@@ -385,7 +397,7 @@ class _NativePlateState extends State<NativePlate> {
                   final plateSide = (box.maxWidth * .02).clamp(8.0, 32.0);
                   final headSide = (box.maxWidth * .04).clamp(16.0, 48.0);
                   return SingleChildScrollView(
-                    physics: _holdFor != null && _holdFor == '${ses?.id}|${_style.name}'
+                    physics: _holdFor != null && _holdFor == _showingFor(ses)
                         ? const NeverScrollableScrollPhysics()
                         : null,
                     padding: EdgeInsets.only(top: _padTop, bottom: _bottomRoom),
@@ -395,7 +407,7 @@ class _NativePlateState extends State<NativePlate> {
                       children: [
                         Padding(
                           padding: EdgeInsets.symmetric(horizontal: headSide),
-                          child: _heading(ses, i, n, rows.length, calls, box.maxWidth - headSide,
+                          child: _heading(ses, i, n, all.length, calls, box.maxWidth - headSide,
                               totals: mode.key != 'index'),
                         ),
                         // the index alone sits in the middle of the window
@@ -452,6 +464,28 @@ class _NativePlateState extends State<NativePlate> {
                                 ),
                               ],
                             ],
+                          ),
+                        // The page's caption, under the plate; not when it is
+                        // fitted on one screen (body.fit #caption)
+                        if (showPlate && !fit)
+                          Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 704),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 9.6, 16, 0),
+                                child: Text(
+                                  'Each bird is drawn in proportion to how often it was heard. '
+                                  'Select one to see its plate and its hours.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      fontFamily: serif,
+                                      fontStyle: FontStyle.italic,
+                                      fontSize: (box.maxWidth <= 720 ? 16 : 18) * .98 * 16 / 18,
+                                      height: 1.5,
+                                      color: sepia),
+                                ),
+                              ),
+                            ),
                           ),
                         // section{padding:2.2rem clamp(1rem,4vw,3rem) 2.5rem;max-width:78rem},
                         // closer when fitted on one screen
@@ -663,7 +697,7 @@ class _NativePlateState extends State<NativePlate> {
   /// a new bird joining while listening (it appears once its plate is
   /// ready, and the rest make room).
   Widget _collage(Session ses, List<_Row> rows, String? newest, double width, double height) {
-    final showing = '${ses.id}|${_style.name}';
+    final showing = _showingFor(ses);
     final ready = [for (final r in rows) if (_art.containsKey(r.sci)) r];
     // Not before the height is known either (_measure), or they would be
     // placed once and then again.

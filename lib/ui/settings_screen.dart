@@ -111,10 +111,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         (v) => s.update((x) => x.nativeSizeBy = v)),
                     _switch('Fit on one screen', s.nativeFit,
                         (v) => s.update((x) => x.nativeFit = v)),
+                    _switch('Skulls, wings and eggs', s.nativeParts,
+                        (v) => s.update((x) => x.nativeParts = v)),
+                    _dropdown(
+                        'Limit species',
+                        '${s.nativeLimit}',
+                        {
+                          '0': 'All',
+                          for (final n in const [5, 10, 15, 20, 30, 40]) '$n': 'The $n most heard',
+                          if (!const [0, 5, 10, 15, 20, 30, 40].contains(s.nativeLimit))
+                            '${s.nativeLimit}': 'The ${s.nativeLimit} most heard',
+                        },
+                        (v) => s.update((x) => x.nativeLimit = int.tryParse(v) ?? 0)),
                     Text(
-                      'The web plate being moved into Flutter: heading, collage, index and a '
-                      'card for each bird, with pictures kept on this device. '
-                      'No views, map, zoom, recordings or share yet; switch this off to get them back.',
+                      'The web plate being moved into Flutter: everything but the map so far. '
+                      'Switch this off for the web plate.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],

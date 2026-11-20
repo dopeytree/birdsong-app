@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -148,6 +149,14 @@ class Settings extends ChangeNotifier {
   /// plate keeps this as birdplate.bsIndexFolded).
   bool nativeIndexFolded = false;
 
+  /// The Flutter plate: offer plates of skulls, wings and eggs among a
+  /// bird's other plates (never chosen first), as the web plate's option.
+  bool nativeParts = false;
+
+  /// The Flutter plate: draw and list only the [nativeLimit] most heard
+  /// species; 0 for all (the web plate's Limit species).
+  int nativeLimit = 0;
+
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
 
@@ -219,6 +228,8 @@ class Settings extends ChangeNotifier {
         : nativeMarkAt;
     nativeFit = (j['nativeFit'] as bool?) ?? nativeFit;
     nativeIndexFolded = (j['nativeIndexFolded'] as bool?) ?? nativeIndexFolded;
+    nativeParts = (j['nativeParts'] as bool?) ?? nativeParts;
+    nativeLimit = math.max(0, (j['nativeLimit'] as num?)?.toInt() ?? nativeLimit);
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -276,6 +287,8 @@ class Settings extends ChangeNotifier {
         'nativeMarkAt': nativeMarkAt,
         'nativeFit': nativeFit,
         'nativeIndexFolded': nativeIndexFolded,
+        'nativeParts': nativeParts,
+        'nativeLimit': nativeLimit,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,

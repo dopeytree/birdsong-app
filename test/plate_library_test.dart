@@ -25,4 +25,22 @@ void main() {
     expect(PlateLibrary.scorePlate('Turdus merula Keulemans.jpg', sci, common),
         greaterThan(PlateLibrary.scorePlate('Turdus merula and Turdus pilaris Keulemans.jpg', sci, common)));
   });
+
+  test('skulls, wings and eggs: passed over, or offered but never first', () {
+    const sci = 'Erithacus rubecula', common = 'European Robin';
+    expect(PlateLibrary.plateKind('Erithacus rubecula eggs Naumann.jpg'), 'egg');
+    expect(PlateLibrary.plateKind('Skull of a robin.jpg'), 'skull');
+    expect(PlateLibrary.plateKind('Erithacus rubecula Naumann.jpg'), '');
+    expect(PlateLibrary.scorePlate('Erithacus rubecula eggs Naumann.jpg', sci, common), -1);
+    final egg = PlateLibrary.scorePlate('Erithacus rubecula eggs Naumann.jpg', sci, common, parts: true);
+    final bird = PlateLibrary.scorePlate('Erithacus rubecula Naumann.jpg', sci, common, parts: true);
+    expect(egg, greaterThan(0));
+    expect(egg, lessThan(bird));
+  });
+
+  test("the page's artists and dated files are scored as the page scores them", () {
+    const sci = 'Turdus merula', common = 'Common Blackbird';
+    expect(PlateLibrary.scorePlate('Turdus merula 1880.jpg', sci, common), 70 + 50);
+    expect(PlateLibrary.scorePlate('Keulemans Onze Vogels Merel.jpg', sci, common), 90);
+  });
 }
