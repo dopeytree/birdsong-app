@@ -91,6 +91,8 @@ void main() {
     final s = await loadWith({});
     expect(s.nativeMarkAt, 'below');
     expect(s.nativeFit, isTrue);
+    expect(s.nativeIndexFolded, isFalse);
+    expect((await loadWith({'nativeIndexFolded': true})).toJson()['nativeIndexFolded'], isTrue);
     final t = await loadWith({'nativeMarkAt': 'fade', 'nativeFit': false});
     expect(t.toJson()['nativeMarkAt'], 'fade');
     expect(t.toJson()['nativeFit'], isFalse);

@@ -313,7 +313,7 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                       // over its centre, or on its lower edge (top:100%, -70%)
                       alignment: widget.markBelow ? Alignment.bottomCenter : Alignment.center,
                       child: Transform.translate(
-                        offset: widget.markBelow ? const Offset(0, 9 * .3) : Offset.zero,
+                        offset: widget.markBelow ? const Offset(0, 8 * .3) : Offset.zero,
                         child: AnimatedScale(
                           scale: widget.hovered ? 1.5 : 1,
                           duration: const Duration(milliseconds: 250),
@@ -341,7 +341,7 @@ class _Dot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const size = 9.0;
+    const size = 8.0; // .5rem
     final dot = Container(
       width: size,
       height: size,
@@ -361,7 +361,7 @@ class _Dot extends StatelessWidget {
           return DecoratedBox(
             decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [
               // box-shadow: 0 0 0 0 rgba(140,59,42,.6) to 0 0 0 .8rem transparent
-              BoxShadow(color: madder.withValues(alpha: .6 * (1 - t)), spreadRadius: 14.4 * t),
+              BoxShadow(color: madder.withValues(alpha: .6 * (1 - t)), spreadRadius: 12.8 * t),
             ]),
             child: child,
           );
@@ -395,7 +395,7 @@ class _NameOval extends StatelessWidget {
                   fontFamily: serif,
                   fontStyle: FontStyle.italic,
                   // font-size: clamp(.6rem, 1.1vw, .9rem)
-                  fontSize: (MediaQuery.sizeOf(context).width * .011).clamp(10.8, 16.2),
+                  fontSize: (MediaQuery.sizeOf(context).width * .011).clamp(9.6, 14.4),
                   height: 1.15,
                   color: sepia)),
         ),
@@ -411,7 +411,7 @@ class _Tip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        constraints: const BoxConstraints(maxWidth: 288),
+        constraints: const BoxConstraints(maxWidth: 256),
         // box-shadow: 0 0 0 3px paper, 0 0 0 4px rule, 0 6px 18px
         decoration: const BoxDecoration(color: paper, boxShadow: [
           BoxShadow(color: paper, spreadRadius: 3),
@@ -419,19 +419,19 @@ class _Tip extends StatelessWidget {
           BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 6), blurRadius: 18),
         ]),
         foregroundDecoration: BoxDecoration(border: Border.all(color: rule)),
-        padding: const EdgeInsets.fromLTRB(14.4, 8, 14.4, 9),
+        padding: const EdgeInsets.fromLTRB(12.8, 7.2, 12.8, 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(bird.common,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontFamily: serif, fontSize: 19, height: 1.25, color: ink)),
+                style: const TextStyle(fontFamily: serif, fontSize: 16.8, height: 1.25, color: ink)),
             Text(bird.sci,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 16, height: 1.25, color: sepia)),
+                    fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14.4, height: 1.25, color: sepia)),
             Text(calls(bird.count),
-                style: const TextStyle(fontFamily: serif, fontSize: 16, height: 1.25, color: madder)),
+                style: const TextStyle(fontFamily: serif, fontSize: 14.4, height: 1.25, color: madder)),
           ],
         ),
       );
@@ -501,15 +501,15 @@ class _PlateStatusState extends State<PlateStatus> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final width = math.min(234.0, MediaQuery.sizeOf(context).width * .52);
+    final width = math.min(208.0, MediaQuery.sizeOf(context).width * .52);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text('Preparing the plate… ${widget.done} of ${widget.of}',
             textAlign: TextAlign.center,
             style: const TextStyle(
-                fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 20.7, color: sepia)),
-        const SizedBox(height: 16.2),
+                fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 18.4, color: sepia)),
+        const SizedBox(height: 14.4),
         SizedBox(
           width: width,
           height: 2,

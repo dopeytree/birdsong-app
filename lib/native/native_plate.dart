@@ -8,6 +8,7 @@ import '../settings.dart';
 import '../store/detection_store.dart';
 import '../ui/format.dart';
 import 'collage_view.dart';
+import 'index_view.dart';
 import 'plate_library.dart';
 
 /// The plate drawn by Flutter itself instead of the web page: a first
@@ -26,7 +27,8 @@ import 'plate_library.dart';
 /// sizings (by a button), figures that fade in, grow under the pointer with
 /// a label beside it, the mark on the latest heard, the glow on one being
 /// heard, the page's paper behind, and a height that leaves the index on
-/// the same screen. A bird's card offers its other plates; the one picked
+/// the same screen. The index (index_view.dart) is the page's too, with the
+/// app's fold and session arrows. A bird's card offers its other plates; the one picked
 /// is kept.
 ///
 /// Not moved across yet: the views a to g, the map, pinch zoom, the limit
@@ -86,7 +88,7 @@ class _NativePlateState extends State<NativePlate> {
   // screen. Null until first measured.
   double? _others;
   final _allKey = GlobalKey(), _plateKey = GlobalKey();
-  static const _padTop = 14.0, _padBottom = 28.0;
+  static const _padTop = 14.0;
 
   /// The most species drawn on the plate; the rest are in the index only
   /// (the page's maxOnPlate).
@@ -229,16 +231,19 @@ class _NativePlateState extends State<NativePlate> {
           child: SafeArea(
             child: Stack(
               children: [
-                LayoutBuilder(
-                  builder: (context, box) => SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, _padTop, 20, _padBottom),
+                LayoutBuilder(builder: (context, box) {
+                  final fit = app.settings.nativeFit;
+                  final side = (box.maxWidth * (fit ? .03 : .04)).clamp(16.0, fit ? 32.0 : 48.0);
+                  final plateSide = (box.maxWidth * .02).clamp(8.0, 32.0);
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.only(top: _padTop),
                     child: Column(
                       key: _allKey,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // room on the right for the buttons
                         Padding(
-                          padding: const EdgeInsets.only(right: 196),
+                          padding: const EdgeInsets.only(left: 20, right: 196),
                           child: _heading(ses, i, n, rows.length, calls),
                         ),
                         const SizedBox(height: 18),
@@ -261,19 +266,46 @@ class _NativePlateState extends State<NativePlate> {
                             ),
                           )
                         else
-                          KeyedSubtree(
+                          // #plate{margin:.2rem clamp(.5rem,2vw,2rem) .55rem}
+                          Padding(
                             key: _plateKey,
-                            child: _collage(ses!, onPlate, newest, box.maxWidth - 40,
-                                _plateHeight(box.maxWidth - 40, box.maxHeight)),
+                            padding: EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
+                            child: _collage(ses!, onPlate, newest, box.maxWidth - 2 * plateSide,
+                                _plateHeight(box.maxWidth, box.maxHeight) - 12),
                           ),
-                        const SizedBox(height: 22),
-                        _indexHeading(i, n),
-                        const SizedBox(height: 10),
-                        _index(rows, marked, box.maxWidth - 40),
+                        // section{padding:2.2rem clamp(1rem,4vw,3rem) 2.5rem;max-width:78rem},
+                        // closer when fitted on one screen
+                        Center(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: fit ? double.infinity : 1248),
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(side, fit ? 8 : 35.2, side, fit ? 12.8 : 40),
+                              child: IndexView(
+                                entries: [
+                                  for (final r in rows)
+                                    IndexEntry(r.sci, r.common, r.count,
+                                        noPlate: _art.containsKey(r.sci) && _art[r.sci] == null),
+                                ],
+                                width: math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side,
+                                fit: fit,
+                                narrow: box.maxWidth <= 720,
+                                folded: app.settings.nativeIndexFolded,
+                                onFold: () => app.settings
+                                    .update((x) => x.nativeIndexFolded = !x.nativeIndexFolded),
+                                newest: marked,
+                                steps: n > 1,
+                                canPrev: i > 0,
+                                canNext: i >= 0 && i < n - 1,
+                                onStep: store.step,
+                                onOpen: (e) => _openCard(rows.firstWhere((r) => r.sci == e.sci)),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ),
+                  );
+                }),
                 Positioned(
                   right: 8,
                   top: 8,
@@ -393,7 +425,7 @@ class _NativePlateState extends State<NativePlate> {
     );
   }
 
-  /// How tall the collage is. Fitted on one screen (the page's fitPlate): the
+  /// How tall the collage is, with its margins. Fitted on one screen (the page's fitPlate): the
   /// screen less the heading and the index, and never under 140. Otherwise
   /// the page's own: the screen less 8.5rem and at least 420, or three wide
   /// to four tall on a narrow screen.
@@ -403,7 +435,7 @@ class _NativePlateState extends State<NativePlate> {
       // a first guess, only ever seen behind "Preparing the plate"
       return others == null ? math.max(140, screen * .5) : math.max(140, screen - others);
     }
-    return width + 40 <= 720 ? width * 4 / 3 : math.max(420, screen - 153);
+    return width <= 720 ? width * 4 / 3 : math.max(420, screen - 136);
   }
 
   /// After each frame: the height of everything but the collage, for
@@ -412,79 +444,9 @@ class _NativePlateState extends State<NativePlate> {
     if (!mounted) return;
     final all = _allKey.currentContext?.size?.height, plate = _plateKey.currentContext?.size?.height;
     if (all == null || plate == null) return;
-    // the column's own padding, top and bottom
-    final others = all - plate + _padTop + _padBottom;
+    // and the scroll view's padding above
+    final others = all - plate + _padTop;
     if (_others == null || (others - _others!).abs() > .5) setState(() => _others = others);
-  }
-
-  Widget _indexHeading(int i, int n) {
-    final store = app.store;
-    Widget arrow(IconData icon, bool on, int by, String tip) => IconButton(
-          tooltip: tip,
-          visualDensity: VisualDensity.compact,
-          icon: Icon(icon, size: 20),
-          color: ink,
-          onPressed: on ? () => store.step(by) : null,
-        );
-    return Row(
-      children: [
-        if (n > 1) arrow(Icons.chevron_left, i > 0, -1, 'Earlier session'),
-        const Expanded(child: Divider(color: rule, indent: 8, endIndent: 14)),
-        const Text('Index of species',
-            style: TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 2.2, color: ink)),
-        const Expanded(child: Divider(color: rule, indent: 14, endIndent: 8)),
-        if (n > 1) arrow(Icons.chevron_right, i >= 0 && i < n - 1, 1, 'Later session'),
-      ],
-    );
-  }
-
-  Widget _index(List<_Row> rows, String? newest, double width) {
-    // Fitted on one screen the page sets the index smaller and in columns
-    // of 11rem (body.fit #index), so more of the screen is left for birds.
-    final fit = app.settings.nativeFit;
-    final gap = fit ? 26.0 : 28.0;
-    final cols = fit
-        ? math.max(1, ((width + gap) / (176 + gap)).floor())
-        : (width >= 900 ? 3 : (width >= 340 ? 2 : 1));
-    final colWidth = (width - gap * (cols - 1)) / cols;
-    return Wrap(
-      spacing: gap,
-      children: [
-        for (final r in rows)
-          SizedBox(
-            width: colWidth,
-            child: InkWell(
-              onTap: () => _openCard(r),
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: fit ? 1 : 3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Flexible(
-                      child: Text(r.common,
-                          overflow: TextOverflow.ellipsis,
-                          // the latest heard has its name in madder, to match its mark
-                          style: TextStyle(
-                              fontFamily: serif,
-                              fontSize: fit ? 15 : 17,
-                              color: r.sci == newest ? madder : ink)),
-                    ),
-                    // the leader between name and number
-                    Expanded(
-                      child: Container(
-                          height: 1,
-                          margin: const EdgeInsets.fromLTRB(8, 0, 8, 6),
-                          color: rule.withValues(alpha: 0.6)),
-                    ),
-                    Text('${r.count}',
-                        style: TextStyle(fontFamily: caps, fontSize: fit ? 14 : 16, color: madder)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
   }
 }
 

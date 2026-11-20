@@ -144,6 +144,10 @@ class Settings extends ChangeNotifier {
   /// of the screen, as the web plate's "Fit everything on one screen".
   bool nativeFit = true;
 
+  /// The Flutter plate: the index folded away under its heading (the web
+  /// plate keeps this as birdplate.bsIndexFolded).
+  bool nativeIndexFolded = false;
+
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
 
@@ -214,6 +218,7 @@ class Settings extends ChangeNotifier {
         ? j['nativeMarkAt'] as String
         : nativeMarkAt;
     nativeFit = (j['nativeFit'] as bool?) ?? nativeFit;
+    nativeIndexFolded = (j['nativeIndexFolded'] as bool?) ?? nativeIndexFolded;
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -270,6 +275,7 @@ class Settings extends ChangeNotifier {
         'nativePlateStyle': nativePlateStyle,
         'nativeMarkAt': nativeMarkAt,
         'nativeFit': nativeFit,
+        'nativeIndexFolded': nativeIndexFolded,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,
