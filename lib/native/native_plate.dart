@@ -440,6 +440,7 @@ class _NativePlateState extends State<NativePlate> {
                   : () {},
               foldable: showPlate,
               inline: inline,
+              species: all.length,
               newest: marked,
               steps: n > 1,
               canPrev: i > 0,
@@ -654,8 +655,8 @@ class _NativePlateState extends State<NativePlate> {
                     right: 56,
                     bottom: 8,
                     // the heading in the bottom 40, level with the buttons;
-                    // its ⌃ above
-                    height: 40 + 20,
+                    // its ⌃ just above
+                    height: 40 + 12,
                     child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
                         inline: true),
                   ),

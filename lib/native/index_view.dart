@@ -65,6 +65,7 @@ class IndexView extends StatelessWidget {
     required this.onFold,
     this.foldable = true,
     this.inline = false,
+    this.species = 0,
     required this.newest,
     required this.steps,
     required this.canPrev,
@@ -95,6 +96,10 @@ class IndexView extends StatelessWidget {
   /// heading takes the bottom 40, level with the buttons.
   final bool inline;
 
+  /// How many species the session heard, for the heading: "Index of 123
+  /// species" (every species, also beyond a limit on the list).
+  final int species;
+
   /// The latest heard, when it is to be marked.
   final String? newest;
 
@@ -109,10 +114,20 @@ class IndexView extends StatelessWidget {
   Widget build(BuildContext context) {
     if (inline) {
       return LayoutBuilder(
-        builder: (context, box) => Column(
-          mainAxisAlignment: MainAxisAlignment.end,
+        builder: (context, box) => Stack(
+          alignment: Alignment.bottomCenter,
           children: [
-            GestureDetector(
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 40,
+              child: Center(child: _heading(rules: box.maxWidth < 340 ? 0 : 28, pad: 8)),
+            ),
+            // just above the words, pointing the way they open
+            Positioned(
+              bottom: 27,
+              child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onFold,
               child: const ExcludeSemantics(
@@ -125,7 +140,7 @@ class IndexView extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(height: 40, child: Center(child: _heading(rules: box.maxWidth < 340 ? 0 : 28, pad: 8))),
+            ),
           ],
         ),
       );
@@ -231,7 +246,7 @@ class IndexView extends StatelessWidget {
                   line,
                   gap,
                   Flexible(
-                    child: Text('Index of species',
+                    child: Text(species > 0 ? 'Index of ${thousands(species)} species' : 'Index of species',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             fontFamily: caps,
