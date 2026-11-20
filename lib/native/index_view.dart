@@ -43,8 +43,8 @@ String thousands(int n) {
 /// plate-extras.js and injected styles (.bsIx, .bsIxArrow, .bsStep):
 ///
 /// - the heading in small capitals between two short rules, centred
-/// - tap the heading to fold the list away and back; a small arrow below
-///   the list (to fold) or above the heading (to unfold) does the same
+/// - tap the heading to fold the list away and back (the Flutter plate
+///   has no fold arrows; folded, the heading sits in the bottom row)
 /// - with more than one session, ‹ and › at the outer ends step between
 ///   them; one with nowhere to go keeps its place but is not drawn
 /// - the list runs down columns of 16rem (11rem fitted on one screen), no
@@ -86,14 +86,13 @@ class IndexView extends StatelessWidget {
   final VoidCallback onFold;
 
   /// False for the index alone (view c): nothing to fold it away to, so no
-  /// fold arrows and the heading is only a heading.
+  /// tap, the heading is only a heading.
   final bool foldable;
 
   /// Folded away, the heading alone, in the row along the bottom of the
   /// screen between the map and share buttons (the Flutter plate's own
-  /// design), its ⌃ above it as when folded on the page: a tap on either
-  /// opens the list again. Shorter rules, and none on a narrow screen. The
-  /// heading takes the bottom 40, level with the buttons.
+  /// design): a tap on it opens the list again. Shorter rules, and none on
+  /// a narrow screen.
   final bool inline;
 
   /// How many species the session heard, for the heading: "Index of
@@ -114,35 +113,7 @@ class IndexView extends StatelessWidget {
   Widget build(BuildContext context) {
     if (inline) {
       return LayoutBuilder(
-        builder: (context, box) => Stack(
-          alignment: Alignment.bottomCenter,
-          children: [
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 40,
-              child: Center(child: _heading(rules: box.maxWidth < 340 ? 0 : 28, pad: 8)),
-            ),
-            // just above the words, pointing the way they open
-            Positioned(
-              bottom: 27,
-              child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onFold,
-              child: const ExcludeSemantics(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24),
-                  child: Opacity(
-                    opacity: .75,
-                    child: Text('\u2303', style: TextStyle(fontFamily: serif, fontSize: 18, height: 1, color: sepia)),
-                  ),
-                ),
-              ),
-            ),
-            ),
-          ],
-        ),
+        builder: (context, box) => Center(child: _heading(rules: box.maxWidth < 340 ? 0 : 28, pad: 8)),
       );
     }
     // rem is 16 throughout the page
@@ -152,23 +123,9 @@ class IndexView extends StatelessWidget {
     final cols = indexColumns(entries.length, width, colWidth, gap);
     // one column on a screen narrower than a column takes what there is
     final each = math.min(colWidth, width);
-    const arrow = TextStyle(fontFamily: serif, fontSize: 18, height: 1, color: sepia);
-    Widget fold(String glyph, EdgeInsets margin) => GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onFold,
-          child: ExcludeSemantics(
-            child: Container(
-              width: double.infinity,
-              margin: margin,
-              alignment: Alignment.center,
-              child: Opacity(opacity: .75, child: Text(glyph, style: arrow)),
-            ),
-          ),
-        );
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (foldable && folded) fold('⌃', const EdgeInsets.only(bottom: 1.6)),
         _heading(),
         SizedBox(height: fit ? 13.6 : 25.6),
         if (!folded) ...[
@@ -197,7 +154,6 @@ class IndexView extends StatelessWidget {
               ],
             ],
           ),
-          if (foldable) fold('⌄', const EdgeInsets.only(top: 4.8)),
         ],
       ],
     );
