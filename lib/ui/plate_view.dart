@@ -370,42 +370,89 @@ class _PlateViewState extends State<PlateView> {
     _say(mode.name, seconds: 2);
   }
 
-  // The microphone, a tap: while recording, stop; otherwise show Listen
-  // here (already there, a reminder that a hold records).
-  Future<void> _micTap() async {
-    if (app.engine.running) {
-      await _toggleListening();
-      return;
-    }
-    if (_s.mode != AppMode.listen) {
-      _s.update((x) => x.mode = AppMode.listen);
-      _say('Listen here & now', seconds: 2);
-    } else {
-      _say('Hold the microphone to record', seconds: 2);
-    }
+  // ---- the source pill, the record button and the stations button --------
+
+  // The pill's microphone half: show Listen here.
+  void _toListen() {
+    if (_s.mode == AppMode.listen) return;
+    _s.update((x) => x.mode = AppMode.listen);
+    _say('Listen here & now', seconds: 2);
   }
 
-  // A hold: record a new session. It starts before the plate moves to
-  // Listen here, so the plate opens on the new session rather than drawing
-  // the last one first.
-  Future<void> _micHold() async {
-    if (app.engine.running || app.engine.starting) return;
-    HapticFeedback.mediumImpact();
+  // The pill's sensors half: show the remote station last shown. With none
+  // saved yet, it asks for one.
+  void _toRemote() {
+    if (_s.stations.isEmpty) {
+      editStation(context, _s);
+      return;
+    }
+    if (_s.mode == AppMode.station) return;
+    _s.update((x) {
+      x.mode = AppMode.station;
+      x.stationId = x.station!.id;
+    });
+    _say(_s.station!.name, seconds: 2);
+  }
+
+  // The record button, under the microphone: a tap starts a new session, a
+  // tap while recording stops it. A session started from a station's plate
+  // starts before the plate moves to Listen here, so it opens on the new
+  // session rather than drawing the last one first.
+  Future<void> _record() async {
+    if (app.engine.starting) return;
+    if (!app.engine.running) HapticFeedback.mediumImpact();
     await _toggleListening();
     if (mounted && app.engine.running && _s.mode != AppMode.listen) {
       _s.update((x) => x.mode = AppMode.listen);
     }
   }
 
-  // To the remote station; on one already, the next saved station. With
-  // none saved yet, it asks for one.
-  void _toStation() {
-    if (_s.stations.isEmpty) {
-      editStation(context, _s);
+  // The stations button, under the sensors: with two saved stations a tap
+  // goes to the other; otherwise it lists them, with Add a station.
+  Future<void> _stationsTap(BuildContext context) async {
+    if (_s.stations.length == 2) {
+      _s.nextStation();
+      _say(_s.station!.name, seconds: 2);
       return;
     }
-    if (_s.mode == AppMode.station && _s.stations.length == 1) return;
-    _s.nextStation();
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    final at = RelativeRect.fromRect(
+        box.localToGlobal(Offset(0, box.size.height), ancestor: overlay) & box.size,
+        Offset.zero & overlay.size);
+    final current = _s.mode == AppMode.station ? _s.station?.id : null;
+    final picked = await showMenu<String>(
+      context: context,
+      position: at,
+      color: paper,
+      items: [
+        for (final st in _s.stations)
+          PopupMenuItem(
+            value: st.id,
+            child: ListTile(
+              dense: true,
+              leading: Icon(st.id == current ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: Theme.of(context).colorScheme.primary),
+              title: Text(st.name),
+              subtitle: Text(st.kind),
+            ),
+          ),
+        const PopupMenuItem(
+          value: '+',
+          child: ListTile(dense: true, leading: Icon(Icons.add), title: Text('Add a station')),
+        ),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    if (picked == '+') {
+      if (context.mounted) await editStation(context, _s);
+      return;
+    }
+    _s.update((x) {
+      x.mode = AppMode.station;
+      x.stationId = picked;
+    });
     _say(_s.station!.name, seconds: 2);
   }
 
@@ -459,28 +506,56 @@ class _PlateViewState extends State<PlateView> {
                 top: 8 + safe.top,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Both sources, always there: the one shown in madder. The
-                    // microphone: a tap shows Listen here, a hold records a new
-                    // session, a tap on the slashed microphone stops.
-                    _MicButton(
-                      listening: app.engine.running,
-                      busy: app.engine.starting,
-                      shown: listen || app.engine.running,
-                      onTap: _micTap,
-                      onHold: _micHold,
-                    ),
-                    IconButton(
-                      tooltip: _s.stations.isEmpty
-                          ? 'Add a remote station'
-                          : listen
-                              ? 'Remote station: ${_s.station!.name}'
-                              : _s.stations.length > 1
-                                  ? '${_s.station!.name} · next: ${_s.nextStationName}'
-                                  : _s.station!.name,
-                      icon: const Icon(Icons.sensors),
-                      color: listen ? sepia.withValues(alpha: 0.55) : Theme.of(context).colorScheme.primary,
-                      onPressed: _toStation,
+                    // The source: a two-part pill, Listen here | remote
+                    // station, the one shown filled. Under the microphone,
+                    // the record button; under the sensors, the stations.
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 5), // level with the round buttons beside it
+                        _SourcePill(
+                          listen: listen,
+                          stationName: _s.station?.name,
+                          onListen: _toListen,
+                          onRemote: _toRemote,
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: _SourcePill.half,
+                              child: listen || app.engine.running || app.engine.starting
+                                  ? _RecordButton(
+                                      recording: app.engine.running,
+                                      busy: app.engine.starting,
+                                      onTap: _record,
+                                    )
+                                  : null,
+                            ),
+                            SizedBox(
+                              width: _SourcePill.half,
+                              child: !listen && _s.stations.isNotEmpty
+                                  ? Builder(
+                                      builder: (bc) => IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip: _s.stations.length == 2
+                                            ? 'Next: ${_s.nextStationName}'
+                                            : 'Stations',
+                                        icon: Icon(
+                                            _s.stations.length == 2 ? Icons.swap_horiz : Icons.list,
+                                            size: 20),
+                                        color: Theme.of(context).colorScheme.primary,
+                                        onPressed: () => _stationsTap(bc),
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                     IconButton(
                       tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
@@ -496,28 +571,6 @@ class _PlateViewState extends State<PlateView> {
                         color: Theme.of(context).colorScheme.primary,
                         onPressed: _toggleMap,
                       ),
-                    if (PlateShare.supported)
-                      PopupMenuButton<String>(
-                        key: _shareKey,
-                        tooltip: 'Share or save the plate',
-                        icon: Icon(Icons.ios_share,
-                            color: Theme.of(context).colorScheme.primary),
-                        color: paper,
-                        onSelected: (v) => v == 'save' ? _save() : _share(),
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: 'share',
-                            child: ListTile(
-                                leading: Icon(Icons.ios_share), title: Text('Share…')),
-                          ),
-                          PopupMenuItem(
-                            value: 'save',
-                            child: ListTile(
-                                leading: Icon(Icons.photo_library_outlined),
-                                title: Text('Save to Photos')),
-                          ),
-                        ],
-                      ),
                     IconButton(
                       tooltip: 'Settings',
                       icon: const Icon(Icons.menu),
@@ -527,11 +580,38 @@ class _PlateViewState extends State<PlateView> {
                   ],
                 ),
               ),
+            // Share or save, out of the way at the bottom right.
+            if (PlateShare.supported && !_popup)
+              Positioned(
+                right: 8 + safe.right,
+                bottom: 8 + safe.bottom,
+                child: PopupMenuButton<String>(
+                  key: _shareKey,
+                  tooltip: 'Share or save the plate',
+                  icon: Icon(Icons.ios_share,
+                      color: Theme.of(context).colorScheme.primary),
+                  color: paper,
+                  onSelected: (v) => v == 'save' ? _save() : _share(),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'share',
+                      child: ListTile(
+                          leading: Icon(Icons.ios_share), title: Text('Share…')),
+                    ),
+                    PopupMenuItem(
+                      value: 'save',
+                      child: ListTile(
+                          leading: Icon(Icons.photo_library_outlined),
+                          title: Text('Save to Photos')),
+                    ),
+                  ],
+                ),
+              ),
             if (_note != null)
               Positioned(
                 left: 16 + safe.left,
                 right: 16 + safe.right,
-                top: 64 + safe.top,
+                top: 100 + safe.top,
                 child: IgnorePointer(
                   ignoring: !_noteShown,
                   child: AnimatedOpacity(
@@ -637,43 +717,95 @@ class _Note extends StatelessWidget {
   }
 }
 
-/// The microphone: plain when idle, slashed while recording (a tap stops
-/// it), with a slow pulse around it; a spinner while it starts. Madder when
-/// it is the plate on show or recording, faded otherwise.
-class _MicButton extends StatefulWidget {
-  const _MicButton({
-    required this.listening,
-    required this.busy,
-    required this.shown,
-    required this.onTap,
-    required this.onHold,
+/// The source, as a two-part pill: Listen here (microphone) | a remote
+/// station (sensors). The one on show is filled in madder; a tap on the
+/// other switches to it.
+class _SourcePill extends StatelessWidget {
+  const _SourcePill({
+    required this.listen,
+    required this.stationName,
+    required this.onListen,
+    required this.onRemote,
   });
 
-  final bool listening;
-  final bool busy;
-  final bool shown;
-  final VoidCallback onTap;
-  final VoidCallback onHold;
+  /// Each half's width; the record and stations buttons line up under them.
+  static const half = 46.0;
+
+  final bool listen;
+  final String? stationName;
+  final VoidCallback onListen;
+  final VoidCallback onRemote;
 
   @override
-  State<_MicButton> createState() => _MicButtonState();
+  Widget build(BuildContext context) {
+    final red = Theme.of(context).colorScheme.primary;
+    Widget part(bool on, IconData icon, String tip, VoidCallback tap, BorderRadius r) => Tooltip(
+          message: tip,
+          child: Semantics(
+            button: true,
+            selected: on,
+            label: tip,
+            child: InkWell(
+              borderRadius: r,
+              onTap: tap,
+              child: Container(
+                width: half,
+                height: 36,
+                decoration: BoxDecoration(color: on ? red : Colors.transparent, borderRadius: r),
+                child: Icon(icon, size: 21, color: on ? paper : sepia.withValues(alpha: 0.7)),
+              ),
+            ),
+          ),
+        );
+    return Container(
+      decoration: BoxDecoration(
+        color: paper.withValues(alpha: 0.85),
+        border: Border.all(color: red.withValues(alpha: 0.55)),
+        borderRadius: BorderRadius.circular(19),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          part(listen, Icons.mic_none_outlined, 'Listen here & now', onListen,
+              const BorderRadius.horizontal(left: Radius.circular(18))),
+          part(!listen, Icons.sensors,
+              stationName == null ? 'Add a remote station' : 'Remote station: $stationName',
+              onRemote, const BorderRadius.horizontal(right: Radius.circular(18))),
+        ],
+      ),
+    );
+  }
 }
 
-class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMixin {
+/// Record a new session, or stop the one recording: a madder dot when idle,
+/// a stop square with a slow pulse around it while recording, a spinner
+/// while it starts.
+class _RecordButton extends StatefulWidget {
+  const _RecordButton({required this.recording, required this.busy, required this.onTap});
+
+  final bool recording;
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  State<_RecordButton> createState() => _RecordButtonState();
+}
+
+class _RecordButtonState extends State<_RecordButton> with SingleTickerProviderStateMixin {
   late final AnimationController _pulse =
       AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
 
   @override
   void initState() {
     super.initState();
-    if (widget.listening) _pulse.repeat();
+    if (widget.recording) _pulse.repeat();
   }
 
   @override
-  void didUpdateWidget(_MicButton old) {
+  void didUpdateWidget(_RecordButton old) {
     super.didUpdateWidget(old);
-    if (widget.listening && !_pulse.isAnimating) _pulse.repeat();
-    if (!widget.listening && _pulse.isAnimating) _pulse.reset();
+    if (widget.recording && !_pulse.isAnimating) _pulse.repeat();
+    if (!widget.recording && _pulse.isAnimating) _pulse.reset();
   }
 
   @override
@@ -685,20 +817,19 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     final red = Theme.of(context).colorScheme.primary;
-    final color = widget.shown ? red : sepia.withValues(alpha: 0.55);
-    const size = 40.0;
+    const size = 36.0;
     return SizedBox(
       width: size + 8,
       height: size + 8,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (widget.listening)
+          if (widget.recording)
             AnimatedBuilder(
               animation: _pulse,
               builder: (context, _) => Container(
-                width: size * 0.8 + 14 * _pulse.value,
-                height: size * 0.8 + 14 * _pulse.value,
+                width: size * 0.7 + 14 * _pulse.value,
+                height: size * 0.7 + 14 * _pulse.value,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: red.withValues(alpha: 0.25 * (1 - _pulse.value)),
@@ -707,36 +838,17 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
             ),
           widget.busy
               ? SizedBox(
-                  width: 20,
-                  height: 20,
+                  width: 18,
+                  height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2, color: red),
                 )
-              // A tooltip that shows on hover only: on a touch screen a long
-              // press is the hold that records.
-              : Tooltip(
-                  triggerMode: TooltipTriggerMode.manual,
-                  message: widget.listening
-                      ? 'Stop recording'
-                      : widget.shown
-                          ? 'Hold to record'
-                          : 'Listen here & now · hold to record',
-                  child: Semantics(
-                    button: true,
-                    label: widget.listening ? 'Stop recording' : 'Listen here and now',
-                    onLongPressHint: widget.listening ? null : 'record a new session',
-                    child: InkResponse(
-                      radius: 22,
-                      onTap: widget.onTap,
-                      onLongPress: widget.listening ? null : widget.onHold,
-                      child: SizedBox(
-                        width: size,
-                        height: size,
-                        child: Icon(
-                            widget.listening ? Icons.mic_off_outlined : Icons.mic_none_outlined,
-                            color: color),
-                      ),
-                    ),
-                  ),
+              : IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: widget.recording ? 'Stop recording' : 'Record a new session',
+                  icon: Icon(widget.recording ? Icons.stop_rounded : Icons.fiber_manual_record,
+                      size: widget.recording ? 24 : 18),
+                  color: red,
+                  onPressed: widget.onTap,
                 ),
         ],
       ),

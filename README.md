@@ -56,8 +56,12 @@ flutter test
 0. First launch walks you through it: choose *This device listens* or
    *I have a station*, download a model, switch on Core ML, allow the
    microphone. Settings > *Show the welcome screens again* repeats it.
-1. The app is the plate. Top right: the menu button opens **Settings**,
-   and in *Listen here & now* the microphone starts and stops a session.
+1. The app is the plate. Top right: a two-part switch, microphone
+   (*Listen here & now*) | sensors (a remote station). Under the microphone,
+   the record button starts and stops a session; under the sensors, on a
+   remote station, a button goes to the other saved station (with two) or
+   lists them all. Beside them the view, map and menu (**Settings**)
+   buttons; share and Save to Photos are at the bottom right.
 2. **Settings**, in sections: where birds come from; *Listening* (live
    scores per model while listening, threshold, how often, Core ML);
    *Models* (download, tick to listen, which one the plate draws);
