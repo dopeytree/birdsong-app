@@ -234,7 +234,7 @@ class PlateLibrary {
       if (png == null) return null;
       final part = File('${cut.path}.part');
       await part.writeAsBytes(png.buffer.asUint8List(), flush: true);
-      return part.rename(cut.path);
+      return await part.rename(cut.path);
     } catch (e) {
       debugPrint('cut out ${file.path}: $e');
       return null;

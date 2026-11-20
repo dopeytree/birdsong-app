@@ -13,8 +13,10 @@ void main() {
     expect(indexColumns(12, 120, 256, 41.6), (columns: 1, perColumn: 12));
   });
 
-  test('a phone fitted on one screen takes two columns of 11rem', () {
-    expect(indexColumns(9, 390 - 32, 176, 25.6), (columns: 2, perColumn: 5));
+  test('fitted on one screen, a phone holds one column of 11rem and a large one two', () {
+    // 11rem columns with 1.6rem between need 377.6 across for two
+    expect(indexColumns(9, 390 - 32, 176, 25.6), (columns: 1, perColumn: 9));
+    expect(indexColumns(9, 430 - 32, 176, 25.6), (columns: 2, perColumn: 5));
   });
 
   test('no names, no columns', () {

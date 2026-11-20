@@ -43,7 +43,7 @@ class Detection {
     this.lon,
   }) : uuid = uuid ?? newUuid();
 
-  /// Short local id, used in the plate's URLs (/api/v2/audio/<id>).
+  /// Short local id, used in the plate's URLs (`/api/v2/audio/<id>`).
   final int id;
   final String uuid;
   final String model;
@@ -319,8 +319,8 @@ Future<void> _writeAtomic(File file, String text) async {
 ///     session.json        the session (see [Session.toJson])
 ///     detections.jsonl    one detection per line (see [Detection.toJson])
 ///     track.jsonl         position fixes on the way (see [TrackPoint]), if any
-///     audio/<id>.wav      the clip around each detection
-///     spectrograms/<id>.bmp
+///     `audio/<id>.wav`      the clip around each detection
+///     `spectrograms/<id>.bmp`
 ///
 /// Everything is held in memory too. A session's files are rewritten as a
 /// whole, shortly after a change and at once when it ends.

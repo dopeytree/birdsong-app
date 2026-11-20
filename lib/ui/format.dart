@@ -45,10 +45,8 @@ String weatherWords(Map<String, dynamic>? w) {
   if (w == null) return '';
   final t = (w['temperatureC'] as num?)?.round();
   final sym = w['symbol'] as String?;
-  final sky = sym == null
-      ? null
-      : sym
-          .replaceAll(RegExp(r'_(day|night|polartwilight)$'), '')
+  final sky = sym
+          ?.replaceAll(RegExp(r'_(day|night|polartwilight)$'), '')
           .replaceAll('_', ' ')
           .replaceAll('lightrain', 'light rain')
           .replaceAll('heavyrain', 'heavy rain')
