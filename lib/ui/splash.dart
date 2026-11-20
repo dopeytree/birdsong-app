@@ -36,15 +36,15 @@ class SupportQuote extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Beautiful things, “singing out brilliantly from the wreck of time” '
-          '— passed hand to hand to the next generation of lovers.',
+          'Beautiful things, ‘singing out brilliantly from the wreck of time’ '
+          '– passed hand to hand to the next generation of lovers.',
           textAlign: TextAlign.center,
           style: base.copyWith(fontStyle: FontStyle.italic),
         ),
         const SizedBox(height: 6),
         Text.rich(
           TextSpan(children: [
-            const TextSpan(text: 'after Donna Tartt, '),
+            const TextSpan(text: '~ '),
             TextSpan(text: 'The Goldfinch', style: base.copyWith(fontStyle: FontStyle.italic)),
           ]),
           textAlign: TextAlign.center,
