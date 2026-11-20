@@ -135,6 +135,15 @@ class Settings extends ChangeNotifier {
   /// 'plain' (PlateStyle in lib/native/plate_library.dart).
   String nativePlateStyle = 'cutout';
 
+  /// The Flutter plate: how the creature heard last is marked: 'centre' (a
+  /// dot over it), 'below' (a dot under it, the app's choice for the web
+  /// plate in Listen here), 'fade' (the rest faded) or 'none'.
+  String nativeMarkAt = 'below';
+
+  /// The Flutter plate: the collage takes what the heading and index leave
+  /// of the screen, as the web plate's "Fit everything on one screen".
+  bool nativeFit = true;
+
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
 
@@ -201,6 +210,10 @@ class Settings extends ChangeNotifier {
     nativePlateStyle = const ['cutout', 'tint', 'plain'].contains(j['nativePlateStyle'])
         ? j['nativePlateStyle'] as String
         : nativePlateStyle;
+    nativeMarkAt = const ['centre', 'below', 'fade', 'none'].contains(j['nativeMarkAt'])
+        ? j['nativeMarkAt'] as String
+        : nativeMarkAt;
+    nativeFit = (j['nativeFit'] as bool?) ?? nativeFit;
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -255,6 +268,8 @@ class Settings extends ChangeNotifier {
         'nativePlate': nativePlate,
         'nativeSizeBy': nativeSizeBy,
         'nativePlateStyle': nativePlateStyle,
+        'nativeMarkAt': nativeMarkAt,
+        'nativeFit': nativeFit,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,

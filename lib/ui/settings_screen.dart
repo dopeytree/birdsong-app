@@ -102,9 +102,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'plain': 'As they come',
                         },
                         (v) => s.update((x) => x.nativePlateStyle = v)),
+                    _dropdown(
+                        'Latest marked by',
+                        s.nativeMarkAt,
+                        const {...PageControl.markAt, 'none': 'Nothing'},
+                        (v) => s.update((x) => x.nativeMarkAt = v)),
+                    _dropdown('Size by', s.nativeSizeBy, PageControl.sizeBy,
+                        (v) => s.update((x) => x.nativeSizeBy = v)),
+                    _switch('Fit on one screen', s.nativeFit,
+                        (v) => s.update((x) => x.nativeFit = v)),
                     Text(
-                      'A first version of the plate without the web page: heading, collage, '
-                      'index and a card for each bird, with pictures kept on this device. '
+                      'The web plate being moved into Flutter: heading, collage, index and a '
+                      'card for each bird, with pictures kept on this device. '
                       'No views, map, zoom, recordings or share yet; switch this off to get them back.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),

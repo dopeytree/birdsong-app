@@ -86,4 +86,15 @@ void main() {
     expect(s.mode, AppMode.listen);
     expect(s.stations, isEmpty);
   });
+
+  test('the Flutter plate marks the latest below and fits one screen, unless told otherwise', () async {
+    final s = await loadWith({});
+    expect(s.nativeMarkAt, 'below');
+    expect(s.nativeFit, isTrue);
+    final t = await loadWith({'nativeMarkAt': 'fade', 'nativeFit': false});
+    expect(t.toJson()['nativeMarkAt'], 'fade');
+    expect(t.toJson()['nativeFit'], isFalse);
+    // a value this version does not know falls back
+    expect((await loadWith({'nativeMarkAt': 'sideways'})).nativeMarkAt, 'below');
+  });
 }

@@ -7,27 +7,32 @@ import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
 import '../ui/format.dart';
-import 'collage_layout.dart';
+import 'collage_view.dart';
 import 'plate_library.dart';
 
 /// The plate drawn by Flutter itself instead of the web page: a first
 /// version, for Listen here. It has the heading, the collage, the Index of
 /// species and a card for each bird, from the sessions on this device.
 ///
+/// This is the web plate (assets/web/index.html) moved across, not a new
+/// design: what the page does, this does, and where it does not yet, the
+/// list below says so.
+///
 /// Plates still on their paper are treated one of three ways (Settings >
 /// Experimental, PlateStyle): cut out on the device as the web plate does,
-/// tinted (multiplied with the page's paper colour, which only works on
-/// flat paper, so this screen has no vignette or grain), or left as they
-/// come.
+/// tinted (multiplied with the page's paper colour) or left as they come.
 ///
-/// The collage is packed as the web plate packs it (collage_layout.dart) and
-/// sized three ways, by a button: noisiest species, recent ramblings, no
-/// pecking order. A bird's card offers its other plates; the one picked is
-/// kept.
+/// The collage (collage_view.dart) is the page's: its packing, its three
+/// sizings (by a button), figures that fade in, grow under the pointer with
+/// a label beside it, the mark on the latest heard, the glow on one being
+/// heard, the page's paper behind, and a height that leaves the index on
+/// the same screen. A bird's card offers its other plates; the one picked
+/// is kept.
 ///
-/// Not here yet (the web plate has them): the views a to g, the map, pinch
-/// zoom, the live glow, recordings and spectrograms on the card, share,
-/// remote stations (those still open the web plate).
+/// Not moved across yet: the views a to g, the map, pinch zoom, the limit
+/// on species, skulls wings and eggs, the caption, recordings, spectrograms
+/// and facts on the card, share, remote stations (those still open the web
+/// plate).
 class NativePlate extends StatefulWidget {
   const NativePlate({super.key, required this.app, required this.openSettings, this.onLoaded});
 
@@ -75,6 +80,17 @@ class _NativePlateState extends State<NativePlate> {
   // was ready: until then nothing is drawn, so the birds appear in their
   // places rather than arriving one by one and shuffling about.
   String? _revealed;
+
+  // The height of everything but the collage (heading, index, padding),
+  // measured after each frame, so the collage can take what is left of the
+  // screen. Null until first measured.
+  double? _others;
+  final _allKey = GlobalKey(), _plateKey = GlobalKey();
+  static const _padTop = 14.0, _padBottom = 28.0;
+
+  /// The most species drawn on the plate; the rest are in the index only
+  /// (the page's maxOnPlate).
+  static const maxOnPlate = 60;
 
   PlateStyle get _style => PlateStyle.named(app.settings.nativePlateStyle);
 
@@ -193,19 +209,31 @@ class _NativePlateState extends State<NativePlate> {
         final store = app.store, engine = app.engine;
         final ses = store.selected;
         final rows = _rows(ses);
-        _ensure(rows);
+        final onPlate = rows.take(maxOnPlate).toList();
+        _ensure(onPlate);
+        // the creature heard last (the page's newestSci)
+        String? newest;
+        DateTime? latest;
+        for (final r in rows) {
+          if (r.last != null && (latest == null || r.last!.isAfter(latest))) {
+            latest = r.last;
+            newest = r.sci;
+          }
+        }
+        final marked = app.settings.nativeMarkAt == 'none' ? null : newest;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
         final calls = rows.fold<int>(0, (n, r) => n + r.count);
         final i = store.selectedIndex, n = store.sessions.length;
         final red = Theme.of(context).colorScheme.primary;
-        return ColoredBox(
-          color: paper,
+        return PaperBackground(
           child: SafeArea(
             child: Stack(
               children: [
                 LayoutBuilder(
                   builder: (context, box) => SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+                    padding: const EdgeInsets.fromLTRB(20, _padTop, 20, _padBottom),
                     child: Column(
+                      key: _allKey,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // room on the right for the buttons
@@ -216,6 +244,7 @@ class _NativePlateState extends State<NativePlate> {
                         const SizedBox(height: 18),
                         if (rows.isEmpty)
                           Padding(
+                            key: _plateKey,
                             padding: const EdgeInsets.symmetric(vertical: 80),
                             child: Center(
                               child: Text(
@@ -232,11 +261,15 @@ class _NativePlateState extends State<NativePlate> {
                             ),
                           )
                         else
-                          _collage(ses!, rows, box.maxWidth - 40, box.maxHeight),
+                          KeyedSubtree(
+                            key: _plateKey,
+                            child: _collage(ses!, onPlate, newest, box.maxWidth - 40,
+                                _plateHeight(box.maxWidth - 40, box.maxHeight)),
+                          ),
                         const SizedBox(height: 22),
                         _indexHeading(i, n),
                         const SizedBox(height: 10),
-                        _index(rows, box.maxWidth - 40),
+                        _index(rows, marked, box.maxWidth - 40),
                       ],
                     ),
                   ),
@@ -324,73 +357,64 @@ class _NativePlateState extends State<NativePlate> {
     );
   }
 
-  /// The birds, packed as the web plate packs them: the largest in the
-  /// middle, the rest spiralling out.
-  ///
-  /// Nothing is drawn until every plate of the session is ready, so the
-  /// birds appear in their places. After that they only move when something
-  /// asks them to: the sizing button, or a new bird joining while listening
-  /// (it appears once its plate is ready, and the rest make room).
-  Widget _collage(Session ses, List<_Row> rows, double width, double screen) {
-    final height = math.max(260.0, math.min(width * 1.15, screen * 0.62));
+  /// The collage (collage_view.dart), once every plate of the session is
+  /// ready, so the birds appear in their places; until then, the page's
+  /// "Preparing the plate" and its rule. After that they only move when
+  /// something asks them to: the sizing button, the window changing size, or
+  /// a new bird joining while listening (it appears once its plate is
+  /// ready, and the rest make room).
+  Widget _collage(Session ses, List<_Row> rows, String? newest, double width, double height) {
     final showing = '${ses.id}|${_style.name}';
     final ready = [for (final r in rows) if (_art.containsKey(r.sci)) r];
+    // Not before the height is known either (_measure), or they would be
+    // placed once and then again.
     if (_revealed != showing) {
-      if (ready.length < rows.length) {
+      if (ready.length < rows.length || (app.settings.nativeFit && _others == null)) {
         return SizedBox(
           width: width,
           height: height,
-          child: Center(
-            child: Text('Preparing the plate… ${ready.length} of ${rows.length}',
-                style: const TextStyle(
-                    fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 17, color: sepia)),
-          ),
+          child: Center(child: PlateStatus(done: ready.length, of: rows.length)),
         );
       }
       _revealed = showing;
     }
-    final by = app.settings.nativeSizeBy;
-    // Recent ramblings: it is the order that counts, not the gap, or a
-    // morning's birds would all come out one size.
-    final byTime = [...ready]..sort((a, b) => (a.last ?? DateTime(0)).compareTo(b.last ?? DateTime(0)));
-    double weight(_Row r) => switch (by) {
-          'equal' => 1,
-          'time' => (byTime.indexOf(r) + 1).toDouble(),
-          _ => r.count.toDouble(),
-        };
-    final places = layoutCollage([
-      for (final r in ready)
-        CollageItem(r.sci,
-            weight: weight(r), aspect: _art[r.sci]?.aspect ?? 1.7, blank: _art[r.sci] == null)
-    ], Size(width, height))
-      ..sort((a, b) => a.order.compareTo(b.order));
-    final row = {for (final r in ready) r.sci: r};
-    return SizedBox(
+    return CollageView(
       // A new session or style is a new collage: nothing glides across from
       // the one before.
       key: ValueKey(showing),
-      width: width,
-      height: height,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          for (final p in places)
-            AnimatedPositioned(
-              key: ValueKey(p.id),
-              duration: const Duration(milliseconds: 550),
-              curve: Curves.easeInOutCubic,
-              left: p.rect.left,
-              top: p.rect.top,
-              width: p.rect.width,
-              height: p.rect.height,
-              child: GestureDetector(
-                onTap: () => _openCard(row[p.id]!),
-                child: _Figure(art: _art[p.id], name: row[p.id]!.common, width: p.rect.width),
-              ),
-            ),
-        ],
-      ),
+      birds: [for (final r in ready) CollageBird(r.sci, r.common, r.count, r.last)],
+      art: _art,
+      size: Size(width, height),
+      sizeBy: app.settings.nativeSizeBy,
+      markAt: app.settings.nativeMarkAt,
+      newest: newest,
+      live: app.engine.liveSpecies,
+      onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
     );
+  }
+
+  /// How tall the collage is. Fitted on one screen (the page's fitPlate): the
+  /// screen less the heading and the index, and never under 140. Otherwise
+  /// the page's own: the screen less 8.5rem and at least 420, or three wide
+  /// to four tall on a narrow screen.
+  double _plateHeight(double width, double screen) {
+    if (app.settings.nativeFit) {
+      final others = _others;
+      // a first guess, only ever seen behind "Preparing the plate"
+      return others == null ? math.max(140, screen * .5) : math.max(140, screen - others);
+    }
+    return width + 40 <= 720 ? width * 4 / 3 : math.max(420, screen - 153);
+  }
+
+  /// After each frame: the height of everything but the collage, for
+  /// [_plateHeight].
+  void _measure() {
+    if (!mounted) return;
+    final all = _allKey.currentContext?.size?.height, plate = _plateKey.currentContext?.size?.height;
+    if (all == null || plate == null) return;
+    // the column's own padding, top and bottom
+    final others = all - plate + _padTop + _padBottom;
+    if (_others == null || (others - _others!).abs() > .5) setState(() => _others = others);
   }
 
   Widget _indexHeading(int i, int n) {
@@ -414,9 +438,14 @@ class _NativePlateState extends State<NativePlate> {
     );
   }
 
-  Widget _index(List<_Row> rows, double width) {
-    const gap = 28.0;
-    final cols = width >= 900 ? 3 : (width >= 340 ? 2 : 1);
+  Widget _index(List<_Row> rows, String? newest, double width) {
+    // Fitted on one screen the page sets the index smaller and in columns
+    // of 11rem (body.fit #index), so more of the screen is left for birds.
+    final fit = app.settings.nativeFit;
+    final gap = fit ? 26.0 : 28.0;
+    final cols = fit
+        ? math.max(1, ((width + gap) / (176 + gap)).floor())
+        : (width >= 900 ? 3 : (width >= 340 ? 2 : 1));
     final colWidth = (width - gap * (cols - 1)) / cols;
     return Wrap(
       spacing: gap,
@@ -427,14 +456,18 @@ class _NativePlateState extends State<NativePlate> {
             child: InkWell(
               onTap: () => _openCard(r),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
+                padding: EdgeInsets.symmetric(vertical: fit ? 1 : 3),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Flexible(
                       child: Text(r.common,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontFamily: serif, fontSize: 17, color: ink)),
+                          // the latest heard has its name in madder, to match its mark
+                          style: TextStyle(
+                              fontFamily: serif,
+                              fontSize: fit ? 15 : 17,
+                              color: r.sci == newest ? madder : ink)),
                     ),
                     // the leader between name and number
                     Expanded(
@@ -444,7 +477,7 @@ class _NativePlateState extends State<NativePlate> {
                           color: rule.withValues(alpha: 0.6)),
                     ),
                     Text('${r.count}',
-                        style: const TextStyle(fontFamily: caps, fontSize: 16, color: madder)),
+                        style: TextStyle(fontFamily: caps, fontSize: fit ? 14 : 16, color: madder)),
                   ],
                 ),
               ),
@@ -453,63 +486,6 @@ class _NativePlateState extends State<NativePlate> {
       ],
     );
   }
-}
-
-/// One bird on the plate: its picture, or its name on a ticket while it
-/// is looked for ([looking]) or when there is none.
-class _Figure extends StatelessWidget {
-  const _Figure({required this.art, required this.name, required this.width, this.looking = false});
-
-  final PlateArt? art;
-  final String name;
-  final double width;
-  final bool looking;
-
-  @override
-  Widget build(BuildContext context) {
-    final art = this.art;
-    if (art == null) {
-      return Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration:
-              BoxDecoration(border: Border.all(color: rule), borderRadius: BorderRadius.circular(40)),
-          child: Text(name,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontFamily: serif,
-                  fontStyle: FontStyle.italic,
-                  fontSize: 13,
-                  color: looking ? rule : sepia)),
-        ),
-      );
-    }
-    return _PlateImage(art: art, width: width);
-  }
-}
-
-/// A plate drawn to fit. A tinted one (PlateArt.tint) is multiplied with
-/// the page's paper, so its white becomes the page; a cut-out, or a plate
-/// as it comes, is drawn as it is.
-class _PlateImage extends StatelessWidget {
-  const _PlateImage({required this.art, required this.width});
-
-  final PlateArt art;
-  final double width;
-
-  @override
-  Widget build(BuildContext context) => Image.file(
-        art.file,
-        fit: BoxFit.contain,
-        // decode no larger than it is drawn
-        cacheWidth: math.max(1, (width * MediaQuery.devicePixelRatioOf(context)).round()),
-        color: art.tint ? paper : null,
-        colorBlendMode: art.tint ? BlendMode.multiply : null,
-        gaplessPlayback: true,
-        errorBuilder: (context, _, __) => const SizedBox(),
-      );
 }
 
 /// A bird's card: its plate, names, how often it was heard, the plate's
@@ -565,7 +541,7 @@ class _PlateCardState extends State<_PlateCard> {
                 height: 260,
                 child: art == null
                     ? const Center(child: Text('No plate found.', style: small))
-                    : _PlateImage(art: art, width: 392),
+                    : PlateImage(art: art, width: 392),
               ),
               const SizedBox(height: 12),
               Text(r.common,
@@ -670,6 +646,6 @@ class _ThumbState extends State<_Thumb> {
         future: _art,
         builder: (context, snap) => snap.data == null
             ? const SizedBox()
-            : _PlateImage(art: snap.data!, width: 70),
+            : PlateImage(art: snap.data!, width: 70),
       );
 }
