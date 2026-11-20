@@ -161,7 +161,9 @@ def android():
         text = manifest.read_text()
         perms = ["android.permission.RECORD_AUDIO", "android.permission.INTERNET",
                  "android.permission.ACCESS_COARSE_LOCATION",
-                 "android.permission.ACCESS_FINE_LOCATION"]
+                 "android.permission.ACCESS_FINE_LOCATION",
+                 # Settings > Listening > Microphone: headset (Bluetooth SCO)
+                 "android.permission.MODIFY_AUDIO_SETTINGS"]
         add = "".join(f'    <uses-permission android:name="{p}"/>\n'
                       for p in perms if p not in text)
         if add:

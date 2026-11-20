@@ -257,6 +257,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text('${engine.skipped} windows skipped', style: theme.textTheme.bodySmall),
           const Divider(height: 24),
         ],
+        _dropdown('Microphone', s.micSource, microphones, (v) => s.update((x) => x.micSource = v)),
+        Text(
+          s.micSource == 'headset'
+              ? 'Bluetooth headphones send their microphone at call quality, which misses '
+                  'the higher songs, and your music drops to call quality while listening. '
+                  'It still works; for the best detections use the phone\'s own.'
+              : 'Best for birds: the full range of song. Music and podcasts keep playing, '
+                  'in full quality on Bluetooth headphones.',
+          style: theme.textTheme.bodySmall,
+        ),
+        if (locked)
+          Text('A change of microphone applies from the next recording.',
+              style: theme.textTheme.bodySmall),
+        const SizedBox(height: 8),
         _slider('Threshold ${(s.threshold * 100).round()}%', s.threshold, 0.05, 0.95, 18,
             (v) => s.update((x) => x.threshold = v)),
         _slider('Every ${s.hopSeconds.toStringAsFixed(1)} s', s.hopSeconds, 0.5, 5, 9,
@@ -528,6 +542,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ],
     );
   }
+
+  /// Which microphone listens (Settings.micSource).
+  static const microphones = {
+    'phone': "The phone's own",
+    'headset': "Headphones' or headset's",
+  };
 
   /// The map of the walk (the map button on the plate switches to it).
   static const mapBirds = {

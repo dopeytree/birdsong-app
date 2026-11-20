@@ -81,6 +81,11 @@ flutter test
    needs a connection: MapLibre and d3 load from a CDN, tiles from
    OpenFreeMap, heights from the Mapzen terrain tiles on AWS.
 
+Music, podcasts and other apps keep playing while it listens. Settings >
+*Listening* > *Microphone* picks the phone's own (the default: full range of
+song, and music stays in full quality on Bluetooth headphones) or the
+headphones' (works, but Bluetooth sends it at call quality, 16 to 24 kHz,
+which misses higher songs and turns the music to call quality too).
 On iPhone the app keeps listening with the screen locked (the orange
 microphone dot shows), and keeps the map's trail too: a position about every
 30 seconds once you've moved 15 m, and one at each detection.

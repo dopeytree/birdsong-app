@@ -132,14 +132,7 @@ class ListenEngine extends ChangeNotifier {
       }
       _raw.clear();
       _at32.clear();
-      final stream = await rec.startStream(const RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
-        sampleRate: captureRate,
-        numChannels: 1,
-        autoGain: false,
-        echoCancel: false,
-        noiseSuppress: false,
-      ));
+      final stream = await rec.startStream(_recordConfig(settings.micSource == 'headset'));
       _sub = stream.listen(_onAudio, onError: (Object e) {
         error = 'Microphone: $e';
         notifyListeners();
@@ -468,6 +461,41 @@ class ListenEngine extends ChangeNotifier {
       return null;
     }
   }
+
+  // ---- the microphone ------------------------------------------------------
+
+  /// How the microphone is opened. Either way other apps' audio (music, a
+  /// podcast) keeps playing: on iPhone the session mixes with others, and on
+  /// Android a recorder takes no audio focus.
+  ///
+  /// [headset] false, the phone's own microphone: on iPhone the category
+  /// leaves out allowBluetooth (the hands-free profile), so Bluetooth
+  /// headphones stay on A2DP for the music and can't become the input; on
+  /// Android no Bluetooth SCO link is opened.
+  ///
+  /// [headset] true, the headphones' or headset's: Bluetooth microphones go
+  /// over the hands-free profile, 16 kHz (24 kHz on recent AirPods) instead
+  /// of the phone's 48 kHz, so higher songs are lost and music drops to call
+  /// quality while listening.
+  ///
+  /// If the microphone in use goes away (headphones taken out), recording
+  /// carries on with the phone's own rather than pausing.
+  static RecordConfig _recordConfig(bool headset) => RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: captureRate,
+        numChannels: 1,
+        autoGain: false,
+        echoCancel: false,
+        noiseSuppress: false,
+        audioRouteChange: AudioRouteChangeMode.follow,
+        iosConfig: IosRecordConfig(categoryOptions: [
+          IosAudioCategoryOption.mixWithOthers,
+          IosAudioCategoryOption.defaultToSpeaker,
+          IosAudioCategoryOption.allowBluetoothA2DP,
+          if (headset) IosAudioCategoryOption.allowBluetooth,
+        ]),
+        androidConfig: AndroidRecordConfig(manageBluetooth: headset),
+      );
 
   // ---- the trail, for the map --------------------------------------------
 

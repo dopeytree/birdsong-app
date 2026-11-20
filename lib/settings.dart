@@ -87,6 +87,13 @@ class Settings extends ChangeNotifier {
   /// Listen here: seconds between analyses.
   double hopSeconds = 1.0;
 
+  /// Listen here: which microphone hears the birds. 'phone' (the phone's
+  /// own: full range, and music keeps playing in high quality on Bluetooth
+  /// headphones) or 'headset' (headphones' or a headset's: Bluetooth sends
+  /// it at call quality, which loses the higher songs and turns music to
+  /// call quality too). Other apps' audio keeps playing either way.
+  String micSource = 'phone';
+
   /// Listen here: the same species from the same model within this many
   /// seconds counts as the same call.
   double repeatSeconds = 10.0;
@@ -158,6 +165,7 @@ class Settings extends ChangeNotifier {
     }
     threshold = (j['threshold'] as num?)?.toDouble() ?? threshold;
     hopSeconds = (j['hopSeconds'] as num?)?.toDouble() ?? hopSeconds;
+    micSource = j['micSource'] == 'headset' ? 'headset' : 'phone';
     repeatSeconds = (j['repeatSeconds'] as num?)?.toDouble() ?? repeatSeconds;
     animalsOnly = (j['animalsOnly'] as bool?) ?? animalsOnly;
     useGeomodel = (j['useGeomodel'] as bool?) ?? useGeomodel;
@@ -194,6 +202,7 @@ class Settings extends ChangeNotifier {
         'hopSeconds': hopSeconds,
         'repeatSeconds': repeatSeconds,
         'animalsOnly': animalsOnly,
+        'microphone': micSource,
         'locationFilter': useGeomodel,
         if (useGeomodel) 'locationFilterThreshold': geoThreshold,
         'coreMl': useCoreMl,
@@ -211,6 +220,7 @@ class Settings extends ChangeNotifier {
         'birdweatherStation': birdweatherStation,
         'threshold': threshold,
         'hopSeconds': hopSeconds,
+        'micSource': micSource,
         'repeatSeconds': repeatSeconds,
         'animalsOnly': animalsOnly,
         'useGeomodel': useGeomodel,
