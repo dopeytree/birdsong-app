@@ -1,12 +1,17 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../app_state.dart';
 import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
+import '../engine/listen_engine.dart' show maxSessionSpecies;
 import '../ui/format.dart';
+import '../ui/plate_buttons.dart';
+import '../ui/station_editor.dart';
 import 'collage_view.dart';
 import 'index_view.dart';
 import 'plate_library.dart';
@@ -88,7 +93,7 @@ class _NativePlateState extends State<NativePlate> {
   // screen. Null until first measured.
   double? _others;
   final _allKey = GlobalKey(), _plateKey = GlobalKey();
-  static const _padTop = 14.0;
+  static const _padTop = 16.0; // header{padding:1rem ... 0}
 
   /// The most species drawn on the plate; the rest are in the index only
   /// (the page's maxOnPlate).
@@ -122,11 +127,7 @@ class _NativePlateState extends State<NativePlate> {
     final keys = _sizings.keys.toList();
     final next = keys[(keys.indexOf(app.settings.nativeSizeBy) + 1) % keys.length];
     app.settings.update((x) => x.nativeSizeBy = next);
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-          duration: const Duration(seconds: 2),
-          content: Text(_sizings[next]!, style: const TextStyle(fontFamily: serif, fontSize: 16))));
+    _say(_sizings[next]!, seconds: 2);
   }
 
   AppState get app => widget.app;
@@ -141,11 +142,15 @@ class _NativePlateState extends State<NativePlate> {
         lib.close();
       }
     });
+    _sesId = app.engine.session?.id;
+    app.engine.addListener(_watchSession);
     WidgetsBinding.instance.addPostFrameCallback((_) => widget.onLoaded?.call());
   }
 
   @override
   void dispose() {
+    _noteTimer?.cancel();
+    app.engine.removeListener(_watchSession);
     _lib?.close();
     super.dispose();
   }
@@ -162,6 +167,66 @@ class _NativePlateState extends State<NativePlate> {
       ..sort((a, b) => b.count != a.count ? b.count - a.count : a.common.compareTo(b.common));
   }
 
+  // ---- notes at the top of the plate, as the web plate's ------------------
+  String? _note;
+  String? _noteAction;
+  VoidCallback? _noteDo;
+  bool _noteShown = false;
+  Timer? _noteTimer;
+
+  void _say(String text, {String? action, VoidCallback? onAction, int seconds = 3}) {
+    if (!mounted) return;
+    _noteTimer?.cancel();
+    setState(() {
+      _note = text;
+      _noteAction = action;
+      _noteDo = onAction;
+      _noteShown = true;
+    });
+    _noteTimer = Timer(Duration(seconds: seconds), () {
+      if (mounted) setState(() => _noteShown = false);
+    });
+  }
+
+  // Session started, ended, or full and carried on in a new one.
+  int? _sesId;
+  void _watchSession() {
+    final now = app.engine.session?.id;
+    if (now == _sesId) return;
+    final before = _sesId;
+    _sesId = now;
+    final store = app.store;
+    String number(int id) {
+      final i = store.sessions.indexWhere((x) => x.id == id);
+      return i < 0 ? '' : ' #${i + 1}';
+    }
+
+    if (before == null && now != null) {
+      _say('Listening: session${number(now)} started.');
+    } else if (before != null && now != null) {
+      _say('Session${number(before)} is full at $maxSessionSpecies species; '
+          'session${number(now)} started.', seconds: 5);
+    } else if (before != null) {
+      // The store closes (or drops) the session just after the engine stops.
+      Future.delayed(const Duration(milliseconds: 400), () {
+        final found = store.sessions.where((x) => x.id == before);
+        if (found.isEmpty) {
+          _say('Stopped. Nothing was heard, so no session was kept.');
+          return;
+        }
+        final ses = found.first;
+        final species = {
+          for (final d in store.forPlate(app.settings.plateModel, session: ses)) d.sci
+        }.length;
+        _say('Session${number(before)} ended: '
+            '${lasting((ses.end ?? DateTime.now()).difference(ses.start))}, '
+            '$species species.', seconds: 4);
+      });
+    }
+  }
+
+  // The record button: a tap starts a new session, a tap while recording
+  // stops it.
   Future<void> _record() async {
     final engine = app.engine;
     if (engine.starting) return;
@@ -169,15 +234,22 @@ class _NativePlateState extends State<NativePlate> {
       await engine.stop();
       return;
     }
+    HapticFeedback.mediumImpact();
     await engine.start();
     if (!mounted || engine.error == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(engine.error!)));
+    final noModel = engine.error!.contains('Models');
+    _say(engine.error!,
+        action: noModel ? 'Models' : null,
+        onAction: noModel ? widget.openSettings : null,
+        seconds: 6);
   }
 
-  void _toStation() {
+  // The pill's sensors half: show the remote station last shown (that is
+  // still the web plate). With none saved yet, it asks for one.
+  void _toRemote() {
     final s = app.settings;
     if (s.stations.isEmpty) {
-      widget.openSettings();
+      editStation(context, s);
       return;
     }
     s.update((x) {
@@ -235,18 +307,17 @@ class _NativePlateState extends State<NativePlate> {
                   final fit = app.settings.nativeFit;
                   final side = (box.maxWidth * (fit ? .03 : .04)).clamp(16.0, fit ? 32.0 : 48.0);
                   final plateSide = (box.maxWidth * .02).clamp(8.0, 32.0);
+                  final headSide = (box.maxWidth * .04).clamp(16.0, 48.0);
                   return SingleChildScrollView(
                     padding: const EdgeInsets.only(top: _padTop),
                     child: Column(
                       key: _allKey,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // room on the right for the buttons
                         Padding(
-                          padding: const EdgeInsets.only(left: 20, right: 196),
-                          child: _heading(ses, i, n, rows.length, calls),
+                          padding: EdgeInsets.symmetric(horizontal: headSide),
+                          child: _heading(ses, i, n, rows.length, calls, box.maxWidth - headSide),
                         ),
-                        const SizedBox(height: 18),
                         if (rows.isEmpty)
                           Padding(
                             key: _plateKey,
@@ -306,49 +377,73 @@ class _NativePlateState extends State<NativePlate> {
                     ),
                   );
                 }),
+                // The same buttons as over the web plate: record, the
+                // source pill, the menu, and the plate's view under it.
                 Positioned(
                   right: 8,
                   top: 8,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      engine.starting
-                          ? const SizedBox(
-                              width: 48,
-                              height: 48,
-                              child: Padding(
-                                  padding: EdgeInsets.all(15),
-                                  child: CircularProgressIndicator(strokeWidth: 2)))
-                          : IconButton(
-                              tooltip: engine.running ? 'Stop recording' : 'Record a new session',
-                              icon: Icon(
-                                  engine.running ? Icons.stop_rounded : Icons.fiber_manual_record),
-                              color: red,
-                              onPressed: _record,
-                            ),
-                      IconButton(
-                        tooltip: app.settings.stations.isEmpty
-                            ? 'Add a remote station'
-                            : 'Remote station: ${app.settings.station!.name}',
-                        icon: const Icon(Icons.sensors),
-                        color: sepia,
-                        onPressed: _toStation,
+                      RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5), // level with the round buttons
+                        child: SourcePill(
+                          listen: true,
+                          stationName: app.settings.station?.name,
+                          onListen: () {},
+                          onRemote: _toRemote,
+                        ),
                       ),
-                      IconButton(
-                        tooltip: 'Size the birds by: ${_sizings[app.settings.nativeSizeBy] ?? ''}',
-                        icon: const Icon(Icons.autorenew),
-                        color: red,
-                        onPressed: _nextSizing,
-                      ),
-                      IconButton(
-                        tooltip: 'Settings',
-                        icon: const Icon(Icons.menu),
-                        color: red,
-                        onPressed: widget.openSettings,
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Settings',
+                            icon: const Icon(Icons.menu),
+                            color: red,
+                            onPressed: widget.openSettings,
+                          ),
+                          // Views a to g are not moved across yet: for now
+                          // this steps through the three that size the
+                          // collage (a, f and g).
+                          IconButton(
+                            tooltip: 'Plate: ${_sizings[app.settings.nativeSizeBy] ?? ''}',
+                            icon: const Icon(Icons.dashboard_outlined),
+                            color: red,
+                            onPressed: _nextSizing,
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
+                if (_note != null)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    top: 112,
+                    child: IgnorePointer(
+                      ignoring: !_noteShown,
+                      child: AnimatedOpacity(
+                        opacity: _noteShown ? 1 : 0,
+                        duration: const Duration(milliseconds: 250),
+                        child: Center(
+                          child: PlateNote(
+                            text: _note!,
+                            action: _noteAction,
+                            onAction: _noteDo == null
+                                ? null
+                                : () {
+                                    setState(() => _noteShown = false);
+                                    _noteDo!();
+                                  },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -357,34 +452,60 @@ class _NativePlateState extends State<NativePlate> {
     );
   }
 
-  Widget _heading(Session? ses, int i, int n, int species, int calls) {
-    const sub = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 16, color: sepia, height: 1.35);
+  /// The page's header as the app fills it in Listen here: the title with
+  /// the session's number, then, each on its own line, when, where and the
+  /// totals. The title stops short of the buttons' row; the lines under it
+  /// stop short of the menu and view column. [width] is the room from the
+  /// left padding to the screen's right edge.
+  Widget _heading(Session? ses, int i, int n, int species, int calls, double width) {
+    // #sub{font-style:italic;color:sepia;font-size:.95rem}, three block spans
+    const sub = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: sepia, height: 1.5);
+    // record 44, pill 94, menu 48, and 8 from the edge; the column is the last two
+    const row1 = 194.0, col = 56.0;
     final w = ses == null ? '' : weatherWords(ses.weather);
+    final when = ses == null
+        ? 'Nothing recorded yet: tap the microphone to start.'
+        : ses.live
+            ? 'Listening now, since ${clock(ses.start)}.'
+            : '${span(ses.start, ses.end ?? ses.start)}.';
+    final where = ses == null
+        ? ''
+        : ses.hasPlace
+            ? 'At ${place(ses.lat!, ses.lon!)}${w.isEmpty ? '' : ', $w'}.'
+            : (ses.live ? '' : 'Place unknown.');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text.rich(
-          TextSpan(text: 'Birdsong', children: [
-            if (n > 0 && i >= 0)
-              TextSpan(text: '  #${i + 1}/$n', style: const TextStyle(color: sepia)),
-          ]),
-          style: const TextStyle(fontFamily: serif, fontSize: 30, color: ink, height: 1.05),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: math.max(120, width - row1)),
+          child: Text.rich(
+            TextSpan(text: 'Birdsong', children: [
+              if (n > 0 && i >= 0)
+                TextSpan(text: ' #${i + 1}/$n', style: const TextStyle(color: sepia)),
+            ]),
+            // h1{font-size:clamp(1.6rem,2.6vw,2.2rem);line-height:1.05;letter-spacing:-.005em}
+            style: TextStyle(
+                fontFamily: serif,
+                fontSize: ((width + 16) * .026).clamp(25.6, 35.2),
+                letterSpacing: -.15,
+                color: ink,
+                height: 1.05),
+          ),
         ),
-        const SizedBox(height: 4),
-        if (ses != null)
-          Text(
-            ses.live
-                ? '${day(ses.start)}, ${clock(ses.start)}, listening now.'
-                : '${span(ses.start, ses.end!)}.',
-            style: sub,
+        const SizedBox(height: 3.2),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: math.max(120, width - col)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(when, style: sub),
+              if (where.isNotEmpty) Text(where, style: sub),
+              if (species > 0)
+                Text('$species species from ${thousands(calls)} ${calls == 1 ? 'call' : 'calls'}.',
+                    style: sub),
+            ],
           ),
-        if (ses != null && ses.hasPlace)
-          Text('At ${place(ses.lat!, ses.lon!)}${w.isEmpty ? '' : ', $w'}.', style: sub),
-        if (ses != null)
-          Text(
-            '$species species from $calls ${calls == 1 ? 'call' : 'calls'}.',
-            style: sub,
-          ),
+        ),
       ],
     );
   }
