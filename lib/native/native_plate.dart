@@ -14,9 +14,11 @@ import 'plate_library.dart';
 /// version, for Listen here. It has the heading, the collage, the Index of
 /// species and a card for each bird, from the sessions on this device.
 ///
-/// Plates still on their paper are "tinted": multiplied with the page's
-/// paper colour, so their white becomes the page. That only works on flat
-/// paper, so this screen has no vignette or grain behind the birds.
+/// Plates still on their paper are treated one of three ways (Settings >
+/// Experimental, PlateStyle): cut out on the device as the web plate does,
+/// tinted (multiplied with the page's paper colour, which only works on
+/// flat paper, so this screen has no vignette or grain), or left as they
+/// come.
 ///
 /// The collage is packed as the web plate packs it (collage_layout.dart) and
 /// sized three ways, by a button: noisiest species, recent ramblings, no
@@ -63,15 +65,37 @@ class _NativePlateState extends State<NativePlate> {
   final Map<String, PlateArt?> _art = {};
   final Set<String> _asking = {};
 
+  // The style those plates were prepared in. A change of style (Settings >
+  // Experimental) starts again; [_round] lets answers from before be told
+  // apart and dropped.
+  PlateStyle? _artStyle;
+  int _round = 0;
+
+  // The collage on show, as "session|style", once every one of its plates
+  // was ready: until then nothing is drawn, so the birds appear in their
+  // places rather than arriving one by one and shuffling about.
+  String? _revealed;
+
+  PlateStyle get _style => PlateStyle.named(app.settings.nativePlateStyle);
+
   /// Look for the plates of [rows] not asked for yet.
   void _ensure(List<_Row> rows) {
     final lib = _lib;
     if (lib == null) return;
+    final style = _style;
+    if (style != _artStyle) {
+      _artStyle = style;
+      _round++;
+      _art.clear();
+      _asking.clear();
+    }
+    final round = _round;
     for (final r in rows) {
       if (_art.containsKey(r.sci) || !_asking.add(r.sci)) continue;
-      lib.plateFor(r.sci, r.common).then((art) {
+      lib.plateFor(r.sci, r.common, style).then((art) {
+        if (!mounted || round != _round) return;
         _asking.remove(r.sci);
-        if (mounted) setState(() => _art[r.sci] = art);
+        setState(() => _art[r.sci] = art);
       });
     }
   }
@@ -151,6 +175,7 @@ class _NativePlateState extends State<NativePlate> {
       context: context,
       builder: (context) => _PlateCard(
         lib: lib,
+        style: _style,
         row: r,
         art: _art[r.sci],
         onChosen: (art) {
@@ -207,7 +232,7 @@ class _NativePlateState extends State<NativePlate> {
                             ),
                           )
                         else
-                          _collage(rows, box.maxWidth - 40, box.maxHeight),
+                          _collage(ses!, rows, box.maxWidth - 40, box.maxHeight),
                         const SizedBox(height: 22),
                         _indexHeading(i, n),
                         const SizedBox(height: 10),
@@ -300,27 +325,50 @@ class _NativePlateState extends State<NativePlate> {
   }
 
   /// The birds, packed as the web plate packs them: the largest in the
-  /// middle, the rest spiralling out. Figures glide to their new places when
-  /// the sizing changes or a new bird arrives.
-  Widget _collage(List<_Row> rows, double width, double screen) {
+  /// middle, the rest spiralling out.
+  ///
+  /// Nothing is drawn until every plate of the session is ready, so the
+  /// birds appear in their places. After that they only move when something
+  /// asks them to: the sizing button, or a new bird joining while listening
+  /// (it appears once its plate is ready, and the rest make room).
+  Widget _collage(Session ses, List<_Row> rows, double width, double screen) {
     final height = math.max(260.0, math.min(width * 1.15, screen * 0.62));
+    final showing = '${ses.id}|${_style.name}';
+    final ready = [for (final r in rows) if (_art.containsKey(r.sci)) r];
+    if (_revealed != showing) {
+      if (ready.length < rows.length) {
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Center(
+            child: Text('Preparing the plate… ${ready.length} of ${rows.length}',
+                style: const TextStyle(
+                    fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 17, color: sepia)),
+          ),
+        );
+      }
+      _revealed = showing;
+    }
     final by = app.settings.nativeSizeBy;
     // Recent ramblings: it is the order that counts, not the gap, or a
     // morning's birds would all come out one size.
-    final byTime = [...rows]..sort((a, b) => (a.last ?? DateTime(0)).compareTo(b.last ?? DateTime(0)));
+    final byTime = [...ready]..sort((a, b) => (a.last ?? DateTime(0)).compareTo(b.last ?? DateTime(0)));
     double weight(_Row r) => switch (by) {
           'equal' => 1,
           'time' => (byTime.indexOf(r) + 1).toDouble(),
           _ => r.count.toDouble(),
         };
     final places = layoutCollage([
-      for (final r in rows)
+      for (final r in ready)
         CollageItem(r.sci,
             weight: weight(r), aspect: _art[r.sci]?.aspect ?? 1.7, blank: _art[r.sci] == null)
     ], Size(width, height))
       ..sort((a, b) => a.order.compareTo(b.order));
-    final row = {for (final r in rows) r.sci: r};
+    final row = {for (final r in ready) r.sci: r};
     return SizedBox(
+      // A new session or style is a new collage: nothing glides across from
+      // the one before.
+      key: ValueKey(showing),
       width: width,
       height: height,
       child: Stack(
@@ -337,11 +385,7 @@ class _NativePlateState extends State<NativePlate> {
               height: p.rect.height,
               child: GestureDetector(
                 onTap: () => _openCard(row[p.id]!),
-                child: _Figure(
-                    art: _art[p.id],
-                    name: row[p.id]!.common,
-                    looking: !_art.containsKey(p.id),
-                    width: p.rect.width),
+                child: _Figure(art: _art[p.id], name: row[p.id]!.common, width: p.rect.width),
               ),
             ),
         ],
@@ -446,9 +490,9 @@ class _Figure extends StatelessWidget {
   }
 }
 
-/// A plate drawn to fit. "Tinted": a plate still on its paper is multiplied
-/// with the page's paper, so its white becomes the page; a cut-out is drawn
-/// as it is.
+/// A plate drawn to fit. A tinted one (PlateArt.tint) is multiplied with
+/// the page's paper, so its white becomes the page; a cut-out, or a plate
+/// as it comes, is drawn as it is.
 class _PlateImage extends StatelessWidget {
   const _PlateImage({required this.art, required this.width});
 
@@ -461,8 +505,8 @@ class _PlateImage extends StatelessWidget {
         fit: BoxFit.contain,
         // decode no larger than it is drawn
         cacheWidth: math.max(1, (width * MediaQuery.devicePixelRatioOf(context)).round()),
-        color: art.ready ? null : paper,
-        colorBlendMode: art.ready ? null : BlendMode.multiply,
+        color: art.tint ? paper : null,
+        colorBlendMode: art.tint ? BlendMode.multiply : null,
         gaplessPlayback: true,
         errorBuilder: (context, _, __) => const SizedBox(),
       );
@@ -472,9 +516,11 @@ class _PlateImage extends StatelessWidget {
 /// credit, and the other plates on offer. Tapping one makes it this bird's
 /// plate from now on (PlateLibrary.choose).
 class _PlateCard extends StatefulWidget {
-  const _PlateCard({required this.lib, required this.row, required this.art, required this.onChosen});
+  const _PlateCard(
+      {required this.lib, required this.style, required this.row, required this.art, required this.onChosen});
 
   final PlateLibrary lib;
+  final PlateStyle style;
   final _Row row;
   final PlateArt? art;
   final ValueChanged<PlateArt?> onChosen;
@@ -491,7 +537,7 @@ class _PlateCardState extends State<_PlateCard> {
 
   Future<void> _choose(PlateCandidate c) async {
     setState(() => _choosing = c.url);
-    final art = await widget.lib.choose(widget.row.sci, c);
+    final art = await widget.lib.choose(widget.row.sci, c, widget.style);
     if (!mounted) return;
     setState(() {
       _choosing = null;
@@ -537,7 +583,8 @@ class _PlateCardState extends State<_PlateCard> {
               if (art != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
-                  child: Text('${art.credit}${art.ready ? '' : ' Tinted into the page.'}',
+                  child: Text(
+                      '${art.credit}${art.cut ? ' Cut out on this device.' : art.tint ? ' Tinted into the page.' : ''}',
                       textAlign: TextAlign.center, style: small),
                 ),
               const SizedBox(height: 14),
@@ -574,7 +621,7 @@ class _PlateCardState extends State<_PlateCard> {
                                               width: 18,
                                               height: 18,
                                               child: CircularProgressIndicator(strokeWidth: 2)))
-                                      : _Thumb(lib: widget.lib, candidate: c),
+                                      : _Thumb(lib: widget.lib, style: widget.style, candidate: c),
                                 ),
                               ),
                             );
@@ -582,7 +629,9 @@ class _PlateCardState extends State<_PlateCard> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text('Cut-outs first, then plates from Wikimedia Commons, which are tinted.',
+                      const Text(
+                          'Cut-outs first, then plates from Wikimedia Commons. '
+                          'How those are treated is under Settings, Experimental.',
                           textAlign: TextAlign.center, style: small),
                     ],
                   );
@@ -603,9 +652,10 @@ class _PlateCardState extends State<_PlateCard> {
 
 /// One of the other plates, small. Fetched (and kept) when first shown.
 class _Thumb extends StatefulWidget {
-  const _Thumb({required this.lib, required this.candidate});
+  const _Thumb({required this.lib, required this.style, required this.candidate});
 
   final PlateLibrary lib;
+  final PlateStyle style;
   final PlateCandidate candidate;
 
   @override
@@ -613,7 +663,7 @@ class _Thumb extends StatefulWidget {
 }
 
 class _ThumbState extends State<_Thumb> {
-  late final Future<PlateArt?> _art = widget.lib.load(widget.candidate).then<PlateArt?>((a) => a).catchError((Object _) => null);
+  late final Future<PlateArt?> _art = widget.lib.load(widget.candidate, widget.style).then<PlateArt?>((a) => a).catchError((Object _) => null);
 
   @override
   Widget build(BuildContext context) => FutureBuilder<PlateArt?>(

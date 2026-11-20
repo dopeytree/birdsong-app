@@ -130,6 +130,11 @@ class Settings extends ChangeNotifier {
   /// (recent ramblings) or 'equal' (no pecking order).
   String nativeSizeBy = 'calls';
 
+  /// The Flutter plate: what is done to a plate still on its paper:
+  /// 'cutout' (lifted off the page, as the web plate does), 'tint' or
+  /// 'plain' (PlateStyle in lib/native/plate_library.dart).
+  String nativePlateStyle = 'cutout';
+
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
 
@@ -193,6 +198,9 @@ class Settings extends ChangeNotifier {
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
     nativePlate = (j['nativePlate'] as bool?) ?? nativePlate;
+    nativePlateStyle = const ['cutout', 'tint', 'plain'].contains(j['nativePlateStyle'])
+        ? j['nativePlateStyle'] as String
+        : nativePlateStyle;
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -246,6 +254,7 @@ class Settings extends ChangeNotifier {
         'plateModel': plateModel,
         'nativePlate': nativePlate,
         'nativeSizeBy': nativeSizeBy,
+        'nativePlateStyle': nativePlateStyle,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -5,6 +6,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+
+import 'cutout.dart';
 
 /// A picture that could stand for a species: where it is, not yet fetched.
 class PlateCandidate {
@@ -26,9 +29,27 @@ class PlateCandidate {
       ready: j['ready'] == true, credit: (j['credit'] as String?) ?? '', page: j['page'] as String?);
 }
 
+/// What is done to a plate that is still on its paper.
+enum PlateStyle {
+  /// The bird is lifted off the page on this device, as the web plate does.
+  cutout('Cut out'),
+
+  /// The whole plate, multiplied with the page's paper colour.
+  tint('Tinted'),
+
+  /// The whole plate, untouched.
+  plain('As it comes');
+
+  const PlateStyle(this.label);
+  final String label;
+
+  static PlateStyle named(String? name) =>
+      values.firstWhere((v) => v.name == name, orElse: () => PlateStyle.cutout);
+}
+
 /// A picture of one species, on this device.
 class PlateArt {
-  const PlateArt(this.file, this.from, this.aspect);
+  const PlateArt(this.file, this.from, this.aspect, {this.tint = false, this.cut = false});
 
   final File file;
   final PlateCandidate from;
@@ -36,7 +57,12 @@ class PlateArt {
   /// Width over height, for the collage.
   final double aspect;
 
-  bool get ready => from.ready;
+  /// Draw it multiplied with the paper colour.
+  final bool tint;
+
+  /// [file] is the figure cut out of the plate on this device.
+  final bool cut;
+
   String get credit => from.credit;
 }
 
@@ -101,25 +127,25 @@ class PlateLibrary {
   }
 
   /// The plate for a species: the one picked on its card, else the best
-  /// found. Null when there is none (or no connection and it isn't on the
-  /// device yet). Asked once a run.
-  Future<PlateArt?> plateFor(String sci, String common) =>
-      _asked[sci] ??= _find(sci, common).catchError((Object e) {
+  /// found, treated in [style]. Null when there is none (or no connection
+  /// and it isn't on the device yet). Asked once a run for each style.
+  Future<PlateArt?> plateFor(String sci, String common, PlateStyle style) =>
+      _asked['${style.name}|$sci'] ??= _find(sci, common, style).catchError((Object e) {
         debugPrint('plate $sci: $e');
         return null;
       });
 
-  Future<PlateArt?> _find(String sci, String common) async {
+  Future<PlateArt?> _find(String sci, String common, PlateStyle style) async {
     final chosen = _choices[sci];
     if (chosen is Map) {
       try {
-        return await load(PlateCandidate.fromJson(chosen.cast<String, dynamic>()));
+        return await load(PlateCandidate.fromJson(chosen.cast<String, dynamic>()), style);
       } catch (e) {
         debugPrint('chosen plate $sci: $e');
       }
     }
     final all = await candidates(sci, common);
-    return all.isEmpty ? null : load(all.first);
+    return all.isEmpty ? null : load(all.first, style);
   }
 
   /// Every plate on offer for a species, best first: its cut-outs, then up
@@ -146,31 +172,84 @@ class PlateLibrary {
     return out;
   }
 
-  /// Fetch a candidate (once) and measure it.
-  Future<PlateArt> load(PlateCandidate c) async {
+  /// Fetch a candidate (once), treat it in [style] and measure it. A
+  /// ready-made cut-out is the same in every style.
+  Future<PlateArt> load(PlateCandidate c, PlateStyle style) async {
     final file = await _fetch(c.url);
-    var aspect = 1.2;
+    if (!c.ready && style == PlateStyle.cutout) {
+      final cut = await _cutOut(file);
+      if (cut != null) return PlateArt(cut, c, await _aspect(cut), cut: true);
+      // A painted scene, or nothing found: the whole plate, tinted.
+      return PlateArt(file, c, await _aspect(file), tint: true);
+    }
+    return PlateArt(file, c, await _aspect(file), tint: !c.ready && style == PlateStyle.tint);
+  }
+
+  /// Width over height, from the picture's header only.
+  Future<double> _aspect(File file) async {
     try {
-      // Reads the picture's header only.
       final buffer = await ui.ImmutableBuffer.fromFilePath(file.path);
       final about = await ui.ImageDescriptor.encoded(buffer);
-      if (about.height > 0) aspect = about.width / about.height;
+      final aspect = about.height > 0 ? about.width / about.height : 1.2;
       about.dispose();
       buffer.dispose();
+      return aspect;
     } catch (e) {
-      debugPrint('measure ${c.url}: $e');
+      debugPrint('measure ${file.path}: $e');
+      return 1.2;
     }
-    return PlateArt(file, c, aspect);
+  }
+
+  /// The figure cut out of the plate in [file], as a PNG beside it, made
+  /// once (cutout.dart, on another isolate). Null when the plate is better
+  /// left whole, which is remembered too.
+  Future<File?> _cutOut(File file) async {
+    final cut = File('${file.path}.cut.png'), whole = File('${file.path}.whole');
+    if (await cut.exists() && await cut.length() > 0) return cut;
+    if (await whole.exists()) return null;
+    try {
+      // The page works on a copy at most 420 wide; so does this.
+      final buffer = await ui.ImmutableBuffer.fromFilePath(file.path);
+      final about = await ui.ImageDescriptor.encoded(buffer);
+      final codec = await about.instantiateCodec(targetWidth: about.width > 420 ? 420 : null);
+      final frame = (await codec.getNextFrame()).image;
+      final pixels = await frame.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
+      final w = frame.width, h = frame.height;
+      frame.dispose();
+      codec.dispose();
+      about.dispose();
+      buffer.dispose();
+      if (pixels == null) return null;
+      final out = await compute(_cutOutOnIsolate, (pixels.buffer.asUint8List(), w, h));
+      if (out == null) {
+        await whole.writeAsString('');
+        return null;
+      }
+      final done = Completer<ui.Image>();
+      ui.decodeImageFromPixels(out.rgba, out.width, out.height, ui.PixelFormat.rgba8888, done.complete);
+      final image = await done.future;
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      if (png == null) return null;
+      final part = File('${cut.path}.part');
+      await part.writeAsBytes(png.buffer.asUint8List(), flush: true);
+      return part.rename(cut.path);
+    } catch (e) {
+      debugPrint('cut out ${file.path}: $e');
+      return null;
+    }
   }
 
   /// Use [c] for a species from now on (its card's choice), and say what it is.
-  Future<PlateArt?> choose(String sci, PlateCandidate c) {
+  Future<PlateArt?> choose(String sci, PlateCandidate c, PlateStyle style) {
     _choices[sci] = c.toJson();
     File('${dir.path}/choices.json').writeAsString(jsonEncode(_choices)).catchError((Object e) {
       debugPrint('choices: $e');
       return File('');
     });
-    return _asked[sci] = load(c).then<PlateArt?>((a) => a).catchError((Object e) {
+    _asked.removeWhere((key, _) => key.endsWith('|$sci'));
+    return _asked['${style.name}|$sci'] =
+        load(c, style).then<PlateArt?>((a) => a).catchError((Object e) {
       debugPrint('plate $sci: $e');
       return null;
     });
@@ -359,3 +438,6 @@ class PlateLibrary {
 
   void close() => _client.close(force: true);
 }
+
+// compute() takes one argument: the pixels and their size.
+CutOut? _cutOutOnIsolate((Uint8List, int, int) a) => cutOutFigure(a.$1, a.$2, a.$3);

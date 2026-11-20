@@ -93,6 +93,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   [
                     _switch('Draw the plate in Flutter', s.nativePlate,
                         (v) => s.update((x) => x.nativePlate = v)),
+                    _dropdown(
+                        'Plates on paper',
+                        s.nativePlateStyle,
+                        const {
+                          'cutout': 'Cut out, as the web plate does',
+                          'tint': 'Tinted into the page',
+                          'plain': 'As they come',
+                        },
+                        (v) => s.update((x) => x.nativePlateStyle = v)),
                     Text(
                       'A first version of the plate without the web page: heading, collage, '
                       'index and a card for each bird, with pictures kept on this device. '
