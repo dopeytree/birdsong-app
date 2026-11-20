@@ -11,7 +11,6 @@ import '../store/detection_store.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
 import '../ui/format.dart';
 import '../ui/plate_buttons.dart';
-import '../ui/plate_icons.dart';
 import '../ui/station_editor.dart';
 import 'collage_view.dart';
 import 'index_view.dart';
@@ -402,7 +401,7 @@ class _NativePlateState extends State<NativePlate> {
                         children: [
                           IconButton(
                             tooltip: 'Settings',
-                            icon: const PlateIcon(PlateGlyph.menu),
+                            icon: const Icon(Icons.menu),
                             color: red,
                             onPressed: widget.openSettings,
                           ),
@@ -411,7 +410,7 @@ class _NativePlateState extends State<NativePlate> {
                           // collage (a, f and g).
                           IconButton(
                             tooltip: 'Plate: ${_sizings[app.settings.nativeSizeBy] ?? ''}',
-                            icon: const PlateIcon(PlateGlyph.plate),
+                            icon: const Icon(Icons.dashboard_outlined),
                             color: red,
                             onPressed: _nextSizing,
                           ),

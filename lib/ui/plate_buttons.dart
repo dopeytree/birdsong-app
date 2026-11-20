@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../main.dart' show ink, paper, rule, sepia, serif;
-import 'plate_icons.dart';
 
 // The plate's own controls, shared by the web plate (plate_view.dart) and
 // the Flutter plate (native/native_plate.dart) so both carry the same ones.
@@ -63,7 +62,7 @@ class SourcePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final red = Theme.of(context).colorScheme.primary;
-    Widget part(bool on, PlateGlyph glyph, String tip, VoidCallback tap, BorderRadius r) => Tooltip(
+    Widget part(bool on, IconData icon, String tip, VoidCallback tap, BorderRadius r) => Tooltip(
           message: tip,
           child: Semantics(
             button: true,
@@ -76,7 +75,7 @@ class SourcePill extends StatelessWidget {
                 width: half,
                 height: 36,
                 decoration: BoxDecoration(color: on ? red : Colors.transparent, borderRadius: r),
-                child: Center(child: PlateIcon(glyph, size: 22, color: on ? paper : sepia.withValues(alpha: 0.8))),
+                child: Icon(icon, size: 21, color: on ? paper : sepia.withValues(alpha: 0.7)),
               ),
             ),
           ),
@@ -90,9 +89,9 @@ class SourcePill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          part(listen, PlateGlyph.listen, 'Listen here & now', onListen,
+          part(listen, Icons.mic_none_outlined, 'Listen here & now', onListen,
               const BorderRadius.horizontal(left: Radius.circular(18))),
-          part(!listen, PlateGlyph.station,
+          part(!listen, Icons.sensors,
               stationName == null ? 'Add a remote station' : 'Remote station: $stationName',
               onRemote, const BorderRadius.horizontal(right: Radius.circular(18))),
         ],
@@ -169,8 +168,8 @@ class _RecordButtonState extends State<RecordButton> with SingleTickerProviderSt
               : IconButton(
                   visualDensity: VisualDensity.compact,
                   tooltip: widget.recording ? 'Stop recording' : 'Record a new session',
-                  icon: PlateIcon(widget.recording ? PlateGlyph.stop : PlateGlyph.record,
-                      size: widget.recording ? 22 : 21),
+                  icon: Icon(widget.recording ? Icons.stop_rounded : Icons.fiber_manual_record,
+                      size: widget.recording ? 24 : 18),
                   color: red,
                   onPressed: widget.onTap,
                 ),
