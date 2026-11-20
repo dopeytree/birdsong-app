@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../native/native_plate.dart';
+import '../settings.dart';
 import 'onboarding_screen.dart';
 import 'plate_view.dart';
 import 'settings_screen.dart';
@@ -29,10 +31,17 @@ class HomeShell extends StatelessWidget {
           // Edge to edge: the page's own paper runs under the status bar, the
           // Dynamic Island and the home indicator; the page pads its content
           // clear of them instead (PlateView passes it the insets).
-          body: PlateView(
-              app: app,
-              openSettings: () => _openSettings(context),
-              onLoaded: onPlateLoaded),
+          // Experimental (Settings > Experimental): in Listen here the plate
+          // drawn by Flutter itself. A remote station still uses the page.
+          body: app.settings.nativePlate && app.settings.mode == AppMode.listen
+              ? NativePlate(
+                  app: app,
+                  openSettings: () => _openSettings(context),
+                  onLoaded: onPlateLoaded)
+              : PlateView(
+                  app: app,
+                  openSettings: () => _openSettings(context),
+                  onLoaded: onPlateLoaded),
         );
       },
     );

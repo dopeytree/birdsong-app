@@ -85,6 +85,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               _displaySection(context, listen),
               if (listen) _mapSection(context),
+              if (listen)
+                _section(
+                  context,
+                  'Experimental',
+                  summary: s.nativePlate ? 'Plate drawn by Flutter' : 'Plate drawn by the web page',
+                  [
+                    _switch('Draw the plate in Flutter', s.nativePlate,
+                        (v) => s.update((x) => x.nativePlate = v)),
+                    Text(
+                      'A first version of the plate without the web page: heading, collage, '
+                      'index and a card for each bird, with pictures kept on this device. '
+                      'No views, map, zoom, recordings or share yet; switch this off to get them back.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               const SizedBox(height: 8),
               SegmentedButton<AppMode>(
                 segments: const [

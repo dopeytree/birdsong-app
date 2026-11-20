@@ -122,6 +122,10 @@ class Settings extends ChangeNotifier {
   /// Which model's detections the plate draws, or 'all'.
   String plateModel = 'bnl-v3-10k';
 
+  /// Experimental: in Listen here, the plate drawn by Flutter itself
+  /// (lib/native/native_plate.dart) instead of the web page.
+  bool nativePlate = false;
+
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
 
@@ -184,6 +188,7 @@ class Settings extends ChangeNotifier {
     final active = j['activeModels'];
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
+    nativePlate = (j['nativePlate'] as bool?) ?? nativePlate;
     showMap = (j['showMap'] as bool?) ?? showMap;
     mapBirds = j['mapBirds'] == 'all' ? 'all' : 'first';
     mapExtras = (j['mapExtras'] as bool?) ?? mapExtras;
@@ -232,6 +237,7 @@ class Settings extends ChangeNotifier {
         'plateView': plateModes[plateMode - 1].key,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
+        'nativePlate': nativePlate,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,
