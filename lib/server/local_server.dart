@@ -285,6 +285,17 @@ class LocalServer {
       '#bsZoomBox{overflow:hidden;touch-action:pan-x pan-y}body.bs-zoomed #bsZoomBox{touch-action:none}'
       'body{padding:max(env(safe-area-inset-top),var(--bs-top,0px)) max(env(safe-area-inset-right),var(--bs-right,0px))'
       ' max(env(safe-area-inset-bottom),var(--bs-bottom,0px)) max(env(safe-area-inset-left),var(--bs-left,0px))}'
+      // Room for the app's own buttons, which float over the page: their
+      // sizes come from plate_view.dart (--bs-ui-*). The bottom row (map,
+      // share) adds to the bottom padding, so on one screen the index rises
+      // and the collage gives up the height; the title stops short of the
+      // record button and source pill, and the date, place and notice lines
+      // stop short of the menu and view buttons on the right.
+      'body{padding-bottom:calc(max(env(safe-area-inset-bottom),var(--bs-bottom,0px)) + var(--bs-ui-bottom,0px))}'
+      'header h1{max-width:calc(100vw - var(--bs-ui-row1,0px) - clamp(1rem,4vw,3rem)'
+      ' - max(env(safe-area-inset-left),var(--bs-left,0px)))}'
+      '#sub,#notice{max-width:calc(100vw - var(--bs-ui-col,0px) - clamp(1rem,4vw,3rem)'
+      ' - max(env(safe-area-inset-left),var(--bs-left,0px)))}'
 
       // A creature being heard right now glows, and the dot on it (over its
       // centre, or beneath it) breathes out a ring, in the plate's madder.

@@ -53,6 +53,10 @@ class _PlateViewState extends State<PlateView> {
 
   final _shareKey = GlobalKey();
 
+  /// The top-right buttons, measured so the page can keep its title and
+  /// date clear of them (see _pushInsets).
+  final _topKey = GlobalKey();
+
   /// The page is showing the session arrows beside "Index of species"; the
   /// app's own pair is only for modes without that line.
   bool _arrowsInPage = false;
@@ -121,19 +125,38 @@ class _PlateViewState extends State<PlateView> {
   EdgeInsets _insets = EdgeInsets.zero;
   String _insetsPushed = '';
 
+  // With them, the room the app's own buttons take, so nothing on the page
+  // sits under one (local_server.dart lays the page out around these):
+  //   --bs-ui-row1    the top-right row's width (record, pill, menu)
+  //   --bs-ui-col     the menu and view column's width, on the right
+  //   --bs-ui-bottom  the bottom row's height (map, share)
   void _pushInsets() {
     final p = _insets;
-    final key = '${p.top},${p.right},${p.bottom},${p.left}';
+    final box = _topKey.currentContext?.findRenderObject() as RenderBox?;
+    final row = box != null && box.hasSize ? box.size.width : 0.0;
+    final ui = (
+      row1: row > 0 ? row + 8 + 12 : 0.0, // its right margin, and a gap
+      col: 48 + 8 + 12.0,
+      bottom: _bottomButtons ? _bottomButtonSize + 8 + 6 : 0.0,
+    );
+    final key = '${p.top},${p.right},${p.bottom},${p.left}|${ui.row1},${ui.col},${ui.bottom}';
     if (key == _insetsPushed) return;
     _insetsPushed = key;
     String px(double v) => '${v.toStringAsFixed(1)}px';
     _web
         .runJavaScript('(function(s){s.setProperty("--bs-top","${px(p.top)}");'
             's.setProperty("--bs-right","${px(p.right)}");s.setProperty("--bs-bottom","${px(p.bottom)}");'
-            's.setProperty("--bs-left","${px(p.left)}");dispatchEvent(new Event("resize"));})'
+            's.setProperty("--bs-left","${px(p.left)}");'
+            's.setProperty("--bs-ui-row1","${px(ui.row1)}");s.setProperty("--bs-ui-col","${px(ui.col)}");'
+            's.setProperty("--bs-ui-bottom","${px(ui.bottom)}");dispatchEvent(new Event("resize"));})'
             '(document.documentElement.style)')
         .catchError((Object _) {});
   }
+
+  /// The map and share buttons at the bottom corners: a little smaller than
+  /// the top ones, to take less of the page.
+  static const _bottomButtonSize = 40.0;
+  bool get _bottomButtons => PlateShare.supported || _mapAllowed;
 
   AppState get app => widget.app;
   Settings get _s => app.settings;
@@ -484,13 +507,15 @@ class _PlateViewState extends State<PlateView> {
   @override
   Widget build(BuildContext context) {
     final safe = MediaQuery.paddingOf(context);
-    if (safe != _insets) {
-      _insets = safe;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _pushInsets());
-    }
+    _insets = safe;
     return ListenableBuilder(
       listenable: Listenable.merge([_s, app.store, app.engine]),
       builder: (context, _) {
+        // After layout: the insets, and the buttons' size as just laid out
+        // (the row changes as the source switches, or recording starts).
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _pushInsets();
+        });
         final listen = _s.mode == AppMode.listen;
         final store = app.store;
         final i = store.selectedIndex;
@@ -505,6 +530,7 @@ class _PlateViewState extends State<PlateView> {
                 right: 8 + safe.right,
                 top: 8 + safe.top,
                 child: Row(
+                  key: _topKey,
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -565,6 +591,10 @@ class _PlateViewState extends State<PlateView> {
                 left: 8 + safe.left,
                 bottom: 8 + safe.bottom,
                 child: IconButton(
+                  constraints: const BoxConstraints.tightFor(
+                      width: _bottomButtonSize, height: _bottomButtonSize),
+                  padding: EdgeInsets.zero,
+                  iconSize: 22,
                   tooltip: _mapOn ? 'Back to the plate' : 'The walk on a map',
                   icon: Icon(_mapOn ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
                   color: Theme.of(context).colorScheme.primary,
@@ -578,6 +608,8 @@ class _PlateViewState extends State<PlateView> {
                 bottom: 8 + safe.bottom,
                 child: PopupMenuButton<String>(
                   key: _shareKey,
+                  padding: const EdgeInsets.all(9),
+                  iconSize: 22,
                   tooltip: 'Share or save the plate',
                   icon: Icon(Icons.ios_share,
                       color: Theme.of(context).colorScheme.primary),
