@@ -90,8 +90,9 @@ class IndexView extends StatelessWidget {
 
   /// Folded away, the heading alone, in the row along the bottom of the
   /// screen between the map and share buttons (the Flutter plate's own
-  /// design): no fold arrow, a tap on the heading opens the list again;
-  /// shorter rules, and none on a narrow screen.
+  /// design), its ⌃ above it as when folded on the page: a tap on either
+  /// opens the list again. Shorter rules, and none on a narrow screen. The
+  /// heading takes the bottom 40, level with the buttons.
   final bool inline;
 
   /// The latest heard, when it is to be marked.
@@ -108,7 +109,25 @@ class IndexView extends StatelessWidget {
   Widget build(BuildContext context) {
     if (inline) {
       return LayoutBuilder(
-        builder: (context, box) => Center(child: _heading(rules: box.maxWidth < 340 ? 0 : 28, pad: 8)),
+        builder: (context, box) => Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onFold,
+              child: const ExcludeSemantics(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: Opacity(
+                    opacity: .75,
+                    child: Text('\u2303', style: TextStyle(fontFamily: serif, fontSize: 18, height: 1, color: sepia)),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(height: 40, child: Center(child: _heading(rules: box.maxWidth < 340 ? 0 : 28, pad: 8))),
+          ],
+        ),
       );
     }
     // rem is 16 throughout the page
