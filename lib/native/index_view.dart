@@ -96,7 +96,7 @@ class IndexView extends StatelessWidget {
   final bool inline;
 
   /// How many species the session heard, for the heading: "Index of
-  /// Species |123|" (every species, also beyond a limit on the list).
+  /// Species | 123" (every species, also beyond a limit on the list).
   final int species;
 
   /// The latest heard, when it is to be marked.
@@ -202,7 +202,7 @@ class IndexView extends StatelessWidget {
                   line,
                   gap,
                   Flexible(
-                    child: Text(species > 0 ? 'Index of Species |${thousands(species)}|' : 'Index of Species',
+                    child: Text(species > 0 ? 'Index of Species | ${thousands(species)}' : 'Index of Species',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             fontFamily: caps,
