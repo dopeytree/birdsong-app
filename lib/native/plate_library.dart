@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
@@ -53,9 +54,9 @@ class PlateLibrary {
 
   final Map<String, Future<PlateArt?>> _asked = {};
   Future<void>? _manifestLoad;
-  Map<String, List<String>> _cutouts = {}; // slug -> manifest keys, best first
-  Map<String, String> _cutoutSource = {}; // manifest key -> artist key
-  Map<String, String> _cutoutPage = {};
+  final Map<String, List<String>> _cutouts = {}; // slug -> manifest keys, best first
+  final Map<String, String> _cutoutSource = {}; // manifest key -> artist key
+  final Map<String, String> _cutoutPage = {};
   Map<String, dynamic> _alias = {};
   Map<String, dynamic> _found = {};
 
@@ -90,7 +91,7 @@ class PlateLibrary {
       return PlateArt(
         await _fetch('$_art/artwork/classic/$key'),
         ready: true,
-        credit: (who.isEmpty ? '' : 'After $who. ') + 'Cut-out from the Fugleramme project, CC BY-SA 4.0.',
+        credit: '${who.isEmpty ? '' : 'After $who. '}Cut-out from the Fugleramme project, CC BY-SA 4.0.',
         page: _cutoutPage[key],
       );
     }
@@ -173,7 +174,7 @@ class PlateLibrary {
       best = {
         'url': ii['thumburl'],
         'page': ii['descriptionurl'],
-        'credit': title.replaceFirst(RegExp(r'\.\w+$'), '') + '. Wikimedia Commons.$kin',
+        'credit': '${title.replaceFirst(RegExp(r'\.\w+$'), '')}. Wikimedia Commons.$kin',
       };
     }
     return best;
