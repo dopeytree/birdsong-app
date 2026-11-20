@@ -111,6 +111,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         (v) => s.update((x) => x.nativeSizeBy = v)),
                     _switch('Fit on one screen', s.nativeFit,
                         (v) => s.update((x) => x.nativeFit = v)),
+                    _switch('Species and calls under the date', s.nativeTotals,
+                        (v) => s.update((x) => x.nativeTotals = v)),
                     _switch('Skulls, wings and eggs', s.nativeParts,
                         (v) => s.update((x) => x.nativeParts = v)),
                     _dropdown(

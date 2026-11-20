@@ -157,6 +157,10 @@ class Settings extends ChangeNotifier {
   /// species; 0 for all (the web plate's Limit species).
   int nativeLimit = 0;
 
+  /// The Flutter plate: the heading's "22 species from 90 calls" line. Off
+  /// unless chosen; the index's heading carries the number of species.
+  bool nativeTotals = false;
+
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
 
@@ -230,6 +234,7 @@ class Settings extends ChangeNotifier {
     nativeIndexFolded = (j['nativeIndexFolded'] as bool?) ?? nativeIndexFolded;
     nativeParts = (j['nativeParts'] as bool?) ?? nativeParts;
     nativeLimit = math.max(0, (j['nativeLimit'] as num?)?.toInt() ?? nativeLimit);
+    nativeTotals = (j['nativeTotals'] as bool?) ?? nativeTotals;
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -289,6 +294,7 @@ class Settings extends ChangeNotifier {
         'nativeIndexFolded': nativeIndexFolded,
         'nativeParts': nativeParts,
         'nativeLimit': nativeLimit,
+        'nativeTotals': nativeTotals,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,

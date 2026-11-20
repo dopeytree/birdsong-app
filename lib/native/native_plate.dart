@@ -719,8 +719,9 @@ class _NativePlateState extends State<NativePlate> {
   }
 
   /// The page's header as the app fills it in Listen here: the title with
-  /// the session's number, then, each on its own line, when, where and the
-  /// totals. The title stops short of the buttons' row; the lines under it
+  /// the session's number, then, each on its own line, when, where (just
+  /// the position), the weather (its picture and the temperature), and,
+  /// when switched on (Settings > Experimental, nativeTotals), the totals. The title stops short of the buttons' row; the lines under it
   /// stop short of the menu and view column. [width] is the room from the
   /// left padding to the screen's right edge.
   Widget _heading(Session? ses, int i, int n, int species, int calls, double width, {bool totals = true}) {
@@ -728,7 +729,9 @@ class _NativePlateState extends State<NativePlate> {
     const sub = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: sepia, height: 1.5);
     // record 44, pill 94, menu 48, and 8 from the edge; the column is the last two
     const row1 = 194.0, col = 56.0;
-    final w = ses == null ? '' : weatherWords(ses.weather);
+    final weather = ses?.weather;
+    final temp = (weather?['temperatureC'] as num?)?.round();
+    final sky = weather?['symbol'] as String?;
     final when = ses == null
         ? 'Nothing recorded yet: tap the microphone to start.'
         : ses.live
@@ -737,8 +740,8 @@ class _NativePlateState extends State<NativePlate> {
     final where = ses == null
         ? ''
         : ses.hasPlace
-            ? 'At ${place(ses.lat!, ses.lon!)}${w.isEmpty ? '' : ', $w'}.'
-            : (ses.live ? '' : 'Place unknown.');
+            ? place(ses.lat!, ses.lon!)
+            : (ses.live ? '' : 'Place unknown');
     return Column(
       key: _headKey,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -767,7 +770,22 @@ class _NativePlateState extends State<NativePlate> {
             children: [
               Text(when, style: sub),
               if (where.isNotEmpty) Text(where, style: sub),
-              if (totals && species > 0)
+              if (temp != null || sky != null)
+                Tooltip(
+                  message: weatherWords(weather),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (sky != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 5),
+                          child: Icon(weatherIcon(sky), size: 17, color: sepia),
+                        ),
+                      if (temp != null) Text('$temp°C', style: sub),
+                    ],
+                  ),
+                ),
+              if (totals && app.settings.nativeTotals && species > 0)
                 Text('$species species from ${thousands(calls)} ${calls == 1 ? 'call' : 'calls'}.',
                     style: sub),
             ],
@@ -951,4 +969,18 @@ class _EdgeArrow extends StatelessWidget {
       onPressed: onPressed,
     );
   }
+}
+
+/// A picture for MET Norway's weather symbol ("partlycloudy_day",
+/// "lightrainshowers_night", ...), from Material's icons.
+IconData weatherIcon(String symbol) {
+  final s = symbol.toLowerCase(), night = s.endsWith('_night');
+  if (s.contains('thunder')) return Icons.thunderstorm_outlined;
+  if (s.contains('snow') || s.contains('sleet')) return Icons.ac_unit;
+  if (s.contains('rain')) return Icons.water_drop_outlined;
+  if (s.startsWith('fog')) return Icons.foggy;
+  if (s.startsWith('cloudy')) return Icons.cloud_outlined;
+  if (s.startsWith('partlycloudy')) return Icons.wb_cloudy_outlined;
+  // clear sky, fair
+  return night ? Icons.nights_stay_outlined : Icons.wb_sunny_outlined;
 }
