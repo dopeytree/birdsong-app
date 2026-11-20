@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 
 import '../main.dart' show ink, madder, paper, rule, sepia, serif;
@@ -607,4 +608,110 @@ class _PaperPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PaperPainter old) => false;
+}
+
+/// Pinch to zoom the collage, on touch screens, as the app does on the web
+/// plate (assets/app/plate-extras.js): two fingers zoom about their
+/// midpoint up to four times, one finger pans once zoomed in, a double tap
+/// goes back, and letting go below 1.05 goes back too. A pinch never opens a
+/// creature's card (the zoom wins over the tap); a plain tap still does. A
+/// new layout starts unzoomed.
+///
+/// [onHold] says when the page around it should stop scrolling: while two
+/// fingers are on the collage, and while it is zoomed in, so one finger
+/// pans the birds rather than the page.
+class ZoomableCollage extends StatefulWidget {
+  const ZoomableCollage({super.key, required this.size, required this.onHold, required this.child});
+
+  final Size size;
+  final ValueChanged<bool> onHold;
+  final Widget child;
+
+  /// Only where fingers are the pointer, as on the web plate.
+  static bool get touch =>
+      defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android;
+
+  @override
+  State<ZoomableCollage> createState() => _ZoomableCollageState();
+}
+
+class _ZoomableCollageState extends State<ZoomableCollage> {
+  final _view = TransformationController();
+  final Set<int> _fingers = {};
+  bool _zoomed = false, _held = false;
+
+  double get _scale => _view.value.getMaxScaleOnAxis();
+
+  @override
+  void initState() {
+    super.initState();
+    _view.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(ZoomableCollage old) {
+    super.didUpdateWidget(old);
+    // not now, in the middle of a build: the page is told, and may set state
+    if (old.size != widget.size) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _reset();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _view.dispose();
+    super.dispose();
+  }
+
+  void _changed() {
+    final zoomed = _scale > 1.001;
+    if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
+    _tell();
+  }
+
+  void _tell() {
+    final held = _zoomed || _fingers.length >= 2;
+    if (held == _held) return;
+    _held = held;
+    widget.onHold(held);
+  }
+
+  void _reset() => _view.value = Matrix4.identity();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!ZoomableCollage.touch) return widget.child;
+    return Listener(
+      onPointerDown: (e) {
+        _fingers.add(e.pointer);
+        _tell();
+      },
+      onPointerUp: (e) {
+        _fingers.remove(e.pointer);
+        _tell();
+      },
+      onPointerCancel: (e) {
+        _fingers.remove(e.pointer);
+        _tell();
+      },
+      child: GestureDetector(
+        // only once zoomed in: otherwise a tap on a bird would wait to see
+        // whether a second one follows
+        onDoubleTap: _zoomed ? _reset : null,
+        child: InteractiveViewer(
+          transformationController: _view,
+          minScale: 1,
+          maxScale: 4,
+          panEnabled: _zoomed,
+          clipBehavior: Clip.hardEdge,
+          onInteractionEnd: (_) {
+            if (_scale < 1.05) _reset();
+          },
+          child: SizedBox.fromSize(size: widget.size, child: widget.child),
+        ),
+      ),
+    );
+  }
 }

@@ -40,7 +40,9 @@ import 'plate_library.dart';
 /// The views a to g are the web plate's (Settings.plateMode, shared with
 /// it), and the card is its card (bird_card.dart).
 ///
-/// Not moved across yet: the map, pinch zoom, the limit on species, skulls
+/// Pinch zoom is the app's (ZoomableCollage).
+///
+/// Not moved across yet: the map, the limit on species, skulls
 /// wings and eggs, the caption, share, remote stations (those still open
 /// the web plate).
 class NativePlate extends StatefulWidget {
@@ -91,6 +93,11 @@ class _NativePlateState extends State<NativePlate> {
 
   // For the index alone (view c): the heading's and the index's heights.
   double _headH = 0, _indexH = 0;
+
+  // The page stops scrolling while the collage is pinched or zoomed in: the
+  // collage ("session|style") that asked. One left behind (a new session
+  // while zoomed) asks nothing.
+  String? _holdFor;
   static const _padTop = 16.0; // header{padding:1rem ... 0}
 
   /// The most species drawn on the plate; the rest are in the index only
@@ -327,6 +334,9 @@ class _NativePlateState extends State<NativePlate> {
                   final plateSide = (box.maxWidth * .02).clamp(8.0, 32.0);
                   final headSide = (box.maxWidth * .04).clamp(16.0, 48.0);
                   return SingleChildScrollView(
+                    physics: _holdFor != null && _holdFor == '${ses?.id}|${_style.name}'
+                        ? const NeverScrollableScrollPhysics()
+                        : null,
                     padding: const EdgeInsets.only(top: _padTop),
                     child: Column(
                       key: _allKey,
@@ -583,10 +593,7 @@ class _NativePlateState extends State<NativePlate> {
       }
       _revealed = showing;
     }
-    return CollageView(
-      // A new session or style is a new collage: nothing glides across from
-      // the one before.
-      key: ValueKey(showing),
+    final collage = CollageView(
       birds: [for (final r in ready) CollageBird(r.sci, r.common, r.count, r.last)],
       art: _art,
       size: Size(width, height),
@@ -595,6 +602,17 @@ class _NativePlateState extends State<NativePlate> {
       newest: newest,
       live: app.engine.liveSpecies,
       onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
+    );
+    return ZoomableCollage(
+      // A new session or style is a new collage: nothing glides across from
+      // the one before, and it starts unzoomed.
+      key: ValueKey(showing),
+      size: Size(width, height),
+      onHold: (held) {
+        final want = held ? showing : null;
+        if (want != _holdFor && mounted) setState(() => _holdFor = want);
+      },
+      child: collage,
     );
   }
 
