@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:plate_share/plate_share.dart';
 
 import '../app_state.dart';
-import '../main.dart' show ink, madder, sepia, serif;
+import '../main.dart' show ink, madder, paper, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
@@ -40,10 +43,11 @@ import 'plate_library.dart';
 /// The views a to g are the web plate's (Settings.plateMode, shared with
 /// it), and the card is its card (bird_card.dart).
 ///
-/// Pinch zoom is the app's (ZoomableCollage).
+/// Pinch zoom is the app's (ZoomableCollage), and share and save take a
+/// picture of the plate without the buttons, as on the web plate.
 ///
 /// Not moved across yet: the map, the limit on species, skulls
-/// wings and eggs, the caption, share, remote stations (those still open
+/// wings and eggs, the caption, remote stations (those still open
 /// the web plate).
 class NativePlate extends StatefulWidget {
   const NativePlate({super.key, required this.app, required this.openSettings, this.onLoaded});
@@ -99,6 +103,11 @@ class _NativePlateState extends State<NativePlate> {
   // while zoomed) asks nothing.
   String? _holdFor;
   static const _padTop = 16.0; // header{padding:1rem ... 0}
+
+  // Room at the bottom for the share button, as the web plate makes for it
+  // (--bs-ui-bottom), so the index rises clear of it.
+  static final double _bottomRoom = PlateShare.supported ? 40 + 8 + 6 : 0;
+  final _shotKey = GlobalKey(), _shareKey = GlobalKey();
 
   /// The most species drawn on the plate; the rest are in the index only
   /// (the page's maxOnPlate).
@@ -237,6 +246,46 @@ class _NativePlateState extends State<NativePlate> {
     }
   }
 
+  // ---- share or save the plate, as the web plate does -------------------
+
+  /// A picture of the plate as it is on screen, without the buttons.
+  Future<Uint8List?> _picture() async {
+    final box = _shotKey.currentContext?.findRenderObject();
+    if (box is! RenderRepaintBoundary) return null;
+    final image = await box.toImage(pixelRatio: MediaQuery.devicePixelRatioOf(context));
+    try {
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      return png?.buffer.asUint8List();
+    } finally {
+      image.dispose();
+    }
+  }
+
+  Future<void> _share() async {
+    final box = _shareKey.currentContext?.findRenderObject() as RenderBox?;
+    final from = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+    var ok = false;
+    try {
+      final png = await _picture();
+      if (png != null) ok = await PlateShare.share(text: 'Heard with Birdsong', from: from, png: png);
+    } catch (_) {}
+    if (!ok && mounted) _say("Couldn't take a picture of the plate.");
+  }
+
+  Future<void> _save() async {
+    var r = 'failed';
+    try {
+      final png = await _picture();
+      if (png != null) r = await PlateShare.saveToPhotos(png: png);
+    } catch (_) {}
+    if (!mounted) return;
+    _say(switch (r) {
+      'saved' => 'Saved to Photos.',
+      'denied' => 'Birdsong may not add to Photos: allow it in Settings.',
+      _ => "Couldn't save the plate.",
+    });
+  }
+
   // The record button: a tap starts a new session, a tap while recording
   // stops it.
   Future<void> _record() async {
@@ -321,14 +370,16 @@ class _NativePlateState extends State<NativePlate> {
         final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
         final single = mode.key == 'latest' || mode.key == 'top';
         final showPlate = mode.key != 'index', showIndex = mode.key != 'noindex';
-        return PaperBackground(
-          child: SafeArea(
-            child: Stack(
-              children: [
-                if (single)
-                  _single(mode, rows, newest)
-                else
-                LayoutBuilder(builder: (context, box) {
+        return Stack(
+          children: [
+            // The plate itself, without the buttons over it: what share takes.
+            RepaintBoundary(
+              key: _shotKey,
+              child: PaperBackground(
+                child: SafeArea(
+                  child: single
+                      ? _single(mode, rows, newest)
+                      : LayoutBuilder(builder: (context, box) {
                   final fit = app.settings.nativeFit;
                   final side = (box.maxWidth * (fit ? .03 : .04)).clamp(16.0, fit ? 32.0 : 48.0);
                   final plateSide = (box.maxWidth * .02).clamp(8.0, 32.0);
@@ -337,7 +388,7 @@ class _NativePlateState extends State<NativePlate> {
                     physics: _holdFor != null && _holdFor == '${ses?.id}|${_style.name}'
                         ? const NeverScrollableScrollPhysics()
                         : null,
-                    padding: const EdgeInsets.only(top: _padTop),
+                    padding: EdgeInsets.only(top: _padTop, bottom: _bottomRoom),
                     child: Column(
                       key: _allKey,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,6 +492,12 @@ class _NativePlateState extends State<NativePlate> {
                     ),
                   );
                 }),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Stack(
+                children: [
                 // The same buttons as over the web plate: record, the
                 // source pill, the menu, and the plate's view under it.
                 Positioned(
@@ -480,6 +537,32 @@ class _NativePlateState extends State<NativePlate> {
                     ],
                   ),
                 ),
+                // Share or save, out of the way at the bottom right.
+                if (PlateShare.supported)
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: PopupMenuButton<String>(
+                      key: _shareKey,
+                      padding: const EdgeInsets.all(9),
+                      iconSize: 22,
+                      tooltip: 'Share or save the plate',
+                      icon: Icon(Icons.ios_share, color: red),
+                      color: paper,
+                      onSelected: (v) => v == 'save' ? _save() : _share(),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'share',
+                          child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
+                        ),
+                        PopupMenuItem(
+                          value: 'save',
+                          child: ListTile(
+                              leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (_note != null)
                   Positioned(
                     left: 16,
@@ -508,6 +591,7 @@ class _NativePlateState extends State<NativePlate> {
               ],
             ),
           ),
+          ],
         );
       },
     );
@@ -646,7 +730,7 @@ class _NativePlateState extends State<NativePlate> {
             : '${calls(r.count)} this session';
     return Padding(
       // clear of the buttons at the top
-      padding: const EdgeInsets.fromLTRB(16, 64, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, 64, 16, 16 + _bottomRoom),
       child: Column(
         children: [
           Expanded(
@@ -719,8 +803,8 @@ class _NativePlateState extends State<NativePlate> {
     }
     final all = _allKey.currentContext?.size?.height, plate = _plateKey.currentContext?.size?.height;
     if (all == null || plate == null) return;
-    // and the scroll view's padding above
-    final others = all - plate + _padTop;
+    // and the scroll view's padding above and below
+    final others = all - plate + _padTop + _bottomRoom;
     if (_others == null || (others - _others!).abs() > .5) setState(() => _others = others);
   }
 }
