@@ -1,0 +1,251 @@
+{
+  "about": "What the app relies on inside the Birdsong web page (assets/web/index.html). The app never edits that page: lib/server/local_server.dart adds a little script and CSS when serving it, and lib/server/local_api.dart answers the BirdNET-Go calls it makes. tool/sync_web.py and test/web_contract_test.dart check every new copy of the page against this list. If upstream renames something, change the app's injection (or ask upstream for a proper hook), then update this file.",
+  "hooks": [
+    {
+      "find": "id=\"stationOpts\"",
+      "used_by": "local_server.dart: hidden, closed (no server field in the app)"
+    },
+    {
+      "find": "id=\"cardOpts\"",
+      "used_by": "local_server.dart: hidden"
+    },
+    {
+      "find": "id=\"showOpts\"",
+      "used_by": "local_server.dart: opened"
+    },
+    {
+      "find": "id=\"pl\"",
+      "used_by": "local_server.dart: plate number hidden"
+    },
+    {
+      "find": "id=\"plateno\"",
+      "used_by": "local_server.dart: plate number line (number hidden)"
+    },
+    {
+      "find": "id=\"openSettings\"",
+      "used_by": "local_server.dart: hidden; its options are in the app menu (Settings > Display)"
+    },
+    {
+      "find": "id=\"settings\"",
+      "used_by": "local_server.dart: its h3 renamed Display"
+    },
+    {
+      "find": "id=\"subDate\"",
+      "used_by": "local_server.dart: session date, time and place"
+    },
+    {
+      "find": "id=\"plate\"",
+      "used_by": "local_server.dart: watched to re-mark live birds"
+    },
+    {
+      "find": "function renderHeading",
+      "used_by": "local_server.dart: wrapped so the session line survives redraws"
+    },
+    {
+      "find": "function refresh",
+      "used_by": "plate_view.dart: refresh(false) after new detections"
+    },
+    {
+      "find": "const figures = new Map",
+      "used_by": "local_server.dart: figures.get(sci).button gets .live"
+    },
+    {
+      "find": "b.className = \"bird\"",
+      "used_by": "local_server.dart: .bird.live glow CSS"
+    },
+    {
+      "find": "localStorage.getItem(\"birdplate.\" + k)",
+      "used_by": "local_server.dart: birdplate.server/station cleared, markAt defaulted"
+    },
+    {
+      "find": "params.get(\"period\")",
+      "used_by": "plate_view.dart: ?period=all"
+    },
+    {
+      "find": "[\"hide\", false]",
+      "used_by": "plate_view.dart: ?hide=periods"
+    },
+    {
+      "find": "fetch(\"source.json\"",
+      "used_by": "local_server.dart: /source.json"
+    },
+    {
+      "find": "let fit = ",
+      "used_by": "page_control.dart: reads Fit on one screen"
+    },
+    {
+      "find": "const store = {",
+      "used_by": "page_control.dart: reads skulls/wings/eggs"
+    },
+    {
+      "find": "const opt = {}",
+      "used_by": "page_control.dart: reads the Display options"
+    },
+    {
+      "find": "id=\"fitOpt\"",
+      "used_by": "page_control.dart: sets Fit on one screen"
+    },
+    {
+      "find": "id=\"partsOpt\"",
+      "used_by": "page_control.dart: sets skulls, wings and eggs"
+    },
+    {
+      "find": "id=\"lim\"",
+      "used_by": "page_control.dart: sets Limit species"
+    },
+    {
+      "find": "id=\"markAt\"",
+      "used_by": "page_control.dart: sets how the latest is marked"
+    },
+    {
+      "find": "id=\"sizeBy\"",
+      "used_by": "page_control.dart: sets Size by"
+    },
+    {
+      "find": "data-opt=\"title\"",
+      "used_by": "page_control.dart: shows/hides title"
+    },
+    {
+      "find": "data-opt=\"date\"",
+      "used_by": "page_control.dart: shows/hides date"
+    },
+    {
+      "find": "data-opt=\"totals\"",
+      "used_by": "page_control.dart: shows/hides totals"
+    },
+    {
+      "find": "data-opt=\"periods\"",
+      "used_by": "page_control.dart: shows/hides periods"
+    },
+    {
+      "find": "data-opt=\"index\"",
+      "used_by": "page_control.dart: shows/hides index"
+    },
+    {
+      "find": "data-opt=\"plate\"",
+      "used_by": "page_control.dart: shows/hides plate"
+    },
+    {
+      "find": "data-opt=\"mark\"",
+      "used_by": "page_control.dart: shows/hides mark"
+    },
+    {
+      "find": "src=\"art/artwork/classic/birds/cardinalis-cardinalis.webp\"",
+      "used_by": "local_server.dart: served from assets/app/cardinal.webp"
+    },
+    {
+      "find": "<option value=\"calls\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<option value=\"time\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<option value=\"equal\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<option value=\"centre\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<option value=\"below\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<option value=\"fade\"",
+      "used_by": "page_control.dart: Size by / Marked by choices"
+    },
+    {
+      "find": "<h1>Birdsong</h1>",
+      "used_by": "local_server.dart: session number #2/3 after the title"
+    },
+    {
+      "find": "<dialog id=\"detail\">",
+      "used_by": "local_server.dart: pop-ups open hide the app buttons"
+    },
+    {
+      "find": "--paper:#eee5ce",
+      "used_by": "main.dart: app paper colour matches the page"
+    },
+    {
+      "find": "<h2>Index of species</h2>\n    <ol id=\"index\">",
+      "used_by": "local_server.dart: the app's session arrows sit on this line"
+    },
+    {
+      "find": "content=\"width=device-width, initial-scale=1\"",
+      "used_by": "local_server.dart: viewport-fit=cover added so the page fills the iPhone screen"
+    },
+    {
+      "find": "function measureOthers()",
+      "used_by": "local_server.dart: wrapped to count the safe-area padding"
+    },
+    {
+      "find": "plateEl.style.height = Math.max(140, innerHeight - measureOthers())",
+      "used_by": "local_server.dart: one-screen fit uses measureOthers"
+    },
+    {
+      "find": "addEventListener(\"resize\", () => { clearTimeout(rz); rz = setTimeout(layout, 150); });",
+      "used_by": "plate_view.dart: a resize event re-fits the plate after the insets change"
+    },
+    {
+      "find": "id=\"tip\"",
+      "used_by": "plate-extras.js: the name label is held back during a pinch"
+    },
+    {
+      "find": "#tip.on{",
+      "used_by": "plate-extras.js: hides the label by removing .on"
+    },
+    {
+      "find": "<div id=\"plate\">",
+      "used_by": "plate-extras.js: wrapped in #bsZoomBox for pinch zoom"
+    },
+    {
+      "find": "const SINGLE = { latest: \"Latest bird\", top: \"Top\"",
+      "used_by": "settings.dart plateModes d and e: ?view=latest and ?view=top"
+    },
+    {
+      "find": "?view=plate | index | latest",
+      "used_by": "settings.dart plateModes b and c: ?hide=index, ?view=index, ?show="
+    },
+    {
+      "find": "for (const [key, on] of [[\"hide\", false], [\"show\", true]])",
+      "used_by": "settings.dart plateModes: hide= and show= parts"
+    },
+    {
+      "find": "body.no-index main>section{display:none}",
+      "used_by": "plate-extras.js: fold and session arrows hide with the index"
+    },
+    {
+      "find": "let latestOf = \"\";",
+      "used_by": "plate-extras.js: modes d and e open the shown bird's card"
+    },
+    {
+      "find": "async function openDetail(sp)",
+      "used_by": "plate-extras.js: modes d and e open the shown bird's card"
+    },
+    {
+      "find": "<div id=\"latestFig\"></div>",
+      "used_by": "plate-extras.js: tap the single bird to open its card"
+    },
+    {
+      "find": "const figures = new Map();",
+      "used_by": "plate-extras.js: marks whole (uncut) plates for the multiply blend"
+    },
+    {
+      "find": "if (tot / (W * H) > .5) return null;",
+      "used_by": "plate-extras.js: the plates this gives up on are drawn whole and need the blend"
+    }
+  ],
+  "endpoints": [
+    "/api/v2/analytics/species/daily",
+    "/api/v2/analytics/species/summary",
+    "/api/v2/analytics/time/daily",
+    "/api/v2/analytics/time/distribution/hourly",
+    "/api/v2/audio/",
+    "/api/v2/detections",
+    "/api/v2/species",
+    "/api/v2/spectrogram/"
+  ]
+}

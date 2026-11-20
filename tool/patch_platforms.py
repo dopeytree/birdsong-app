@@ -14,6 +14,7 @@ and LAN stations, the ONNX Runtime ProGuard rule, minSdk 24.
 TEST BUILD: NSAllowsArbitraryLoads and cleartext everywhere are for testing
 against LAN stations; tighten both before a store release.
 """
+import os
 import plistlib
 import re
 import sys
@@ -63,9 +64,23 @@ def patch_text(path, pattern, repl, flags=0):
         say(f"updated {path.relative_to(ROOT)} ({n} change{'s' if n != 1 else ''})")
 
 
+PHOTOS = "Birdsong saves pictures of your plates to Photos when you ask it to."
+
+
+BUNDLE = "uk.co.edstone.birdsongApp"
+
+
 def ios():
+    # BIRDSONG_COPY=<MMDDHHMM> (Run on iPhone as a copy.command): a separate
+    # app with its own ID, name and data; unset puts the usual app back.
+    copy = os.environ.get("BIRDSONG_COPY", "").strip()
+    name = f"Birdsong {copy[4:6]}:{copy[6:8]}" if len(copy) == 8 else "Birdsong"
+    patch_text(ROOT / "ios/Runner.xcodeproj/project.pbxproj",
+               r"PRODUCT_BUNDLE_IDENTIFIER = " + re.escape(BUNDLE) + r"(\.copy\d+)?;",
+               f"PRODUCT_BUNDLE_IDENTIFIER = {BUNDLE}{'.copy' + copy if copy else ''};")
     patch_plist(ROOT / "ios/Runner/Info.plist", {
-        "CFBundleDisplayName": "Birdsong",
+        "NSPhotoLibraryAddUsageDescription": PHOTOS,
+        "CFBundleDisplayName": name,
         "NSMicrophoneUsageDescription": MIC,
         "NSLocalNetworkUsageDescription": LAN,
         "NSLocationWhenInUseUsageDescription": LOC,
@@ -83,14 +98,47 @@ def ios():
                r'\.iOS\("[\d.]+"\)', f'.iOS("{IOS_MIN}")')
 
 
+PAPER = (0xEE, 0xE5, 0xCE)
+
+
+def ios_launch():
+    """The launch screen: the cardinal on paper, as the app's loading screen
+    then shows it, so one hands over to the other."""
+    board = ROOT / "ios/Runner/Base.lproj/LaunchScreen.storyboard"
+    r, g, b = (round(c / 255, 4) for c in PAPER)
+    patch_text(board, r'(<color key="backgroundColor") red="[\d.]+" green="[\d.]+" blue="[\d.]+"',
+               rf'\1 red="{r}" green="{g}" blue="{b}"')
+    # The cardinal a little above the middle, as the loading screen has it
+    # (cardinalLift in lib/ui/splash.dart).
+    patch_text(board, r'(<constraint firstItem="YRO-k0-Ey4" firstAttribute="centerY" '
+               r'secondItem="Ze5-6b-2t3" secondAttribute="centerY")( constant="[-\d.]+")?',
+               r'\1 constant="-56"')
+    images = ROOT / "ios/Runner/Assets.xcassets/LaunchImage.imageset"
+    if images.is_dir():
+        for src in sorted((ROOT / "tool/launch").glob("LaunchImage*.png")):
+            dst = images / src.name
+            if not dst.exists() or dst.read_bytes() != src.read_bytes():
+                dst.write_bytes(src.read_bytes())
+                say(f"updated {dst.relative_to(ROOT)}")
+
+
+def android_launch():
+    for d in ("drawable", "drawable-v21"):
+        patch_text(ROOT / f"android/app/src/main/res/{d}/launch_background.xml",
+                   r'<item android:drawable="[^"]*" />',
+                   '<item><color android:color="#EEE5CE" /></item>')
+
+
 def macos():
     patch_plist(ROOT / "macos/Runner/Info.plist", {
         "NSMicrophoneUsageDescription": MIC,
         "NSLocationUsageDescription": LOC,
         "NSLocationWhenInUseUsageDescription": LOC,
+        "NSPhotoLibraryAddUsageDescription": PHOTOS,
         "NSAppTransportSecurity": ATS,
     })
     ent = {
+        "com.apple.security.personal-information.photos-library": True,
         "com.apple.security.app-sandbox": True,
         "com.apple.security.network.client": True,
         "com.apple.security.network.server": True,
@@ -134,8 +182,10 @@ def android():
 def main():
     print("Patching platform projects")
     ios()
+    ios_launch()
     macos()
     android()
+    android_launch()
     print("Done")
 
 

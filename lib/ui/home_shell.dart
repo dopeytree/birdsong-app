@@ -1,61 +1,40 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
-import 'listen_screen.dart';
-import 'models_screen.dart';
 import 'onboarding_screen.dart';
 import 'plate_view.dart';
 import 'settings_screen.dart';
 
-class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.app});
+/// The plate fills the app; everything else is under its menu button.
+class HomeShell extends StatelessWidget {
+  const HomeShell({super.key, required this.app, this.onPlateLoaded});
 
   final AppState app;
 
-  @override
-  State<HomeShell> createState() => _HomeShellState();
-}
+  /// Called when the plate page has loaded, to lift the loading screen.
+  final VoidCallback? onPlateLoaded;
 
-class _HomeShellState extends State<HomeShell> {
-  int _tab = 0;
+  void _openSettings(BuildContext context) => Navigator.of(context)
+      .push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(app: app)));
 
   @override
   Widget build(BuildContext context) {
-    final app = widget.app;
     return ListenableBuilder(
       listenable: app.settings,
       builder: (context, _) {
         if (!app.settings.onboarded) {
-          return OnboardingScreen(app: app, onDone: (tab) => setState(() => _tab = tab));
+          return OnboardingScreen(app: app, onDone: (_) {});
         }
-        return _shell(app);
+        return Scaffold(
+          // Edge to edge: the page's own paper runs under the status bar, the
+          // Dynamic Island and the home indicator; the page pads its content
+          // clear of them instead (PlateView passes it the insets).
+          body: PlateView(
+              app: app,
+              openSettings: () => _openSettings(context),
+              onLoaded: onPlateLoaded),
+        );
       },
-    );
-  }
-
-  Widget _shell(AppState app) {
-    return Scaffold(
-      body: SafeArea(
-        child: IndexedStack(
-          index: _tab,
-          children: [
-            PlateView(app: app, openTab: (i) => setState(() => _tab = i)),
-            ListenScreen(app: app),
-            ModelsScreen(app: app),
-            SettingsScreen(app: app),
-          ],
-        ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.image_outlined), label: 'Plate'),
-          NavigationDestination(icon: Icon(Icons.hearing), label: 'Listen'),
-          NavigationDestination(icon: Icon(Icons.memory), label: 'Models'),
-          NavigationDestination(icon: Icon(Icons.tune), label: 'Settings'),
-        ],
-      ),
     );
   }
 }

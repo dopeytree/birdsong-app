@@ -56,25 +56,15 @@ flutter test
 0. First launch walks you through it: choose *This device listens* or
    *I have a station*, download a model, switch on Core ML, allow the
    microphone. Settings > *Show the welcome screens again* repeats it.
-1. **Models** tab: download one or more models. Start with
-   *BirdNET+ V3.0 Global 10K, FP16* (67 MB), the build BirdNET Live ships.
-2. Tick **Listen** on each model to run. Every window goes through every
-   ticked model, so you can compare speed and results. Choose which model the
-   plate draws (**On the plate**), or all of them.
-3. **Listen** tab: Start listening. Each model card shows the time per window
-   and its top five species. Detections above the threshold are saved, with a
-   recording and a spectrogram.
-4. **Plate** tab: the familiar plate, cards, recordings and spectrograms.
-   In *Listen here* the plate shows one listening session at a time:
-   the date line under the title gives its date, time and place, and the
-   small arrows at either side step to earlier and later sessions. The
-   small microphone at the top right starts and stops a session. While
-   listening the plate fetches each new detection as it arrives, and a
-   creature being heard right now glows, its dot breathing out a ring. The
-   plate's own settings link is called *Display* in the app.
-5. **Settings**: switch between *Station* and *Listen here*, set a
-   BirdNET-Go address or a BirdWeather station, the threshold, how often to
-   analyse, the location filter, and Core ML (experimental) on Apple devices.
+1. The app is the plate. Top right: the menu button opens **Settings**,
+   and in *Listen here & now* the microphone starts and stops a session.
+2. **Settings**, in sections: where birds come from; *Listening* (live
+   scores per model while listening, threshold, how often, Core ML);
+   *Models* (download, tick to listen, which one the plate draws);
+   *Location filter*; *Data*.
+3. On the plate the date line gives the session's time and place; the
+   small arrows at either side step between sessions. A creature being
+   heard right now glows, its dot breathing out a ring.
 
 On iPhone the app keeps listening with the screen locked (the orange
 microphone dot shows).
@@ -101,6 +91,60 @@ gallery uses (`tphakala/BirdNET-Plus-V3.0`, `tphakala/BirdNET-v3.0-Models`,
 `tphakala/Perch-v2-Models`, `tphakala/BirdNET-v2.4`). Confirm each licence
 with its authors before a release; "Powered by BirdNET" credit is required
 for BirdNET models.
+
+## Where detections are kept
+
+One folder per listening session, in the app's private storage
+(`<app data>/sessions/`), in BirdNET Live's field names:
+
+```
+sessions/2026-11-18T221904Z_a91e4c/
+  session.json        uuid, start and end (UTC), place, settings, models,
+                      weather, stop reason, summary; schemaVersion 1
+  detections.jsonl    one detection per line: timestamp, scientificName,
+                      commonName, confidence, model, top-5 scores, clip
+  audio/<id>.wav      the clip around each detection
+  spectrograms/<id>.bmp
+```
+
+Files are written whole (to `.pending`, then renamed). The older
+`detections/detections.jsonl` and `sessions.jsonl` are moved into folders on
+first launch and kept as `*.migrated`. Weather comes from MET Norway's
+Locationforecast (CC BY 4.0), with the position rounded to about 10 km; it
+can be turned off under Settings > Location filter.
+
+## Testing on the iPhone
+
+`Run on iPhone.command` installs over the Birdsong already on the phone and
+keeps its sessions, recordings and models. `Run on iPhone as a copy.command`
+installs a separate app, "Birdsong HH:MM", with its own empty data, beside
+the others. A free Apple account allows three apps from this Mac on the
+phone at once and ten new app IDs a week, so delete old copies when done.
+
+## Keeping the web page in step
+
+The plate is the Birdsong web page itself (dopeytree/birdsong, `html/`),
+copied unchanged into `assets/web/`. Everything the app does differently is
+added while serving it (`lib/server/local_server.dart`), and listen mode
+answers the page's BirdNET-Go calls itself (`lib/server/local_api.dart`).
+So the page's styles, images, fonts and features come in with a copy, and
+the app's own changes are never redone.
+
+- **Web to app:** double-click `Update web page.command` (or
+  `python3 tool/sync_web.py [--ref v0.43 | --from ~/birdsong]`). It copies
+  `html/`, records the commit in `assets/web/UPSTREAM.json`, lists what
+  changed upstream, and checks `tool/web_contract.json`: every element,
+  function and API call the app relies on. `flutter test` checks it too.
+  If something broke, fix the hook in the app (or add a proper hook
+  upstream), update the contract, then build.
+- **App to web:** anything that would help the web page too (the live glow,
+  session line, an app mode that hides the server fields) belongs upstream
+  as a small named hook, e.g. `window.birdsongLive()`. Once the page has
+  it, the injected copy in `local_server.dart` comes out and the contract
+  points at the hook. The injection gets smaller over time.
+- **Data:** anything new the app records (sessions, places) is served in
+  BirdNET-Go's API shape, so the page and a real station stay
+  interchangeable.
 
 ## How it fits together
 

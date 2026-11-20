@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
-import 'ui/home_shell.dart';
+import 'ui/splash.dart';
 
-const paper = Color(0xFFEFE9D8);
+// The page's own --paper, so the app's screens match the plate.
+const paper = Color(0xFFEEE5CE);
 const ink = Color(0xFF2A241C);
-const madder = Color(0xFF9C3B2E);
+// The rest of the page's palette (its :root), so the app's own controls
+// wear the plate's colours rather than Material's pinks.
+const madder = Color(0xFF8C3B2A);
+const paperDeep = Color(0xFFE3D7B8);
+const sepia = Color(0xFF6B5338);
+const rule = Color(0xFFBCAB86);
 
 // The plate's typefaces: IM Fell English for text, its small caps for
 // headings, as the page uses them.
@@ -14,12 +20,34 @@ const caps = 'IM Fell English SC';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final app = await AppState.create();
-  runApp(BirdsongApp(app: app));
+  // The loading screen shows at once; the app starts up behind it.
+  runApp(BirdsongApp(boot: AppState.create()));
 }
 
 ThemeData birdsongTheme() {
-  final scheme = ColorScheme.fromSeed(seedColor: madder, surface: paper);
+  final scheme = ColorScheme.fromSeed(seedColor: madder, surface: paper).copyWith(
+    primary: madder,
+    onPrimary: paper,
+    primaryContainer: paperDeep,
+    onPrimaryContainer: ink,
+    secondary: sepia,
+    onSecondary: paper,
+    secondaryContainer: madder,
+    onSecondaryContainer: paper,
+    tertiary: sepia,
+    onTertiary: paper,
+    surface: paper,
+    onSurface: ink,
+    onSurfaceVariant: sepia,
+    outline: rule,
+    outlineVariant: rule,
+    surfaceTint: Colors.transparent,
+    surfaceContainerLowest: paper,
+    surfaceContainerLow: paper,
+    surfaceContainer: paperDeep,
+    surfaceContainerHigh: paperDeep,
+    surfaceContainerHighest: paperDeep,
+  );
   final base = ThemeData(colorScheme: scheme, useMaterial3: true).textTheme
       .apply(fontFamily: serif);
   // IM Fell has one weight; let it stand rather than be faked bold.
@@ -49,13 +77,15 @@ ThemeData birdsongTheme() {
     fontFamily: serif,
     textTheme: text,
     scaffoldBackgroundColor: paper,
+    appBarTheme: const AppBarTheme(
+        backgroundColor: paper, surfaceTintColor: Colors.transparent, scrolledUnderElevation: 0),
   );
 }
 
 class BirdsongApp extends StatelessWidget {
-  const BirdsongApp({super.key, required this.app});
+  const BirdsongApp({super.key, required this.boot});
 
-  final AppState app;
+  final Future<AppState> boot;
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +93,7 @@ class BirdsongApp extends StatelessWidget {
       title: 'Birdsong',
       debugShowCheckedModeBanner: false,
       theme: birdsongTheme(),
-      home: HomeShell(app: app),
+      home: Boot(boot: boot),
     );
   }
 }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +7,7 @@ import 'package:record/record.dart';
 
 import '../settings.dart';
 import '../store/detection_store.dart';
+import 'weather.dart';
 import '../store/media.dart';
 import 'classifier.dart';
 import 'labels.dart';
@@ -31,6 +31,10 @@ class ModelReport {
 
   int get averageMillis => runs == 0 ? 0 : totalMillis ~/ runs;
 }
+
+/// A session's plate holds at most this many species; the next new one
+/// starts a fresh session.
+const maxSessionSpecies = 42;
 
 /// Listens to the microphone and runs every active model over it.
 class ListenEngine extends ChangeNotifier {
@@ -127,7 +131,10 @@ class ListenEngine extends ChangeNotifier {
           Duration(milliseconds: (settings.hopSeconds * 1000).round()), (_) => _tick());
       running = true;
       _lastHeard.clear();
-      final ses = session = await store.startSession();
+      final ses = session = await store.startSession(
+        settings: settings.listeningSnapshot,
+        models: [for (final m in _loaded) _modelInfo(m)],
+      );
       unawaited(_locate(ses));
     } catch (e) {
       error = e.toString().replaceFirst('Bad state: ', '');
@@ -154,7 +161,7 @@ class ListenEngine extends ChangeNotifier {
     final ses = session;
     session = null;
     _lastHeard.clear();
-    if (ses != null) await store.endSession(ses);
+    if (ses != null) await store.endSession(ses, reason: 'manual');
     await _unload();
     notifyListeners();
   }
@@ -255,9 +262,12 @@ class ListenEngine extends ChangeNotifier {
           report.error = null;
           final top = p.top(5, keep: (i) => _keep(m, i));
           report.top = [for (final s in top) (m.labels[s.index].common, s.value)];
+          final ranked = [
+            for (final s in top) (sci: m.labels[s.index].sci, confidence: s.value.toDouble())
+          ];
           for (final s in top) {
             if (s.value < settings.threshold) break;
-            await _detected(m, m.labels[s.index], s.value, now);
+            await _detected(m, m.labels[s.index], s.value, now, ranked);
           }
         } catch (e) {
           report.error = e.toString();
@@ -295,23 +305,62 @@ class ListenEngine extends ChangeNotifier {
     }
   }
 
-  Future<void> _detected(LoadedModel m, SpeciesLabel l, double score, DateTime now) async {
-    final key = '${m.spec.id}|${l.sci}';
+  Future<void> _detected(LoadedModel m, SpeciesLabel l, double score, DateTime now,
+      List<RankedScore> ranked) async {
     final plate = settings.plateModel;
-    if (plate == 'all' || plate == m.spec.id) _lastHeard[l.sci] = now;
+    final onPlate = plate == 'all' || plate == m.spec.id;
+    if (onPlate && _sessionFull(l.sci)) await _nextSession(now);
+    final key = '${m.spec.id}|${l.sci}';
+    if (onPlate) _lastHeard[l.sci] = now;
     final open = _open[key];
     if (open != null &&
         now.difference(open.at).inMilliseconds < settings.repeatSeconds * 1000) {
       if (score > open.confidence) {
         open.confidence = score;
+        open.scores = ranked;
         await store.save(open);
       }
       return;
     }
     final d = await store.add(
-        model: m.spec.id, sci: l.sci, common: l.common, confidence: score, at: now);
+        model: m.spec.id,
+        sci: l.sci,
+        common: l.common,
+        confidence: score,
+        at: now,
+        windowSeconds: m.spec.windowSeconds.toDouble(),
+        scores: ranked);
     _open[key] = d;
     unawaited(_saveClip(d, m));
+  }
+
+  /// A new species for this session, which already holds [maxSessionSpecies]
+  /// on its plate?
+  bool _sessionFull(String sci) {
+    final ses = session;
+    if (ses == null) return false;
+    final heard = {for (final d in store.forPlate(settings.plateModel, session: ses)) d.sci};
+    return !heard.contains(sci) && heard.length >= maxSessionSpecies;
+  }
+
+  /// Close the full session and carry on listening in a new one, at the same
+  /// place, starting with the bird that didn't fit.
+  Future<void> _nextSession(DateTime now) async {
+    final old = session!;
+    await store.endSession(old,
+        at: now.subtract(const Duration(milliseconds: 1)), reason: 'speciesLimit');
+    session = await store.startSession(
+        at: now,
+        lat: old.lat,
+        lon: old.lon,
+        settings: old.settings,
+        models: old.models);
+    session!
+      ..weather = old.weather
+      ..locationSource = old.locationSource;
+    _open.clear();
+    _lastHeard.clear();
+    notifyListeners();
   }
 
   /// The window that was heard, a second either side, as WAV and spectrogram.
@@ -336,27 +385,29 @@ class ListenEngine extends ChangeNotifier {
   /// permission the first time; listening goes on without it.
   Future<void> _locate(Session ses) async {
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        locationNote = 'Location Services are off, so this session has no place.';
+      final pos = await _gps();
+      if (pos != null) {
+        ses.lat = pos.$1;
+        ses.lon = pos.$2;
+        ses.locationSource = 'gps';
+        locationNote = null;
+      } else if (settings.latitude != null && settings.longitude != null) {
+        // No GPS: the place typed in Settings stands in, and says so.
+        ses.lat = settings.latitude;
+        ses.lon = settings.longitude;
+        ses.locationSource = 'settings';
+      } else {
         return;
       }
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-      if (perm != LocationPermission.whileInUse && perm != LocationPermission.always) {
-        locationNote = 'Location not allowed, so this session has no place.';
-        return;
-      }
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 20),
-        ),
-      );
-      ses.lat = pos.latitude;
-      ses.lon = pos.longitude;
-      locationNote = null;
       _geoScores = null; // the location filter now knows where we are
       await store.saveSession(ses);
+      if (settings.recordWeather) {
+        final w = await fetchWeather(ses.lat!, ses.lon!, at: ses.start);
+        if (w != null) {
+          ses.weather = w;
+          await store.saveSession(ses);
+        }
+      }
     } catch (e) {
       locationNote = 'Could not get a location: $e';
     } finally {
@@ -364,15 +415,43 @@ class ListenEngine extends ChangeNotifier {
     }
   }
 
-  /// Disk used by recordings.
-  Future<int> clipBytes() async {
-    var n = 0;
-    if (!await store.clips.exists()) return 0;
-    await for (final f in store.clips.list()) {
-      if (f is File) n += await f.length();
+  /// The phone's position, or null (with [locationNote] saying why).
+  Future<(double, double)?> _gps() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        locationNote = 'Location Services are off, so this session has no GPS place.';
+        return null;
+      }
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm != LocationPermission.whileInUse && perm != LocationPermission.always) {
+        locationNote = 'Location not allowed, so this session has no GPS place.';
+        return null;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      return (pos.latitude, pos.longitude);
+    } catch (e) {
+      locationNote = 'Could not get a GPS place: $e';
+      return null;
     }
-    return n;
   }
+
+  /// Disk used by recordings.
+  Future<int> clipBytes() => store.clipBytes();
+
+  /// What a session records about each model listening.
+  static Map<String, dynamic> _modelInfo(LoadedModel m) => {
+        'id': m.spec.id,
+        'name': m.spec.name,
+        'licence': m.spec.licence,
+        'sampleRate': m.spec.sampleRate,
+        'windowSeconds': m.spec.windowSeconds,
+      };
 }
 
 Uint8List _spectrogram(Float32List clip) =>

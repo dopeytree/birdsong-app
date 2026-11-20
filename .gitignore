@@ -31,3 +31,8 @@ models/
 .DS_Store
 build-log.txt
 ios-log.txt
+
+# Upstream web page checkout used by tool/sync_web.py
+.upstream/
+web-log.txt
+github-log.txt

@@ -59,6 +59,15 @@ class LocalServer {
       return _asset(res, 'assets/web/fonts/$name',
           name.endsWith('.ttf') ? 'font/ttf' : 'text/plain; charset=utf-8');
     }
+    // The Support section's cardinal, bundled with the app (the page looks
+    // for it in an art folder beside itself, which only the Docker image has).
+    if (path == '/art/artwork/classic/birds/cardinalis-cardinalis.webp') {
+      return _asset(res, 'assets/app/cardinal.webp', 'image/webp');
+    }
+    // The app's own additions to the page: folding the index, pinch zoom.
+    if (path == '/app/plate-extras.js') {
+      return _asset(res, 'assets/app/plate-extras.js', 'text/javascript; charset=utf-8');
+    }
     if (path == '/source.json') return _json(res, _source());
     if (path == '/healthz') {
       res.write('ok\n');
@@ -158,9 +167,15 @@ class LocalServer {
       }
       final back = await out.close();
       res.statusCode = back.statusCode;
+      // BirdNET-Go gzips its answers and this client unzips them, so the
+      // station's Content-Length (the zipped size) no longer fits the body:
+      // passed on, it made Dart drop every small answer half-sent (the
+      // card's recordings, facts and trend). Pass it on only for a body
+      // that arrives as it was sent, such as a recording.
+      final unzipped = back.compressionState == HttpClientResponseCompressionState.decompressed;
       for (final h in [
         HttpHeaders.contentTypeHeader,
-        HttpHeaders.contentLengthHeader,
+        if (!unzipped) HttpHeaders.contentLengthHeader,
         HttpHeaders.contentRangeHeader,
         HttpHeaders.acceptRangesHeader,
       ]) {
@@ -216,7 +231,46 @@ class LocalServer {
       'localStorage.setItem("birdplate.markAt",JSON.stringify("below"))}catch(e){}</script>'
       '<style>#stationOpts,#cardOpts{display:none}'
       // No plate number in the app; room on the right for the microphone.
-      '#pl{display:none}#plateno{padding-right:3.4rem}'
+      // The page's Settings/Display button too: its options are in the
+      // app's menu (Settings > Display).
+      // (Both live in #plateno, so the whole corner goes.)
+      '#plateno{display:none!important}'
+      // The session number after the title: Birdsong #2/3.
+      '#bsCount{margin-left:.35em;color:var(--sepia)}#bsCount:empty{display:none}'
+      '#bsPlace:empty{display:none}'
+      'html{background:var(--paper)}'
+      // plate-extras.js: the folding index and the zoomable collage.
+      '.bsIx{cursor:pointer;-webkit-user-select:none;user-select:none}'
+      '.bsIxArrow{text-align:center;line-height:1;margin:0 0 .1rem;cursor:pointer;'
+      'font-family:var(--serif);color:var(--sepia);opacity:.75;-webkit-user-select:none;user-select:none}'
+      'body.no-index .bsIxArrow{display:none}body.bs-noindex #index{display:none}'
+      '.bsIxUp{display:none}body.bs-noindex .bsIxUp{display:block}body.bs-noindex .bsIxDown{display:none}'
+      '.bsIxDown{margin:.3rem 0 0}'
+      // the session arrows sit outside the heading's two rules: ‹ —— Index —— ›
+      // a little more room between "Index of species" and the names under it
+      '.bsIx{margin-bottom:1.6rem}body.fit .bsIx{margin-bottom:.85rem}'
+      '.bsStep{display:none;cursor:pointer;color:var(--sepia);font-size:1.25em;line-height:1;padding:0 .2rem}'
+      'body.bs-steps .bsIx{display:flex;align-items:center;justify-content:center}'
+      'body.bs-steps .bsStep{display:block}'
+      '.bsStep:first-child{order:-1}.bsStep:last-child{order:1}'
+      '.bsStep.off{visibility:hidden}'
+      // Mode c, the index alone: in the middle of the window (plate-extras.js),
+      // never folded (there would be nothing left), and no fold arrows.
+      'body.no-plate:not(.latest){display:flex;flex-direction:column;box-sizing:border-box}'
+      'body.no-plate:not(.latest)>main{flex:1 0 auto;display:flex;flex-direction:column;justify-content:center}'
+      // the page centres the section with auto margins, which in a flex column
+      // would shrink it to one column of names; keep it as wide as before
+      'body.no-plate:not(.latest)>main>section{width:100%;box-sizing:border-box;padding-bottom:.8rem}'
+      'body.no-plate .bsIxArrow{display:none!important}body.no-plate.bs-noindex #index{display:block}'
+      // a whole plate's paper melts into the page, as in the detail card;
+      // while pinched, the collage is its own layer, so give it paper to melt into
+      '.bird.whole{mix-blend-mode:multiply}body.bs-zoomed #plate{background:var(--paper)}'
+      // the card scrolls inside the dialog, and a scrolled layer doesn't carry
+      // the dialog's paper, so its plate's multiply blend had nothing to melt into
+      '#card figure{background:var(--paper)}'
+      '#bsZoomBox{overflow:hidden;touch-action:pan-x pan-y}body.bs-zoomed #bsZoomBox{touch-action:none}'
+      'body{padding:max(env(safe-area-inset-top),var(--bs-top,0px)) max(env(safe-area-inset-right),var(--bs-right,0px))'
+      ' max(env(safe-area-inset-bottom),var(--bs-bottom,0px)) max(env(safe-area-inset-left),var(--bs-left,0px))}'
 
       // A creature being heard right now glows, and the dot on it (over its
       // centre, or beneath it) breathes out a ring, in the plate's madder.
@@ -245,11 +299,36 @@ class LocalServer {
       'f.button.classList.toggle("live",live.has(sci));}}catch(e){}}'
       'new MutationObserver(function(){if(live.size)mark();})'
       '.observe(document.getElementById("plate")||document.body,{childList:true});'
-      'var ses=null;window.birdsongSession=function(x){ses=x;showSession();};'
+      'var ses=null,num="",where="";window.birdsongSession=function(x,n,w){ses=x;num=n||"";where=w||"";showSession();};'
       'function showSession(){var d=document.getElementById("subDate");'
-      'if(d&&ses)d.textContent=ses+" ";}'
+      'if(d&&ses){d.textContent=ses;var w=document.getElementById("bsPlace");'
+      'if(!w){w=document.createElement("span");w.id="bsPlace";d.after(w);}w.textContent=where;}'
+      'var h=document.querySelector("header h1");if(h){var c=document.getElementById("bsCount");'
+      'if(!c){c=document.createElement("span");c.id="bsCount";h.appendChild(c);}c.textContent=num;}}'
+      // Tell the app when one of the page's pop-ups opens or closes, so its
+      // buttons and arrows can step aside.
+      'function popups(){var open=!!document.querySelector("dialog[open]");'
+      'try{window.BirdsongHost&&BirdsongHost.postMessage(open?"popup-open":"popup-closed");}catch(e){}}'
+      'document.querySelectorAll("dialog").forEach(function(d){'
+      'new MutationObserver(popups).observe(d,{attributes:true,attributeFilter:["open"]});});'
+      // Where the "Index of species" line is on screen, so the app's arrows
+      // sit on it, clear of the birds and the names; the collage's middle
+      // when the index is hidden.
+      'var lastMid=null;function plateMid(){var ix=document.getElementById("index"),'
+      'h=ix&&ix.previousElementSibling&&ix.previousElementSibling.tagName==="H2"?ix.previousElementSibling:null,'
+      'p=h&&h.getBoundingClientRect().height?h:document.getElementById("plate");if(!p)return;'
+      'var r=p.getBoundingClientRect();if(!r.height)return;var m=Math.round(r.top+r.height/2);'
+      'if(m===lastMid)return;lastMid=m;'
+      'try{window.BirdsongHost&&BirdsongHost.postMessage("plate:"+m);}catch(e){}}'
+      'addEventListener("resize",plateMid);addEventListener("scroll",plateMid,{passive:true});'
+      'new ResizeObserver(plateMid).observe(document.getElementById("plate")||document.body);'
+      'setInterval(plateMid,1000);'
       'try{var rh=renderHeading;renderHeading=function(){rh();showSession();};}catch(e){}'
-      '})();</script>';
+      // "Fit everything on one screen" measures the header and index but not
+      // the body's safe-area padding; count it, so nothing scrolls.
+      'try{var mo=measureOthers;measureOthers=function(){var c=getComputedStyle(document.body);'
+      'return mo()+Math.ceil(parseFloat(c.paddingTop)+parseFloat(c.paddingBottom));};}catch(e){}'
+      '})();</script><script src="/app/plate-extras.js"></script>';
 
   String? _pageHtml;
 
@@ -258,6 +337,11 @@ class LocalServer {
     if (html == null) {
       html = await rootBundle.loadString('assets/web/index.html');
       html = html.replaceFirst('</head>', '$_headExtra</head>');
+      // Lay out under the status bar and the Dynamic Island too; the body
+      // is padded clear of them (--bs-* from the app, env() from WebKit).
+      html = html.replaceFirst(
+          'content="width=device-width, initial-scale=1"',
+          'content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"');
       final at = html.lastIndexOf('</body>');
       if (at >= 0) html = html.replaceRange(at, at, _bodyExtra);
       _pageHtml = html;

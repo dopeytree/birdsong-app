@@ -16,11 +16,70 @@ class Settings extends ChangeNotifier {
 
   AppMode mode = AppMode.listen;
 
-  /// Station mode: BirdNET-Go address, e.g. http://192.168.1.50:8080
-  String birdnetUrl = '';
+  /// Remote stations the user has saved; [stationId] is the one in use.
+  List<Station> stations = [];
+  String? stationId;
 
-  /// Station mode: a public BirdWeather station number instead.
-  String birdweatherStation = '';
+  /// The station a remote plate shows: the chosen one, else the first.
+  Station? get station {
+    for (final x in stations) {
+      if (x.id == stationId) return x;
+    }
+    return stations.isEmpty ? null : stations.first;
+  }
+
+  /// The station in use, as the rest of the app asks for it.
+  String get birdnetUrl => station?.birdnetUrl ?? '';
+  String get birdweatherStation => station?.birdweather ?? '';
+
+  /// The plate's station button: from Listen here, the station last shown;
+  /// on a station, the next saved one, round again.
+  void nextStation() => update((x) {
+        if (x.stations.isEmpty) return;
+        if (x.mode == AppMode.listen) {
+          x.mode = AppMode.station;
+          x.stationId = x.station!.id;
+          return;
+        }
+        final i = x.stations.indexWhere((st) => st.id == x.station?.id);
+        x.stationId = x.stations[(i + 1) % x.stations.length].id;
+      });
+
+  /// Where the station button goes next, for its tooltip.
+  String get nextStationName {
+    if (stations.isEmpty) return 'Add a station';
+    if (mode == AppMode.listen) return station!.name;
+    final i = stations.indexWhere((st) => st.id == station?.id);
+    return stations[(i + 1) % stations.length].name;
+  }
+
+  /// Saves a new station, or [replace]s one, and switches to it.
+  void putStation(Station st, {String? replace}) => update((x) {
+        final i = x.stations.indexWhere((o) => o.id == (replace ?? st.id));
+        if (i >= 0) {
+          x.stations[i] = st;
+        } else {
+          x.stations.add(st);
+        }
+        x.stationId = st.id;
+        x.mode = AppMode.station;
+      });
+
+  /// Forgets a station; a plate that was showing it moves to the next one,
+  /// or to Listen here when none is left.
+  void removeStation(String id) => update((x) {
+        final i = x.stations.indexWhere((o) => o.id == id);
+        if (i < 0) return;
+        final wasShown = x.station?.id == id;
+        x.stations.removeAt(i);
+        if (!wasShown) return;
+        if (x.stations.isEmpty) {
+          x.stationId = null;
+          x.mode = AppMode.listen;
+        } else {
+          x.stationId = x.stations[i.clamp(0, x.stations.length - 1)].id;
+        }
+      });
 
   /// Listen here: minimum score for a detection.
   double threshold = 0.65;
@@ -41,6 +100,14 @@ class Settings extends ChangeNotifier {
 
   /// Run models on Apple's Core ML (Neural Engine or GPU) instead of the CPU.
   bool useCoreMl = false;
+
+  /// Note the weather when a session starts (MET Norway, rough position).
+  bool recordWeather = true;
+
+  /// What the plate shows: its place, 1 to 7, in [plateModes], lettered a to
+  /// g in the order the view button steps through them. Saved by the mode's [PlateMode.key], so a new order of
+  /// the modes keeps the one chosen.
+  int plateMode = 1;
 
   /// Models that listen. Each window goes through every one of them.
   Set<String> activeModels = {'bnl-v3-10k'};
@@ -63,8 +130,19 @@ class Settings extends ChangeNotifier {
   void _fromJson(Map<String, dynamic> j) {
     onboarded = (j['onboarded'] as bool?) ?? onboarded;
     mode = j['mode'] == 'station' ? AppMode.station : AppMode.listen;
-    birdnetUrl = (j['birdnetUrl'] as String?) ?? birdnetUrl;
-    birdweatherStation = (j['birdweatherStation'] as String?) ?? birdweatherStation;
+    final list = j['stations'];
+    if (list is List) {
+      stations = list.whereType<Map<String, dynamic>>().map(Station.fromJson).toList();
+      stationId = j['station'] as String?;
+    } else {
+      // Settings from before saved stations: one BirdNET-Go address and/or
+      // one BirdWeather number, the number winning when both were set.
+      final url = ((j['birdnetUrl'] as String?) ?? '').trim();
+      final bw = ((j['birdweatherStation'] as String?) ?? '').trim();
+      if (url.isNotEmpty) stations.add(Station(id: 'birdnet', name: 'BirdNET-Go', birdnetUrl: url));
+      if (bw.isNotEmpty) stations.add(Station(id: 'birdweather', name: 'BirdWeather $bw', birdweather: bw));
+      stationId = stations.isEmpty ? null : stations.last.id;
+    }
     threshold = (j['threshold'] as num?)?.toDouble() ?? threshold;
     hopSeconds = (j['hopSeconds'] as num?)?.toDouble() ?? hopSeconds;
     repeatSeconds = (j['repeatSeconds'] as num?)?.toDouble() ?? repeatSeconds;
@@ -74,6 +152,14 @@ class Settings extends ChangeNotifier {
     longitude = (j['longitude'] as num?)?.toDouble();
     geoThreshold = (j['geoThreshold'] as num?)?.toDouble() ?? geoThreshold;
     useCoreMl = (j['useCoreMl'] as bool?) ?? useCoreMl;
+    recordWeather = (j['recordWeather'] as bool?) ?? recordWeather;
+    // plateView, by key; or plateMode, its number in the first order (1 to 7).
+    const firstOrder = ['calls', 'time', 'equal', 'noindex', 'index', 'latest', 'top'];
+    final oldN = (j['plateMode'] as num?)?.toInt();
+    final key = j['plateView'] as String? ??
+        (oldN != null && oldN >= 1 && oldN <= firstOrder.length ? firstOrder[oldN - 1] : null);
+    final at = plateModes.indexWhere((m) => m.key == key);
+    if (at >= 0) plateMode = at + 1;
     final active = j['activeModels'];
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
@@ -85,10 +171,26 @@ class Settings extends ChangeNotifier {
     }
   }
 
+  /// The listening settings saved with each session, so its results can be
+  /// read later knowing how they were made.
+  Map<String, dynamic> get listeningSnapshot => {
+        'confidenceThreshold': threshold,
+        'hopSeconds': hopSeconds,
+        'repeatSeconds': repeatSeconds,
+        'animalsOnly': animalsOnly,
+        'locationFilter': useGeomodel,
+        if (useGeomodel) 'locationFilterThreshold': geoThreshold,
+        'coreMl': useCoreMl,
+        'plateModel': plateModel,
+      };
+
   Map<String, dynamic> toJson() => {
         'defaults': 2,
         'onboarded': onboarded,
         'mode': mode.name,
+        'stations': [for (final st in stations) st.toJson()],
+        'station': stationId,
+        // the station in use, as builds before saved stations read it
         'birdnetUrl': birdnetUrl,
         'birdweatherStation': birdweatherStation,
         'threshold': threshold,
@@ -100,6 +202,8 @@ class Settings extends ChangeNotifier {
         'longitude': longitude,
         'geoThreshold': geoThreshold,
         'useCoreMl': useCoreMl,
+        'recordWeather': recordWeather,
+        'plateView': plateModes[plateMode - 1].key,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
       };
@@ -107,12 +211,17 @@ class Settings extends ChangeNotifier {
   void update(void Function(Settings s) change) {
     change(this);
     notifyListeners();
-    _file.writeAsString(const JsonEncoder.withIndent('  ').convert(toJson())).catchError(
-        (Object e) {
+    // one save after another, so a quick run of changes lands in order
+    final json = const JsonEncoder.withIndent('  ').convert(toJson());
+    _saving = _saving.then((_) => _file.writeAsString(json)).then((_) {}, onError: (Object e) {
       debugPrint('settings: could not save ($e)');
-      return _file;
     });
   }
+
+  Future<void> _saving = Future.value();
+
+  /// Done when every change so far is on disk.
+  Future<void> get saved => _saving;
 
   /// BirdNET-Go address without a trailing slash, with http:// if missing.
   String get birdnetBase {
@@ -126,4 +235,91 @@ class Settings extends ChangeNotifier {
   }
 
   String get stationDigits => birdweatherStation.replaceAll(RegExp(r'\D'), '');
+}
+
+/// The plate's modes, lettered a to g ([plateLetter]) in the order the view
+/// button (Icons.dashboard_outlined) steps through them. Those
+/// with a [PlateMode.sizeBy] set the collage's Size by; the others use the
+/// page's own Home Assistant card views (?view=, ?hide=).
+class PlateMode {
+  const PlateMode(this.key, this.name, {this.sizeBy, this.query = '', this.currentOnly = false});
+
+  /// Saved in settings.json as plateView; never changes.
+  final String key;
+
+  final String name;
+
+  /// For a, f and g: the page's Size by (calls, time, equal).
+  final String? sizeBy;
+
+  /// Extra address parameters for the page.
+  final String query;
+
+  /// A panel of the session being viewed, with no session arrows (d and e):
+  /// pick the session in another mode, then come here.
+  final bool currentOnly;
+}
+
+const plateModes = <PlateMode>[
+  PlateMode('calls', 'Noisiest species', sizeBy: 'calls'),                       // a
+  PlateMode('noindex', 'The collage, no index', query: 'hide=index'),             // b
+  PlateMode('index', 'The index alone', query: 'view=index&show=title,date'),     // c
+  PlateMode('latest', 'The latest bird, and when',                                // d
+      query: 'view=latest&show=time,title,date', currentOnly: true),
+  PlateMode('top', 'Most heard this session',                                     // e
+      query: 'view=top&show=title,date', currentOnly: true),
+  PlateMode('time', 'Recent ramblings', sizeBy: 'time'),                          // f
+  PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                        // g
+];
+
+/// Mode [n] (1 to 7) as its letter, a to g: how the modes are named in the code and tests.
+String plateLetter(int n) => String.fromCharCode(0x60 + n);
+
+/// A remote station: a BirdNET-Go address, or a public BirdWeather station.
+class Station {
+  Station({required this.id, required this.name, this.birdnetUrl = '', this.birdweather = ''});
+
+  /// Reads what someone typed or pasted: a BirdWeather station number or
+  /// page (app.birdweather.com/stations/1234), else a BirdNET-Go address.
+  factory Station.fromInput(String name, String input, {String? id}) {
+    final t = input.trim();
+    final bw = RegExp(r'birdweather\.com/stations/(\d+)').firstMatch(t)?.group(1) ??
+        (RegExp(r'^\d+$').hasMatch(t) ? t : null);
+    final kind = bw != null ? 'BirdWeather $bw' : 'BirdNET-Go';
+    return Station(
+      id: id ?? 's${DateTime.now().microsecondsSinceEpoch}-${_made++}',
+      name: name.trim().isNotEmpty ? name.trim() : kind,
+      birdnetUrl: bw == null ? t : '',
+      birdweather: bw ?? '',
+    );
+  }
+
+  static int _made = 0;
+
+  factory Station.fromJson(Map<String, dynamic> j) => Station(
+        id: (j['id'] as String?) ?? 's${j.hashCode}',
+        name: (j['name'] as String?) ?? 'Station',
+        birdnetUrl: (j['birdnetUrl'] as String?) ?? '',
+        birdweather: (j['birdweather'] as String?) ?? '',
+      );
+
+  final String id;
+  final String name;
+  final String birdnetUrl;
+  final String birdweather;
+
+  bool get isBirdWeather => birdweather.replaceAll(RegExp(r'\D'), '').isNotEmpty;
+
+  /// What sort of station, for a subtitle: "BirdNET-Go" or "BirdWeather 1234".
+  String get kind => isBirdWeather ? 'BirdWeather ${birdweather.replaceAll(RegExp(r'\D'), '')}' : 'BirdNET-Go';
+
+  /// What it was set up from, as the user would type it again.
+  String get input => isBirdWeather ? birdweather : birdnetUrl;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (birdnetUrl.isNotEmpty) 'birdnetUrl': birdnetUrl,
+        if (birdweather.isNotEmpty) 'birdweather': birdweather,
+      };
 }
