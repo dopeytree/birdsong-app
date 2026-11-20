@@ -114,8 +114,10 @@ class _NativePlateState extends State<NativePlate> {
 
   // Room at the bottom for the share button, as the web plate makes for it
   // (--bs-ui-bottom), so the index rises clear of it.
-  // (the map button is always there, so the room always is)
-  static const double _bottomRoom = 40 + 8 + 6;
+  // Room at the bottom for the buttons there, so nothing sits under them:
+  // one row (map, share), or two on the left when the view button is above
+  // the map button. Set in each build.
+  double _bottomRoom = 40 + 8 + 6;
   final _shotKey = GlobalKey(), _shareKey = GlobalKey();
 
   /// The most species drawn on the plate; the rest are in the index only
@@ -421,6 +423,7 @@ class _NativePlateState extends State<NativePlate> {
         final mapOn = app.settings.showMap && !mode.currentOnly && ses != null;
         final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
         final fit = app.settings.nativeFit;
+        _bottomRoom = (!mapOn && !mode.currentOnly ? 40 + 40 : 40) + 8 + 6.0;
         // Folded away, the index's heading moves into the row along the
         // bottom, between the map and share buttons, and the plate takes
         // the room; opened, the list is where it always was.
@@ -621,12 +624,6 @@ class _NativePlateState extends State<NativePlate> {
                             color: red,
                             onPressed: widget.openSettings,
                           ),
-                          IconButton(
-                            tooltip: 'Plate: ${mode.name}',
-                            icon: const Icon(Icons.dashboard_outlined),
-                            color: red,
-                            onPressed: _nextMode,
-                          ),
                         ],
                       ),
                     ],
@@ -634,20 +631,38 @@ class _NativePlateState extends State<NativePlate> {
                 ),
                 // The walk on a map in place of the collage, at the bottom
                 // left; not in the views of one bird (d and e).
-                if (!mode.currentOnly)
-                  Positioned(
-                    left: 8,
-                    bottom: 8,
-                    child: IconButton(
-                      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                      padding: EdgeInsets.zero,
-                      iconSize: 22,
-                      tooltip: app.settings.showMap ? 'Back to the plate' : 'The walk on a map',
-                      icon: Icon(app.settings.showMap ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
-                      color: red,
-                      onPressed: _toggleMap,
-                    ),
+                // At the bottom left: the plate's view (a to g), above the map
+                // button, and only while the map is not on screen; in the
+                // views of one bird (d, e) the view button alone.
+                Positioned(
+                  left: 8,
+                  bottom: 8,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!mapOn)
+                        IconButton(
+                          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                          padding: EdgeInsets.zero,
+                          iconSize: 22,
+                          tooltip: 'Plate: ${mode.name}',
+                          icon: const Icon(Icons.dashboard_outlined),
+                          color: red,
+                          onPressed: _nextMode,
+                        ),
+                      if (!mode.currentOnly)
+                        IconButton(
+                          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                          padding: EdgeInsets.zero,
+                          iconSize: 22,
+                          tooltip: app.settings.showMap ? 'Back to the plate' : 'The walk on a map',
+                          icon: Icon(app.settings.showMap ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
+                          color: red,
+                          onPressed: _toggleMap,
+                        ),
+                    ],
                   ),
+                ),
                 // The folded index's heading, level with the two buttons.
                 if (foldedInline)
                   Positioned(
