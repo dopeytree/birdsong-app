@@ -36,4 +36,5 @@ ios-log.txt
 .upstream/
 web-log.txt
 github-log.txt
+copy-log.txt
 __pycache__/
