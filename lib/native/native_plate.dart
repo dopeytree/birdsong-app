@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../app_state.dart';
-import '../main.dart' show ink, sepia, serif;
+import '../main.dart' show ink, madder, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
@@ -37,10 +37,12 @@ import 'plate_library.dart';
 /// app's fold and session arrows. A bird's card offers its other plates; the one picked
 /// is kept.
 ///
-/// Not moved across yet: the views a to g, the map, pinch zoom, the limit
-/// on species, skulls wings and eggs, the caption, recordings, spectrograms
-/// and facts on the card, share, remote stations (those still open the web
-/// plate).
+/// The views a to g are the web plate's (Settings.plateMode, shared with
+/// it), and the card is its card (bird_card.dart).
+///
+/// Not moved across yet: the map, pinch zoom, the limit on species, skulls
+/// wings and eggs, the caption, share, remote stations (those still open
+/// the web plate).
 class NativePlate extends StatefulWidget {
   const NativePlate({super.key, required this.app, required this.openSettings, this.onLoaded});
 
@@ -61,14 +63,6 @@ class _Row {
   int count = 0;
   DateTime? last;
 }
-
-/// How the collage is sized (Settings.nativeSizeBy), with the note shown
-/// when the button steps to it. The web plate's three, by the same names.
-const _sizings = {
-  'calls': 'Noisiest species',
-  'time': 'Recent ramblings',
-  'equal': 'No pecking order',
-};
 
 class _NativePlateState extends State<NativePlate> {
   PlateLibrary? _lib;
@@ -93,7 +87,10 @@ class _NativePlateState extends State<NativePlate> {
   // measured after each frame, so the collage can take what is left of the
   // screen. Null until first measured.
   double? _others;
-  final _allKey = GlobalKey(), _plateKey = GlobalKey();
+  final _allKey = GlobalKey(), _plateKey = GlobalKey(), _headKey = GlobalKey(), _indexKey = GlobalKey();
+
+  // For the index alone (view c): the heading's and the index's heights.
+  double _headH = 0, _indexH = 0;
   static const _padTop = 16.0; // header{padding:1rem ... 0}
 
   /// The most species drawn on the plate; the rest are in the index only
@@ -124,11 +121,18 @@ class _NativePlateState extends State<NativePlate> {
     }
   }
 
-  void _nextSizing() {
-    final keys = _sizings.keys.toList();
-    final next = keys[(keys.indexOf(app.settings.nativeSizeBy) + 1) % keys.length];
-    app.settings.update((x) => x.nativeSizeBy = next);
-    _say(_sizings[next]!, seconds: 2);
+  /// The view button: the next of the plate's views, a to g, as on the web
+  /// plate (Settings.plateMode, shared by both). Stepping onto a, f or g
+  /// also sets how the collage is sized, as the web plate does.
+  void _nextMode() {
+    final s = app.settings;
+    final next = s.plateMode % plateModes.length + 1;
+    final mode = plateModes[next - 1];
+    s.update((x) {
+      x.plateMode = next;
+      if (mode.sizeBy != null) x.nativeSizeBy = mode.sizeBy!;
+    });
+    _say(mode.name, seconds: 2);
   }
 
   AppState get app => widget.app;
@@ -307,10 +311,16 @@ class _NativePlateState extends State<NativePlate> {
         final calls = rows.fold<int>(0, (n, r) => n + r.count);
         final i = store.selectedIndex, n = store.sessions.length;
         final red = Theme.of(context).colorScheme.primary;
+        final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
+        final single = mode.key == 'latest' || mode.key == 'top';
+        final showPlate = mode.key != 'index', showIndex = mode.key != 'noindex';
         return PaperBackground(
           child: SafeArea(
             child: Stack(
               children: [
+                if (single)
+                  _single(mode, rows, newest)
+                else
                 LayoutBuilder(builder: (context, box) {
                   final fit = app.settings.nativeFit;
                   final side = (box.maxWidth * (fit ? .03 : .04)).clamp(16.0, fit ? 32.0 : 48.0);
@@ -324,9 +334,14 @@ class _NativePlateState extends State<NativePlate> {
                       children: [
                         Padding(
                           padding: EdgeInsets.symmetric(horizontal: headSide),
-                          child: _heading(ses, i, n, rows.length, calls, box.maxWidth - headSide),
+                          child: _heading(ses, i, n, rows.length, calls, box.maxWidth - headSide,
+                              totals: mode.key != 'index'),
                         ),
-                        if (rows.isEmpty)
+                        // the index alone sits in the middle of the window
+                        if (!showPlate) SizedBox(height: _indexAloneTop(box.maxHeight)),
+                        if (!showPlate)
+                          const SizedBox.shrink()
+                        else if (rows.isEmpty)
                           Padding(
                             key: _plateKey,
                             padding: const EdgeInsets.symmetric(vertical: 80),
@@ -346,19 +361,46 @@ class _NativePlateState extends State<NativePlate> {
                           )
                         else
                           // #plate{margin:.2rem clamp(.5rem,2vw,2rem) .55rem}
-                          Padding(
+                          Stack(
                             key: _plateKey,
-                            padding: EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
-                            child: _collage(ses!, onPlate, newest, box.maxWidth - 2 * plateSide,
-                                _plateHeight(box.maxWidth, box.maxHeight) - 12),
+                            children: [
+                              Padding(
+                                padding: EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
+                                child: _collage(ses!, onPlate, newest, box.maxWidth - 2 * plateSide,
+                                    _plateHeight(box.maxWidth, box.maxHeight) - 12),
+                              ),
+                              // With no index there is no heading to carry the
+                              // session arrows: the web plate's app draws a
+                              // pair at the plate's edges instead.
+                              if (!showIndex && n > 1) ...[
+                                Positioned(
+                                  left: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: Center(
+                                      child: _EdgeArrow(Icons.chevron_left, 'Earlier session',
+                                          i > 0 ? () => store.step(-1) : null)),
+                                ),
+                                Positioned(
+                                  right: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: Center(
+                                      child: _EdgeArrow(Icons.chevron_right, 'Later session',
+                                          i >= 0 && i < n - 1 ? () => store.step(1) : null)),
+                                ),
+                              ],
+                            ],
                           ),
                         // section{padding:2.2rem clamp(1rem,4vw,3rem) 2.5rem;max-width:78rem},
                         // closer when fitted on one screen
+                        if (showIndex)
                         Center(
+                          key: _indexKey,
                           child: ConstrainedBox(
                             constraints: BoxConstraints(maxWidth: fit ? double.infinity : 1248),
                             child: Padding(
-                              padding: EdgeInsets.fromLTRB(side, fit ? 8 : 35.2, side, fit ? 12.8 : 40),
+                              padding: EdgeInsets.fromLTRB(side, !showPlate ? 12.8 : (fit ? 8 : 35.2), side, fit ? 12.8 : 40),
                               child: IndexView(
                                 entries: [
                                   for (final r in rows)
@@ -368,9 +410,13 @@ class _NativePlateState extends State<NativePlate> {
                                 width: math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side,
                                 fit: fit,
                                 narrow: box.maxWidth <= 720,
-                                folded: app.settings.nativeIndexFolded,
-                                onFold: () => app.settings
-                                    .update((x) => x.nativeIndexFolded = !x.nativeIndexFolded),
+                                // the index alone: never folded, nothing to fold to
+                                folded: showPlate && app.settings.nativeIndexFolded,
+                                onFold: showPlate
+                                    ? () => app.settings
+                                        .update((x) => x.nativeIndexFolded = !x.nativeIndexFolded)
+                                    : () {},
+                                foldable: showPlate,
                                 newest: marked,
                                 steps: n > 1,
                                 canPrev: i > 0,
@@ -413,14 +459,11 @@ class _NativePlateState extends State<NativePlate> {
                             color: red,
                             onPressed: widget.openSettings,
                           ),
-                          // Views a to g are not moved across yet: for now
-                          // this steps through the three that size the
-                          // collage (a, f and g).
                           IconButton(
-                            tooltip: 'Plate: ${_sizings[app.settings.nativeSizeBy] ?? ''}',
+                            tooltip: 'Plate: ${mode.name}',
                             icon: const Icon(Icons.dashboard_outlined),
                             color: red,
-                            onPressed: _nextSizing,
+                            onPressed: _nextMode,
                           ),
                         ],
                       ),
@@ -465,7 +508,7 @@ class _NativePlateState extends State<NativePlate> {
   /// totals. The title stops short of the buttons' row; the lines under it
   /// stop short of the menu and view column. [width] is the room from the
   /// left padding to the screen's right edge.
-  Widget _heading(Session? ses, int i, int n, int species, int calls, double width) {
+  Widget _heading(Session? ses, int i, int n, int species, int calls, double width, {bool totals = true}) {
     // #sub{font-style:italic;color:sepia;font-size:.95rem}, three block spans
     const sub = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: sepia, height: 1.5);
     // record 44, pill 94, menu 48, and 8 from the edge; the column is the last two
@@ -482,6 +525,7 @@ class _NativePlateState extends State<NativePlate> {
             ? 'At ${place(ses.lat!, ses.lon!)}${w.isEmpty ? '' : ', $w'}.'
             : (ses.live ? '' : 'Place unknown.');
     return Column(
+      key: _headKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ConstrainedBox(
@@ -508,7 +552,7 @@ class _NativePlateState extends State<NativePlate> {
             children: [
               Text(when, style: sub),
               if (where.isNotEmpty) Text(where, style: sub),
-              if (species > 0)
+              if (totals && species > 0)
                 Text('$species species from ${thousands(calls)} ${calls == 1 ? 'call' : 'calls'}.',
                     style: sub),
             ],
@@ -554,6 +598,83 @@ class _NativePlateState extends State<NativePlate> {
     );
   }
 
+  /// View c, the index alone, as the app places it on the web plate: in the
+  /// middle of the window rather than of the room under the heading, as far
+  /// as there is room (plate-extras.js, balance). The space above it.
+  double _indexAloneTop(double screen) {
+    final room = screen - _padTop - _headH;
+    final pad = math.max(0.0, math.min(_headH, room - _indexH));
+    return math.max(0.0, (room - pad - _indexH) / 2);
+  }
+
+  /// Views d and e: one bird, as large as the screen allows, with its name,
+  /// scientific name, and when it was last heard (d) or how often (e). A
+  /// tap on it opens its card. The page's #latest.
+  Widget _single(PlateMode mode, List<_Row> rows, String? newest) {
+    final _Row? r = rows.isEmpty
+        ? null
+        : mode.key == 'top'
+            ? rows.first
+            : rows.firstWhere((x) => x.sci == newest, orElse: () => rows.first);
+    if (r != null) _ensure([r]);
+    final art = r == null ? null : _art[r.sci];
+    final width = MediaQuery.sizeOf(context).width;
+    final last = r?.last;
+    final line = r == null
+        ? ''
+        : mode.key == 'latest'
+            ? (last == null ? '' : (sameDay(last, DateTime.now()) ? clock(last) : '${dayMonth(last)}, ${clock(last)}'))
+            // "since records began" is this session, in Listen here
+            : '${calls(r.count)} this session';
+    return Padding(
+      // clear of the buttons at the top
+      padding: const EdgeInsets.fromLTRB(16, 64, 16, 16),
+      child: Column(
+        children: [
+          Expanded(
+            child: r == null || art == null
+                ? const SizedBox.expand()
+                : GestureDetector(
+                    onTap: () => _openCard(r),
+                    child: Semantics(
+                      button: true,
+                      label: '${r.common}: open its card',
+                      child: SizedBox.expand(child: PlateImage(art: art, width: width)),
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 6.4),
+          GestureDetector(
+            onTap: r == null ? null : () => _openCard(r),
+            child: Column(
+              children: [
+                Text(r?.common ?? 'Nothing heard yet.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontFamily: serif, fontSize: (width * .034).clamp(20.8, 33.6), height: 1.25, color: ink)),
+                if (r != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1.6),
+                    child: Text(r.sci,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 18, color: sepia)),
+                  ),
+                if (line.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2.4),
+                    child: Text(line,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontFamily: serif, fontSize: 18, color: madder)),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// How tall the collage is, with its margins. Fitted on one screen (the page's fitPlate): the
   /// screen less the heading and the index, and never under 140. Otherwise
   /// the page's own: the screen less 8.5rem and at least 420, or three wide
@@ -571,10 +692,40 @@ class _NativePlateState extends State<NativePlate> {
   /// [_plateHeight].
   void _measure() {
     if (!mounted) return;
+    final head = _headKey.currentContext?.size?.height, index = _indexKey.currentContext?.size?.height;
+    if (head != null && index != null && ((head - _headH).abs() > .5 || (index - _indexH).abs() > .5)) {
+      setState(() {
+        _headH = head;
+        _indexH = index;
+      });
+    }
     final all = _allKey.currentContext?.size?.height, plate = _plateKey.currentContext?.size?.height;
     if (all == null || plate == null) return;
     // and the scroll view's padding above
     final others = all - plate + _padTop;
     if (_others == null || (others - _others!).abs() > .5) setState(() => _others = others);
+  }
+}
+
+/// A small arrow at the plate's edge for the next or previous session; not
+/// drawn at the first or last. The web plate's _Arrow (plate_view.dart).
+class _EdgeArrow extends StatelessWidget {
+  const _EdgeArrow(this.icon, this.tooltip, this.onPressed);
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onPressed == null) return const SizedBox.shrink();
+    return IconButton(
+      tooltip: tooltip,
+      iconSize: 20,
+      visualDensity: VisualDensity.compact,
+      color: sepia.withValues(alpha: 0.75),
+      icon: Icon(icon),
+      onPressed: onPressed,
+    );
   }
 }

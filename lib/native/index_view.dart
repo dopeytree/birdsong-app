@@ -63,6 +63,7 @@ class IndexView extends StatelessWidget {
     required this.narrow,
     required this.folded,
     required this.onFold,
+    this.foldable = true,
     required this.newest,
     required this.steps,
     required this.canPrev,
@@ -81,6 +82,10 @@ class IndexView extends StatelessWidget {
   final bool narrow;
   final bool folded;
   final VoidCallback onFold;
+
+  /// False for the index alone (view c): nothing to fold it away to, so no
+  /// fold arrows and the heading is only a heading.
+  final bool foldable;
 
   /// The latest heard, when it is to be marked.
   final String? newest;
@@ -117,7 +122,7 @@ class IndexView extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (folded) fold('⌃', const EdgeInsets.only(bottom: 1.6)),
+        if (foldable && folded) fold('⌃', const EdgeInsets.only(bottom: 1.6)),
         _heading(),
         SizedBox(height: fit ? 13.6 : 25.6),
         if (!folded) ...[
@@ -146,7 +151,7 @@ class IndexView extends StatelessWidget {
               ],
             ],
           ),
-          fold('⌄', const EdgeInsets.only(top: 4.8)),
+          if (foldable) fold('⌄', const EdgeInsets.only(top: 4.8)),
         ],
       ],
     );
@@ -184,10 +189,10 @@ class IndexView extends StatelessWidget {
         if (steps) step(-1, '‹', 'Earlier session', canPrev),
         Flexible(
           child: Semantics(
-            button: true,
-            expanded: !folded,
+            button: foldable,
+            expanded: foldable ? !folded : null,
             child: InkWell(
-              onTap: onFold,
+              onTap: foldable ? onFold : null,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
