@@ -508,76 +508,67 @@ class _PlateViewState extends State<PlateView> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Left of the pill: the record button (Listen here, or
+                    // while a session is recording) and, on a remote
+                    // station, the stations button.
+                    if (listen || app.engine.running || app.engine.starting)
+                      _RecordButton(
+                        recording: app.engine.running,
+                        busy: app.engine.starting,
+                        onTap: _record,
+                      ),
+                    if (!listen && _s.stations.isNotEmpty)
+                      Builder(
+                        builder: (bc) => IconButton(
+                          tooltip: _s.stations.length == 2 ? 'Next: ${_s.nextStationName}' : 'Stations',
+                          icon: Icon(_s.stations.length == 2 ? Icons.swap_horiz : Icons.list),
+                          color: Theme.of(context).colorScheme.primary,
+                          onPressed: () => _stationsTap(bc),
+                        ),
+                      ),
                     // The source: a two-part pill, Listen here | remote
-                    // station, the one shown filled. Under the microphone,
-                    // the record button; under the sensors, the stations.
+                    // station, the one shown filled.
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5), // level with the round buttons
+                      child: _SourcePill(
+                        listen: listen,
+                        stationName: _s.station?.name,
+                        onListen: _toListen,
+                        onRemote: _toRemote,
+                      ),
+                    ),
+                    // The menu, and the plate's view (a to g) under it.
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const SizedBox(height: 5), // level with the round buttons beside it
-                        _SourcePill(
-                          listen: listen,
-                          stationName: _s.station?.name,
-                          onListen: _toListen,
-                          onRemote: _toRemote,
+                        IconButton(
+                          tooltip: 'Settings',
+                          icon: const Icon(Icons.menu),
+                          color: Theme.of(context).colorScheme.primary,
+                          onPressed: widget.openSettings,
                         ),
-                        const SizedBox(height: 2),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: _SourcePill.half,
-                              child: listen || app.engine.running || app.engine.starting
-                                  ? _RecordButton(
-                                      recording: app.engine.running,
-                                      busy: app.engine.starting,
-                                      onTap: _record,
-                                    )
-                                  : null,
-                            ),
-                            SizedBox(
-                              width: _SourcePill.half,
-                              child: !listen && _s.stations.isNotEmpty
-                                  ? Builder(
-                                      builder: (bc) => IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        tooltip: _s.stations.length == 2
-                                            ? 'Next: ${_s.nextStationName}'
-                                            : 'Stations',
-                                        icon: Icon(
-                                            _s.stations.length == 2 ? Icons.swap_horiz : Icons.list,
-                                            size: 20),
-                                        color: Theme.of(context).colorScheme.primary,
-                                        onPressed: () => _stationsTap(bc),
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                          ],
+                        IconButton(
+                          tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
+                          icon: const Icon(Icons.dashboard_outlined),
+                          color: Theme.of(context).colorScheme.primary,
+                          onPressed: _nextMode,
                         ),
                       ],
                     ),
-                    IconButton(
-                      tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
-                      icon: const Icon(Icons.dashboard_outlined),
-                      color: Theme.of(context).colorScheme.primary,
-                      onPressed: _nextMode,
-                    ),
-                    // The walk on a map in place of the collage (Listen here).
-                    if (_mapAllowed)
-                      IconButton(
-                        tooltip: _mapOn ? 'Back to the plate' : 'The walk on a map',
-                        icon: Icon(_mapOn ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
-                        color: Theme.of(context).colorScheme.primary,
-                        onPressed: _toggleMap,
-                      ),
-                    IconButton(
-                      tooltip: 'Settings',
-                      icon: const Icon(Icons.menu),
-                      color: Theme.of(context).colorScheme.primary,
-                      onPressed: widget.openSettings,
-                    ),
                   ],
+                ),
+              ),
+            // The walk on a map in place of the collage (Listen here), at the
+            // bottom left.
+            if (_mapAllowed && !_popup)
+              Positioned(
+                left: 8 + safe.left,
+                bottom: 8 + safe.bottom,
+                child: IconButton(
+                  tooltip: _mapOn ? 'Back to the plate' : 'The walk on a map',
+                  icon: Icon(_mapOn ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
+                  color: Theme.of(context).colorScheme.primary,
+                  onPressed: _toggleMap,
                 ),
               ),
             // Share or save, out of the way at the bottom right.
@@ -611,7 +602,7 @@ class _PlateViewState extends State<PlateView> {
               Positioned(
                 left: 16 + safe.left,
                 right: 16 + safe.right,
-                top: 100 + safe.top,
+                top: 112 + safe.top,
                 child: IgnorePointer(
                   ignoring: !_noteShown,
                   child: AnimatedOpacity(
@@ -728,7 +719,7 @@ class _SourcePill extends StatelessWidget {
     required this.onRemote,
   });
 
-  /// Each half's width; the record and stations buttons line up under them.
+  /// Each half's width.
   static const half = 46.0;
 
   final bool listen;

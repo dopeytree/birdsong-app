@@ -57,11 +57,11 @@ flutter test
    *I have a station*, download a model, switch on Core ML, allow the
    microphone. Settings > *Show the welcome screens again* repeats it.
 1. The app is the plate. Top right: a two-part switch, microphone
-   (*Listen here & now*) | sensors (a remote station). Under the microphone,
-   the record button starts and stops a session; under the sensors, on a
-   remote station, a button goes to the other saved station (with two) or
-   lists them all. Beside them the view, map and menu (**Settings**)
-   buttons; share and Save to Photos are at the bottom right.
+   (*Listen here & now*) | sensors (a remote station). Left of it, in Listen
+   here, the record button starts and stops a session; on a remote station,
+   a button goes to the other saved station (with two) or lists them all.
+   Right of it the menu (**Settings**), with the view button (a to g) under
+   it. Bottom left, the map; bottom right, share and Save to Photos.
 2. **Settings**, in sections: where birds come from; *Listening* (live
    scores per model while listening, threshold, how often, Core ML);
    *Models* (download, tick to listen, which one the plate draws);
