@@ -24,6 +24,10 @@ dependencies:
   plate_share:
     path: packages/plate_share
 
+  # Playing a bird's recordings on the Flutter plate's card, sharing the
+  # audio session with the recorder (lib/native/bird_card.dart).
+  audioplayers: ^6.4.0
+
   # Where models, detections and recordings live.
   path_provider: ^2.1.5
 

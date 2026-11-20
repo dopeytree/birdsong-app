@@ -5,13 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../app_state.dart';
-import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
+import '../main.dart' show ink, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
 import '../ui/format.dart';
 import '../ui/plate_buttons.dart';
 import '../ui/station_editor.dart';
+import 'bird_card.dart';
 import 'collage_view.dart';
 import 'index_view.dart';
 import 'plate_library.dart';
@@ -258,16 +259,23 @@ class _NativePlateState extends State<NativePlate> {
     });
   }
 
+  /// The bird's card (bird_card.dart), as the web plate's: what is on the
+  /// plate (the session's) for the facts and recordings, and everything on
+  /// this device for how long the bird has been known here.
   void _openCard(_Row r) {
     final lib = _lib;
     if (lib == null) return;
-    showDialog<void>(
-      context: context,
-      builder: (context) => _PlateCard(
+    final store = app.store, model = app.settings.plateModel;
+    final heard = store.forPlate(model, session: store.selected);
+    BirdCard.show(
+      context,
+      BirdCard(
         lib: lib,
         style: _style,
-        row: r,
+        facts: BirdFacts.of(r.sci, r.common, heard, store.forPlate(model)),
         art: _art[r.sci],
+        clipOf: (d) => d.hasClip ? store.clipFile(d.id) : null,
+        spectrogramOf: (d) => d.hasClip ? store.spectrogramFile(d.id) : null,
         onChosen: (art) {
           if (mounted) setState(() => _art[r.sci] = art);
         },
@@ -569,166 +577,4 @@ class _NativePlateState extends State<NativePlate> {
     final others = all - plate + _padTop;
     if (_others == null || (others - _others!).abs() > .5) setState(() => _others = others);
   }
-}
-
-/// A bird's card: its plate, names, how often it was heard, the plate's
-/// credit, and the other plates on offer. Tapping one makes it this bird's
-/// plate from now on (PlateLibrary.choose).
-class _PlateCard extends StatefulWidget {
-  const _PlateCard(
-      {required this.lib, required this.style, required this.row, required this.art, required this.onChosen});
-
-  final PlateLibrary lib;
-  final PlateStyle style;
-  final _Row row;
-  final PlateArt? art;
-  final ValueChanged<PlateArt?> onChosen;
-
-  @override
-  State<_PlateCard> createState() => _PlateCardState();
-}
-
-class _PlateCardState extends State<_PlateCard> {
-  late PlateArt? _art = widget.art;
-  late final Future<List<PlateCandidate>> _others =
-      widget.lib.candidates(widget.row.sci, widget.row.common);
-  String? _choosing;
-
-  Future<void> _choose(PlateCandidate c) async {
-    setState(() => _choosing = c.url);
-    final art = await widget.lib.choose(widget.row.sci, c, widget.style);
-    if (!mounted) return;
-    setState(() {
-      _choosing = null;
-      if (art != null) _art = art;
-    });
-    if (art != null) widget.onChosen(art);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final r = widget.row, art = _art;
-    const small = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 13, color: sepia);
-    return Dialog(
-      backgroundColor: paper,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4), side: const BorderSide(color: rule)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                height: 260,
-                child: art == null
-                    ? const Center(child: Text('No plate found.', style: small))
-                    : PlateImage(art: art, width: 392),
-              ),
-              const SizedBox(height: 12),
-              Text(r.common,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontFamily: serif, fontSize: 24, color: ink)),
-              Text(r.sci,
-                  style: const TextStyle(
-                      fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 16, color: sepia)),
-              const SizedBox(height: 8),
-              Text(
-                '${r.count == 1 ? 'Heard once' : 'Heard ${r.count} times'}'
-                '${r.last == null ? '' : ', last at ${clock(r.last!)}'}.',
-                style: const TextStyle(fontFamily: serif, fontSize: 16, color: ink),
-              ),
-              if (art != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Text(
-                      '${art.credit}${art.cut ? ' Cut out on this device.' : art.tint ? ' Tinted into the page.' : ''}',
-                      textAlign: TextAlign.center, style: small),
-                ),
-              const SizedBox(height: 14),
-              FutureBuilder<List<PlateCandidate>>(
-                future: _others,
-                builder: (context, snap) {
-                  final all = snap.data;
-                  if (all == null) return const Text('Looking for other plates…', style: small);
-                  if (all.length < 2) return const Text('No other plates on offer.', style: small);
-                  return Column(
-                    children: [
-                      const Text('Other plates', style: TextStyle(fontFamily: caps, fontSize: 14, letterSpacing: 1.6, color: ink)),
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        height: 78,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: all.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 8),
-                          itemBuilder: (context, i) {
-                            final c = all[i], on = art?.from.url == c.url;
-                            return Tooltip(
-                              message: c.credit,
-                              child: InkWell(
-                                onTap: _choosing == null && !on ? () => _choose(c) : null,
-                                child: Container(
-                                  width: 78,
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                      border: Border.all(color: on ? madder : rule, width: on ? 2 : 1)),
-                                  child: _choosing == c.url
-                                      ? const Center(
-                                          child: SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(strokeWidth: 2)))
-                                      : _Thumb(lib: widget.lib, style: widget.style, candidate: c),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                          'Cut-outs first, then plates from Wikimedia Commons. '
-                          'How those are treated is under Settings, Experimental.',
-                          textAlign: TextAlign.center, style: small),
-                    ],
-                  );
-                },
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child:
-                    TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// One of the other plates, small. Fetched (and kept) when first shown.
-class _Thumb extends StatefulWidget {
-  const _Thumb({required this.lib, required this.style, required this.candidate});
-
-  final PlateLibrary lib;
-  final PlateStyle style;
-  final PlateCandidate candidate;
-
-  @override
-  State<_Thumb> createState() => _ThumbState();
-}
-
-class _ThumbState extends State<_Thumb> {
-  late final Future<PlateArt?> _art = widget.lib.load(widget.candidate, widget.style).then<PlateArt?>((a) => a).catchError((Object _) => null);
-
-  @override
-  Widget build(BuildContext context) => FutureBuilder<PlateArt?>(
-        future: _art,
-        builder: (context, snap) => snap.data == null
-            ? const SizedBox()
-            : PlateImage(art: snap.data!, width: 70),
-      );
 }

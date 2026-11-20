@@ -107,6 +107,7 @@ class PlateLibrary {
   Map<String, dynamic> _alias = {};
   Map<String, dynamic> _found = {};
   Map<String, dynamic> _choices = {};
+  Map<String, dynamic>? _wiki;
 
   static Future<PlateLibrary> open() async {
     final base = await getApplicationCacheDirectory();
@@ -238,6 +239,46 @@ class PlateLibrary {
       debugPrint('cut out ${file.path}: $e');
       return null;
     }
+  }
+
+  /// A line or two about a species from the opening of its Wikipedia
+  /// article (CC BY-SA), and the article's address; as the web plate does
+  /// it (blurbFrom in bird_card.dart). Remembered 90 days in wiki.json, a
+  /// missing article too. Null with no connection and nothing remembered.
+  Future<({String text, String url})?> blurb(String sci) async {
+    final wiki = _wiki ??= await _readMap('wiki.json');
+    final kept = wiki[sci];
+    if (kept is Map &&
+        DateTime.now().millisecondsSinceEpoch - ((kept['t'] as num?) ?? 0) < 90 * 86400000) {
+      return (text: (kept['text'] as String?) ?? '', url: (kept['url'] as String?) ?? '');
+    }
+    final url = 'https://en.wikipedia.org/api/rest_v1/page/summary/'
+        '${Uri.encodeComponent(sci.replaceAll(' ', '_'))}?redirect=true';
+    var text = '', page = '';
+    try {
+      final req = await _client.getUrl(Uri.parse(url));
+      req.headers.set('Accept', 'application/json');
+      final res = await req.close().timeout(const Duration(seconds: 15));
+      final body = await res.transform(utf8.decoder).join();
+      if (res.statusCode == 200) {
+        final j = jsonDecode(body) as Map<String, dynamic>;
+        final extract = j['extract'] as String?;
+        if (j['type'] != 'disambiguation' && extract != null && extract.isNotEmpty) {
+          text = blurbFrom(extract);
+          page = ((j['content_urls'] as Map?)?['desktop'] as Map?)?['page'] as String? ?? '';
+        }
+      } else if (res.statusCode != 404) {
+        return null;
+      }
+    } catch (_) {
+      return null;
+    }
+    wiki[sci] = {'t': DateTime.now().millisecondsSinceEpoch, 'text': text, 'url': page};
+    File('${dir.path}/wiki.json').writeAsString(jsonEncode(wiki)).catchError((Object e) {
+      debugPrint('wiki: $e');
+      return File('');
+    });
+    return (text: text, url: page);
   }
 
   /// Use [c] for a species from now on (its card's choice), and say what it is.
@@ -441,3 +482,15 @@ class PlateLibrary {
 
 // compute() takes one argument: the pixels and their size.
 CutOut? _cutOutOnIsolate((Uint8List, int, int) a) => cutOutFigure(a.$1, a.$2, a.$3);
+
+/// The page's blurbFrom: the second and third sentences of a Wikipedia
+/// summary (the first is mostly other names), or just the second when the
+/// two run past 340 characters.
+String blurbFrom(String t) {
+  t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
+  final found = RegExp(r'.+?[a-z\)\]"’”]\.(?=\s+[A-Z]|$)').allMatches(t).map((m) => m.group(0)!.trim()).toList();
+  final parts = found.isEmpty ? [t] : found;
+  if (parts.length < 2) return parts.first;
+  final two = parts[1] + (parts.length > 2 ? ' ${parts[2]}' : '');
+  return two.length <= 340 ? two : parts[1];
+}
