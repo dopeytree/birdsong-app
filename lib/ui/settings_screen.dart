@@ -262,9 +262,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           s.micSource == 'headset'
               ? 'Bluetooth headphones send their microphone at call quality, which misses '
                   'the higher songs, and your music drops to call quality while listening. '
-                  'It still works; for the best detections use the phone\'s own.'
-              : 'Best for birds: the full range of song. Music and podcasts keep playing, '
-                  'in full quality on Bluetooth headphones.',
+                  'A wired headset\'s microphone hears the full range, but rubs on clothes. '
+                  'Both work; for the best detections use the phone\'s own.'
+              : 'Best for birds: the full range of song, even with headphones plugged in. '
+                  'Music and podcasts keep playing, in full quality on Bluetooth headphones.',
           style: theme.textTheme.bodySmall,
         ),
         if (locked)
@@ -546,7 +547,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Which microphone listens (Settings.micSource).
   static const microphones = {
     'phone': "The phone's own",
-    'headset': "Headphones' or headset's",
+    'headset': "Headphones' or headset's (wired or Bluetooth)",
   };
 
   /// The map of the walk (the map button on the plate switches to it).

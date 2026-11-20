@@ -132,7 +132,9 @@ class ListenEngine extends ChangeNotifier {
       }
       _raw.clear();
       _at32.clear();
-      final stream = await rec.startStream(_recordConfig(settings.micSource == 'headset'));
+      final headset = settings.micSource == 'headset';
+      final stream =
+          await rec.startStream(_recordConfig(headset, headset ? null : await _phoneMic(rec)));
       _sub = stream.listen(_onAudio, onError: (Object e) {
         error = 'Microphone: $e';
         notifyListeners();
@@ -478,9 +480,14 @@ class ListenEngine extends ChangeNotifier {
   /// of the phone's 48 kHz, so higher songs are lost and music drops to call
   /// quality while listening.
   ///
+  /// A wired headset's microphone (or a USB one) would otherwise take over by
+  /// itself on both platforms, so with the phone's own chosen [device] names
+  /// the built-in microphone ([_phoneMic]).
+  ///
   /// If the microphone in use goes away (headphones taken out), recording
   /// carries on with the phone's own rather than pausing.
-  static RecordConfig _recordConfig(bool headset) => RecordConfig(
+  static RecordConfig _recordConfig(bool headset, InputDevice? device) => RecordConfig(
+        device: device,
         encoder: AudioEncoder.pcm16bits,
         sampleRate: captureRate,
         numChannels: 1,
@@ -496,6 +503,35 @@ class ListenEngine extends ChangeNotifier {
         ]),
         androidConfig: AndroidRecordConfig(manageBluetooth: headset),
       );
+
+  /// The phone's built-in microphone, or null to leave the choice to the
+  /// system (it still won't be a Bluetooth one: see [_recordConfig]).
+  ///
+  /// On iPhone the plugin can only list inputs once the session can record,
+  /// and if it isn't yet it sets a category of its own without mixing, which
+  /// would pause the music; so the mixing category goes on first.
+  static Future<InputDevice?> _phoneMic(AudioRecorder rec) async {
+    try {
+      switch (defaultTargetPlatform) {
+        case TargetPlatform.iOS:
+          await rec.ios?.setAudioSessionCategory(options: const [
+            IosAudioCategoryOptions.mixWithOthers,
+            IosAudioCategoryOptions.defaultToSpeaker,
+            IosAudioCategoryOptions.allowBluetoothA2DP,
+          ]);
+        case TargetPlatform.android:
+          break;
+        default:
+          return null;
+      }
+      for (final d in await rec.listInputDevices()) {
+        if (d.type == InputDeviceType.builtIn) return d;
+      }
+    } catch (e) {
+      debugPrint('microphone: $e');
+    }
+    return null;
+  }
 
   // ---- the trail, for the map --------------------------------------------
 
