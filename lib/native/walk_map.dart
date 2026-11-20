@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart' show compute, consolidateHttpClientResp
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 
 import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
 import '../store/detection_store.dart';
@@ -642,7 +642,7 @@ class _CrossPainter extends CustomPainter {
     final k = size / 48;
     canvas.translate((box.width - size) / 2, (box.height - size) / 2);
     canvas.scale(k);
-    final path = Path()
+    final path = ui.Path()
       ..moveTo(12, 13)
       ..quadraticBezierTo(24, 23, 36, 35)
       ..moveTo(35, 12)

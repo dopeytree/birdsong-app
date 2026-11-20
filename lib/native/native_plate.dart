@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:plate_share/plate_share.dart';
 
@@ -478,7 +479,7 @@ class _NativePlateState extends State<NativePlate> {
                                 padding: EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
                                 child: mapOn
                                     ? WalkMap(
-                                        walk: Walk.of(store, ses!, app.settings.plateModel),
+                                        walk: Walk.of(store, ses, app.settings.plateModel),
                                         allBirds: app.settings.mapBirds == 'all',
                                         size: Size(box.maxWidth - 2 * plateSide,
                                             _plateHeight(box.maxWidth, box.maxHeight) - 12),

@@ -11,7 +11,7 @@ import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
 
 import '../main.dart' show ink, paper, sepia;
 
-const _font = ['Noto Sans Regular'], _fontIt = ['Noto Sans Italic'];
+const _fontIt = ['Noto Sans Italic'];
 
 String _hex(Color c) =>
     '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
