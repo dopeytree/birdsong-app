@@ -64,6 +64,7 @@ class IndexView extends StatelessWidget {
     required this.folded,
     required this.onFold,
     this.foldable = true,
+    this.inline = false,
     required this.newest,
     required this.steps,
     required this.canPrev,
@@ -87,6 +88,12 @@ class IndexView extends StatelessWidget {
   /// fold arrows and the heading is only a heading.
   final bool foldable;
 
+  /// Folded away, the heading alone, in the row along the bottom of the
+  /// screen between the map and share buttons (the Flutter plate's own
+  /// design): no fold arrow, a tap on the heading opens the list again;
+  /// shorter rules, and none on a narrow screen.
+  final bool inline;
+
   /// The latest heard, when it is to be marked.
   final String? newest;
 
@@ -99,6 +106,11 @@ class IndexView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (inline) {
+      return LayoutBuilder(
+        builder: (context, box) => Center(child: _heading(rules: box.maxWidth < 340 ? 0 : 28, pad: 8)),
+      );
+    }
     // rem is 16 throughout the page
     final colWidth = fit ? 176.0 : 256.0, gap = fit ? 25.6 : 41.6;
     final fontSize = fit ? 13.44 : (narrow ? 16.0 : 18.0);
@@ -158,7 +170,7 @@ class IndexView extends StatelessWidget {
   }
 
   /// ‹ —— Index of species —— ›
-  Widget _heading() {
+  Widget _heading({double rules = 56, double pad = 12}) {
     Widget step(int by, String glyph, String label, bool on) => Visibility(
           visible: on,
           maintainSize: true,
@@ -172,7 +184,7 @@ class IndexView extends StatelessWidget {
               onTap: () => onStep(by),
               child: Padding(
                 // a finger's worth of room about a small glyph
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: pad, vertical: 8),
                 child: ExcludeSemantics(
                   child: Text(glyph,
                       style: TextStyle(
@@ -182,7 +194,8 @@ class IndexView extends StatelessWidget {
             ),
           ),
         );
-    const line = SizedBox(width: 56, height: 1, child: ColoredBox(color: rule));
+    final line = SizedBox(width: rules, height: 1, child: const ColoredBox(color: rule));
+    final gap = SizedBox(width: rules == 0 ? 0 : 14.4);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -197,7 +210,7 @@ class IndexView extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   line,
-                  const SizedBox(width: 14.4),
+                  gap,
                   Flexible(
                     child: Text('Index of species',
                         textAlign: TextAlign.center,
@@ -208,7 +221,7 @@ class IndexView extends StatelessWidget {
                             height: 1.5,
                             color: ink)),
                   ),
-                  const SizedBox(width: 14.4),
+                  gap,
                   line,
                 ],
               ),

@@ -420,6 +420,33 @@ class _NativePlateState extends State<NativePlate> {
         // the map takes the collage's place, and has one even in view c
         final mapOn = app.settings.showMap && !mode.currentOnly && ses != null;
         final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
+        final fit = app.settings.nativeFit;
+        // Folded away, the index's heading moves into the row along the
+        // bottom, between the map and share buttons, and the plate takes
+        // the room; opened, the list is where it always was.
+        final foldedInline = showIndex && showPlate && !single && app.settings.nativeIndexFolded;
+        IndexView index(double width, double screen, {bool inline = false}) => IndexView(
+              entries: [
+                for (final r in rows)
+                  IndexEntry(r.sci, r.common, r.count, noPlate: _art.containsKey(r.sci) && _art[r.sci] == null),
+              ],
+              width: width,
+              fit: fit,
+              narrow: screen <= 720,
+              // the index alone: never folded, nothing to fold to
+              folded: showPlate && app.settings.nativeIndexFolded,
+              onFold: showPlate
+                  ? () => app.settings.update((x) => x.nativeIndexFolded = !x.nativeIndexFolded)
+                  : () {},
+              foldable: showPlate,
+              inline: inline,
+              newest: marked,
+              steps: n > 1,
+              canPrev: i > 0,
+              canNext: i >= 0 && i < n - 1,
+              onStep: store.step,
+              onOpen: (e) => _openCard(rows.firstWhere((r) => r.sci == e.sci)),
+            );
         return Stack(
           children: [
             // The plate itself, without the buttons over it: what share takes.
@@ -430,7 +457,6 @@ class _NativePlateState extends State<NativePlate> {
                   child: single
                       ? _single(mode, rows, newest)
                       : LayoutBuilder(builder: (context, box) {
-                  final fit = app.settings.nativeFit;
                   final side = (box.maxWidth * (fit ? .03 : .04)).clamp(16.0, fit ? 32.0 : 48.0);
                   final plateSide = (box.maxWidth * .02).clamp(8.0, 32.0);
                   final headSide = (box.maxWidth * .04).clamp(16.0, 48.0);
@@ -545,36 +571,14 @@ class _NativePlateState extends State<NativePlate> {
                           ),
                         // section{padding:2.2rem clamp(1rem,4vw,3rem) 2.5rem;max-width:78rem},
                         // closer when fitted on one screen
-                        if (showIndex)
+                        if (showIndex && !foldedInline)
                         Center(
                           key: _indexKey,
                           child: ConstrainedBox(
                             constraints: BoxConstraints(maxWidth: fit ? double.infinity : 1248),
                             child: Padding(
                               padding: EdgeInsets.fromLTRB(side, !showPlate ? 12.8 : (fit ? 8 : 35.2), side, fit ? 12.8 : 40),
-                              child: IndexView(
-                                entries: [
-                                  for (final r in rows)
-                                    IndexEntry(r.sci, r.common, r.count,
-                                        noPlate: _art.containsKey(r.sci) && _art[r.sci] == null),
-                                ],
-                                width: math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side,
-                                fit: fit,
-                                narrow: box.maxWidth <= 720,
-                                // the index alone: never folded, nothing to fold to
-                                folded: showPlate && app.settings.nativeIndexFolded,
-                                onFold: showPlate
-                                    ? () => app.settings
-                                        .update((x) => x.nativeIndexFolded = !x.nativeIndexFolded)
-                                    : () {},
-                                foldable: showPlate,
-                                newest: marked,
-                                steps: n > 1,
-                                canPrev: i > 0,
-                                canNext: i >= 0 && i < n - 1,
-                                onStep: store.step,
-                                onOpen: (e) => _openCard(rows.firstWhere((r) => r.sci == e.sci)),
-                              ),
+                              child: index(math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side, box.maxWidth),
                             ),
                           ),
                         ),
@@ -642,6 +646,16 @@ class _NativePlateState extends State<NativePlate> {
                       color: red,
                       onPressed: _toggleMap,
                     ),
+                  ),
+                // The folded index's heading, level with the two buttons.
+                if (foldedInline)
+                  Positioned(
+                    left: 56,
+                    right: 56,
+                    bottom: 8,
+                    height: 40,
+                    child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
+                        inline: true),
                   ),
                 // Share or save, out of the way at the bottom right.
                 if (PlateShare.supported)
