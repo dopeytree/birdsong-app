@@ -1,15 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// A picture of one species, on this device.
-class PlateArt {
-  const PlateArt(this.file, {required this.ready, required this.credit, this.page});
+/// A picture that could stand for a species: where it is, not yet fetched.
+class PlateCandidate {
+  const PlateCandidate(this.url, {required this.ready, required this.credit, this.page});
 
-  final File file;
+  final String url;
 
   /// A transparent cut-out, drawn as it is. Otherwise a plate still on its
   /// paper, which the screen tints into the page (multiply with the paper).
@@ -18,16 +19,36 @@ class PlateArt {
 
   /// Where the picture is described, for the card's credit.
   final String? page;
+
+  Map<String, dynamic> toJson() => {'url': url, 'ready': ready, 'credit': credit, if (page != null) 'page': page};
+
+  static PlateCandidate fromJson(Map<String, dynamic> j) => PlateCandidate(j['url'] as String,
+      ready: j['ready'] == true, credit: (j['credit'] as String?) ?? '', page: j['page'] as String?);
 }
 
-/// Finds a plate for a species and keeps it on the device, so each picture
+/// A picture of one species, on this device.
+class PlateArt {
+  const PlateArt(this.file, this.from, this.aspect);
+
+  final File file;
+  final PlateCandidate from;
+
+  /// Width over height, for the collage.
+  final double aspect;
+
+  bool get ready => from.ready;
+  String get credit => from.credit;
+}
+
+/// Finds plates for a species and keeps them on the device, so each picture
 /// is fetched once: the Fugleramme cut-outs first, then the engraved plates
 /// on Wikimedia Commons, as the web page chooses them (a shorter version of
 /// its scoreCandidate and commonsPlates).
 ///
 /// Everything lives in the app's cache folder under plates/: the pictures,
-/// the cut-outs' manifest (kept a week) and found.json, which remembers what
-/// Commons answered for each species (kept 30 days).
+/// the cut-outs' manifest (kept a week), found.json, which remembers what
+/// Commons answered for each species (kept 30 days), and choices.json, the
+/// plate picked by hand on a bird's card.
 class PlateLibrary {
   PlateLibrary._(this.dir);
 
@@ -59,21 +80,29 @@ class PlateLibrary {
   final Map<String, String> _cutoutPage = {};
   Map<String, dynamic> _alias = {};
   Map<String, dynamic> _found = {};
+  Map<String, dynamic> _choices = {};
 
   static Future<PlateLibrary> open() async {
     final base = await getApplicationCacheDirectory();
     final dir = Directory('${base.path}/plates');
     await dir.create(recursive: true);
     final lib = PlateLibrary._(dir);
-    try {
-      final f = File('${dir.path}/found.json');
-      if (await f.exists()) lib._found = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
-    } catch (_) {}
+    lib._found = await lib._readMap('found.json');
+    lib._choices = await lib._readMap('choices.json');
     return lib;
   }
 
-  /// The plate for a species, or null when none was found (or there is no
-  /// connection and it isn't on the device yet). Asked once a run.
+  Future<Map<String, dynamic>> _readMap(String name) async {
+    try {
+      final f = File('${dir.path}/$name');
+      if (await f.exists()) return jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+    } catch (_) {}
+    return {};
+  }
+
+  /// The plate for a species: the one picked on its card, else the best
+  /// found. Null when there is none (or no connection and it isn't on the
+  /// device yet). Asked once a run.
   Future<PlateArt?> plateFor(String sci, String common) =>
       _asked[sci] ??= _find(sci, common).catchError((Object e) {
         debugPrint('plate $sci: $e');
@@ -81,24 +110,70 @@ class PlateLibrary {
       });
 
   Future<PlateArt?> _find(String sci, String common) async {
-    await (_manifestLoad ??= _loadManifest());
-    final slug = _slug(sci);
-    final aliased = _alias[sci];
-    final keys = _cutouts[slug] ?? (aliased is String ? _cutouts[_slug(aliased)] : null);
-    if (keys != null && keys.isNotEmpty) {
-      final key = keys.first;
-      final who = _artists[_cutoutSource[key]] ?? '';
-      return PlateArt(
-        await _fetch('$_art/artwork/classic/$key'),
-        ready: true,
-        credit: '${who.isEmpty ? '' : 'After $who. '}Cut-out from the Fugleramme project, CC BY-SA 4.0.',
-        page: _cutoutPage[key],
-      );
+    final chosen = _choices[sci];
+    if (chosen is Map) {
+      try {
+        return await load(PlateCandidate.fromJson(chosen.cast<String, dynamic>()));
+      } catch (e) {
+        debugPrint('chosen plate $sci: $e');
+      }
     }
-    final hit = await _commonsPlate(sci, common);
-    if (hit == null) return null;
-    return PlateArt(await _fetch(hit['url'] as String),
-        ready: false, credit: hit['credit'] as String, page: hit['page'] as String?);
+    final all = await candidates(sci, common);
+    return all.isEmpty ? null : load(all.first);
+  }
+
+  /// Every plate on offer for a species, best first: its cut-outs, then up
+  /// to eight from Commons. For the card's "other plates".
+  Future<List<PlateCandidate>> candidates(String sci, String common) async {
+    await (_manifestLoad ??= _loadManifest());
+    final aliased = _alias[sci];
+    final keys = _cutouts[_slug(sci)] ?? (aliased is String ? _cutouts[_slug(aliased)] : null) ?? const [];
+    final out = <PlateCandidate>[
+      for (final key in keys)
+        PlateCandidate(
+          '$_art/artwork/classic/$key',
+          ready: true,
+          credit: '${_artists[_cutoutSource[key]] == null ? '' : 'After ${_artists[_cutoutSource[key]]}. '}'
+              'Cut-out from the Fugleramme project, CC BY-SA 4.0.',
+          page: _cutoutPage[key],
+        ),
+    ];
+    try {
+      out.addAll(await _commonsPlates(sci, common));
+    } catch (e) {
+      debugPrint('commons $sci: $e');
+    }
+    return out;
+  }
+
+  /// Fetch a candidate (once) and measure it.
+  Future<PlateArt> load(PlateCandidate c) async {
+    final file = await _fetch(c.url);
+    var aspect = 1.2;
+    try {
+      // Reads the picture's header only.
+      final buffer = await ui.ImmutableBuffer.fromFilePath(file.path);
+      final about = await ui.ImageDescriptor.encoded(buffer);
+      if (about.height > 0) aspect = about.width / about.height;
+      about.dispose();
+      buffer.dispose();
+    } catch (e) {
+      debugPrint('measure ${c.url}: $e');
+    }
+    return PlateArt(file, c, aspect);
+  }
+
+  /// Use [c] for a species from now on (its card's choice), and say what it is.
+  Future<PlateArt?> choose(String sci, PlateCandidate c) {
+    _choices[sci] = c.toJson();
+    File('${dir.path}/choices.json').writeAsString(jsonEncode(_choices)).catchError((Object e) {
+      debugPrint('choices: $e');
+      return File('');
+    });
+    return _asked[sci] = load(c).then<PlateArt?>((a) => a).catchError((Object e) {
+      debugPrint('plate $sci: $e');
+      return null;
+    });
   }
 
   static String _slug(String name) => name.trim().toLowerCase().replaceAll(' ', '-');
@@ -127,40 +202,44 @@ class PlateLibrary {
     } catch (_) {}
   }
 
-  /// What Commons has for a species: {url, credit, page}, or null. The
-  /// species' own illustrations category first, then its genus'.
-  Future<Map<String, dynamic>?> _commonsPlate(String sci, String common) async {
+  /// What Commons has for a species, best first. The species' own
+  /// illustrations category, then its genus'.
+  Future<List<PlateCandidate>> _commonsPlates(String sci, String common) async {
     final had = _found[sci];
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (had is Map && now - ((had['t'] as num?) ?? 0) < 30 * 86400000) {
-      final v = had['v'];
-      return v is Map ? v.cast<String, dynamic>() : null;
+    if (had is Map && had['v'] is List && now - ((had['t'] as num?) ?? 0) < 30 * 86400000) {
+      return [
+        for (final v in had['v'] as List)
+          if (v is Map) PlateCandidate.fromJson(v.cast<String, dynamic>())
+      ];
     }
     final genus = sci.split(RegExp(r'\s+')).first;
-    Map<String, dynamic>? best;
+    var best = <PlateCandidate>[];
     for (final (name, kin) in [(sci, ''), (genus, ' A plate of the same genus.')]) {
       for (final cat in ['$name (illustrations)', '$name illustrations']) {
         best = await _commonsCategory(cat, sci, common, kin);
-        if (best != null) break;
+        if (best.isNotEmpty) break;
       }
-      if (best != null) break;
+      if (best.isNotEmpty) break;
     }
-    _found[sci] = {'t': now, 'v': best};
+    _found[sci] = {
+      't': now,
+      'v': [for (final c in best) c.toJson()]
+    };
     try {
       await File('${dir.path}/found.json').writeAsString(jsonEncode(_found));
     } catch (_) {}
     return best;
   }
 
-  Future<Map<String, dynamic>?> _commonsCategory(String cat, String sci, String common, String kin) async {
+  Future<List<PlateCandidate>> _commonsCategory(String cat, String sci, String common, String kin) async {
     final u = '$_commons/w/api.php?format=json&action=query&generator=categorymembers&gcmtype=file'
         '&gcmlimit=50&prop=imageinfo&iiprop=url|size|mime&iiurlwidth=500'
         '&gcmtitle=${Uri.encodeQueryComponent('Category:$cat')}';
     final j = jsonDecode(utf8.decode(await _bytes(u)));
     final pages = (j is Map ? j['query'] : null) is Map ? (j['query']['pages'] as Map?) : null;
-    if (pages == null) return null;
-    Map<String, dynamic>? best;
-    var bestScore = -1;
+    if (pages == null) return [];
+    final scored = <(int, PlateCandidate)>[];
     for (final p in pages.values) {
       final ii = (p['imageinfo'] as List?)?.firstOrNull;
       if (ii is! Map) continue;
@@ -169,15 +248,17 @@ class PlateLibrary {
       if (((ii['width'] as num?) ?? 0) < 400 || ii['thumburl'] is! String) continue;
       final title = (p['title'] as String).replaceFirst(RegExp(r'^File:'), '');
       final score = scorePlate(title, sci, common, wide: kin.isNotEmpty);
-      if (score <= bestScore) continue;
-      bestScore = score;
-      best = {
-        'url': ii['thumburl'],
-        'page': ii['descriptionurl'],
-        'credit': '${title.replaceFirst(RegExp(r'\.\w+$'), '')}. Wikimedia Commons.$kin',
-      };
+      if (score < 0) continue;
+      scored.add((
+        score,
+        PlateCandidate(ii['thumburl'] as String,
+            ready: false,
+            credit: '${title.replaceFirst(RegExp(r'\.\w+$'), '')}. Wikimedia Commons.$kin',
+            page: ii['descriptionurl'] as String?)
+      ));
     }
-    return best;
+    scored.sort((a, b) => b.$1.compareTo(a.$1));
+    return [for (final s in scored.take(8)) s.$2];
   }
 
   /// How well a Commons file suits the plate: -1 to pass it over. After the
