@@ -11,6 +11,9 @@ cd "$(dirname "$0")"
     echo "STATUS: no-gh  (brew install gh, then: gh auth login)"
   elif ! gh auth status >/dev/null 2>&1; then
     echo "STATUS: gh-not-logged-in  (run: gh auth login)"
+    gh auth status 2>&1 | sed 's/^/  gh: /'
+    # git may still hold a sign-in of its own: try, without stopping to ask
+    GIT_TERMINAL_PROMPT=0 git push -u origin --all && git push origin --tags && echo "STATUS: pushed"
   else
     gh auth setup-git >/dev/null 2>&1
     if ! git remote get-url origin >/dev/null 2>&1; then
