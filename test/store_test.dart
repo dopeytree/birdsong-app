@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:birdsong_app/server/local_api.dart' as api;
 import 'package:birdsong_app/store/detection_store.dart';
 import 'package:birdsong_app/ui/format.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -132,5 +133,62 @@ void main() {
         '8°C, light rain showers');
     expect(weatherWords({'temperatureC': -1.6, 'symbol': 'clearsky_night'}), '-2°C, clear');
     expect(weatherWords(null), '');
+  });
+
+  test('the trail and where each bird was heard come back after a restart', () async {
+    final store = await DetectionStore.open(root);
+    final t0 = DateTime(2026, 11, 20, 7, 10);
+    final ses = await store.startSession(at: t0);
+    store.addTrackPoint(ses, TrackPoint(at: t0, lat: 51.1268, lon: -2.7405, accuracy: 8));
+    store.addTrackPoint(
+        ses, TrackPoint(at: t0.add(const Duration(seconds: 30)), lat: 51.1290, lon: -2.7392));
+    await store.add(
+        model: 'm',
+        sci: 'Erithacus rubecula',
+        common: 'Robin',
+        confidence: 0.94,
+        at: t0.add(const Duration(minutes: 2)),
+        lat: 51.1280,
+        lon: -2.7398);
+    await store.endSession(ses, at: t0.add(const Duration(minutes: 10)));
+
+    final dir = store.dirOf(ses).path;
+    final track = await File('$dir/track.jsonl').readAsLines();
+    expect(track, hasLength(2));
+    expect(jsonDecode(track.first), containsPair('accuracy', 8.0));
+    final line = jsonDecode((await File('$dir/detections.jsonl').readAsLines()).single) as Map;
+    expect(line['latitude'], 51.1280);
+    expect(line['longitude'], -2.7398);
+
+    final again = await DetectionStore.open(root);
+    expect(again.sessions.single.track.map((p) => p.lat), [51.1268, 51.1290]);
+    expect(again.all.single.hasPlace, isTrue);
+  });
+
+  test('sessions split at the species limit make one walk on the map', () async {
+    final store = await DetectionStore.open(root);
+    final t0 = DateTime(2026, 11, 20, 7, 0);
+    final a = await store.startSession(at: t0);
+    await store.add(model: 'm', sci: 'A a', common: 'A', confidence: 0.9, at: t0.add(const Duration(minutes: 5)), lat: 51.0, lon: -2.0);
+    final split = t0.add(const Duration(minutes: 30));
+    await store.endSession(a, at: split.subtract(const Duration(milliseconds: 1)), reason: 'speciesLimit');
+    final b = await store.startSession(at: split);
+    store.addTrackPoint(b, TrackPoint(at: split, lat: 51.01, lon: -2.01));
+    await store.add(model: 'm', sci: 'B b', common: 'B', confidence: 0.8, at: split.add(const Duration(minutes: 1)));
+    await store.endSession(b, at: split.add(const Duration(minutes: 20)));
+    // A separate outing later the same day.
+    final c = await store.startSession(at: t0.add(const Duration(hours: 3)));
+    await store.add(model: 'm', sci: 'C c', common: 'C', confidence: 0.8, at: c.start.add(const Duration(minutes: 1)));
+    await store.endSession(c, at: c.start.add(const Duration(minutes: 20)));
+
+    expect(store.walkOf(a), [a, b]);
+    expect(store.walkOf(b), [a, b]);
+    expect(store.walkOf(c), [c]);
+
+    final w = api.walk(store.walkOf(b), b, [for (final x in store.walkOf(b)) ...store.forPlate('all', session: x)]);
+    expect(w['sessions'], [a.id, b.id]);
+    expect((w['detections'] as List).single['scientificName'], 'A a');
+    expect(w['unplaced'], 1, reason: 'B was heard without a position');
+    expect(w['trail'], hasLength(1));
   });
 }

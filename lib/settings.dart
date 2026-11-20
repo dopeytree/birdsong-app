@@ -115,6 +115,19 @@ class Settings extends ChangeNotifier {
   /// Which model's detections the plate draws, or 'all'.
   String plateModel = 'bnl-v3-10k';
 
+  /// Listen here: show the walk on a map in place of the collage.
+  bool showMap = false;
+
+  /// The map's crosses: 'first' (where each species was first heard) or
+  /// 'all' (every call).
+  String mapBirds = 'first';
+
+  /// The map's extras: listed buildings, scheduled monuments, protected
+  /// nature sites and Wikipedia places along the walk. Off by default, as
+  /// they send the walk's area to Historic England, Natural England and
+  /// Wikipedia.
+  bool mapExtras = false;
+
   static Future<Settings> load(Directory dir) async {
     final s = Settings._(File('${dir.path}/settings.json'));
     try {
@@ -163,6 +176,9 @@ class Settings extends ChangeNotifier {
     final active = j['activeModels'];
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
+    showMap = (j['showMap'] as bool?) ?? showMap;
+    mapBirds = j['mapBirds'] == 'all' ? 'all' : 'first';
+    mapExtras = (j['mapExtras'] as bool?) ?? mapExtras;
     // Settings saved before defaults v2 still carry the first test build's
     // defaults (3 s, 50 %); move those, and only those, to the new ones.
     if (((j['defaults'] as num?) ?? 1) < 2) {
@@ -206,6 +222,9 @@ class Settings extends ChangeNotifier {
         'plateView': plateModes[plateMode - 1].key,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
+        'showMap': showMap,
+        'mapBirds': mapBirds,
+        'mapExtras': mapExtras,
       };
 
   void update(void Function(Settings s) change) {

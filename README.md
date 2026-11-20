@@ -65,9 +65,21 @@ flutter test
 3. On the plate the date line gives the session's time and place; the
    small arrows at either side step between sessions. A creature being
    heard right now glows, its dot breathing out a ring.
+4. **The map** (the map button, top right, in *Listen here & now*; not in
+   views d and e, which show one bird alone): the
+   collage gives way to a map of the walk, drawn like the plate: paper,
+   contours, woods and water, quiet roads. A dotted trail runs from Start to
+   End (or Now), with a cross where each species was first heard; tap one
+   for its card. Title, date, place and the Index of species stay. Sessions
+   split at 42 species are joined into one walk. Settings > *Map*: every
+   call instead of first heard, and landmarks, heritage and nature sites
+   (off by default; see the note there about what they send where). The map
+   needs a connection: MapLibre and d3 load from a CDN, tiles from
+   OpenFreeMap, heights from the Mapzen terrain tiles on AWS.
 
 On iPhone the app keeps listening with the screen locked (the orange
-microphone dot shows).
+microphone dot shows), and keeps the map's trail too: a position about every
+30 seconds once you've moved 15 m, and one at each detection.
 
 ## Models
 
@@ -102,7 +114,10 @@ sessions/2026-11-18T221904Z_a91e4c/
   session.json        uuid, start and end (UTC), place, settings, models,
                       weather, stop reason, summary; schemaVersion 1
   detections.jsonl    one detection per line: timestamp, scientificName,
-                      commonName, confidence, model, top-5 scores, clip
+                      commonName, confidence, model, top-5 scores, clip,
+                      latitude and longitude (where it was heard)
+  track.jsonl         the walk's trail, one fix per line: timestamp,
+                      latitude, longitude, accuracy (metres)
   audio/<id>.wav      the clip around each detection
   spectrograms/<id>.bmp
 ```
@@ -161,12 +176,15 @@ lib/
     labels.dart               every label format in use
   server/
     local_server.dart         127.0.0.1 server: page, source.json, /api
-    local_api.dart            the 8 BirdNET-Go endpoints, from local data
+    local_api.dart            the 8 BirdNET-Go endpoints, from local data,
+                              and /app/walk.json for the map
   store/
     detection_store.dart      detections (JSON lines) and clips
     media.dart                WAV, FFT, spectrogram BMP
   ui/                         Plate, Listen, Models, Settings
 assets/web/                   Birdsong's index.html and fonts (v0.42)
+assets/app/                   the app's additions to it: plate-extras.js
+                              (folding index, pinch zoom), map-mode.js (map)
 tool/bootstrap.sh             one-time set-up
 tool/patch_platforms.py       plist, entitlements, deployment targets
 ```

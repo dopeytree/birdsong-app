@@ -39,6 +39,8 @@ class Detection {
     this.scores = const [],
     this.hasClip = false,
     this.reviewStatus = 'unreviewed',
+    this.lat,
+    this.lon,
   }) : uuid = uuid ?? newUuid();
 
   /// Short local id, used in the plate's URLs (/api/v2/audio/<id>).
@@ -61,6 +63,12 @@ class Detection {
   /// unreviewed, correct, wrong or unsure.
   String reviewStatus;
 
+  /// Where it was heard: the phone's latest position fix at the time, for
+  /// the map. Null when location was off or no fix had come in yet.
+  double? lat;
+  double? lon;
+  bool get hasPlace => lat != null && lon != null;
+
   String get clipPath => 'audio/$id.wav';
   String get spectrogramPath => 'spectrograms/$id.bmp';
 
@@ -80,6 +88,8 @@ class Detection {
               {'scientificName': s.sci, 'confidence': double.parse(s.confidence.toStringAsFixed(4))}
           ],
         'reviewStatus': reviewStatus,
+        if (lat != null) 'latitude': lat,
+        if (lon != null) 'longitude': lon,
         if (hasClip) 'clip': clipPath,
         if (hasClip) 'spectrogram': spectrogramPath,
       };
@@ -102,6 +112,8 @@ class Detection {
         ],
         hasClip: j['clip'] != null,
         reviewStatus: (j['reviewStatus'] as String?) ?? 'unreviewed',
+        lat: (j['latitude'] as num?)?.toDouble(),
+        lon: (j['longitude'] as num?)?.toDouble(),
       );
 
   /// A line from the old detections.jsonl (before session folders).
@@ -113,6 +125,32 @@ class Detection {
         confidence: (j['confidence'] as num).toDouble(),
         at: DateTime.parse(j['at'] as String),
         hasClip: (j['clip'] as bool?) ?? false,
+      );
+}
+
+/// One position fix on the way, for the map's trail. A line of track.jsonl.
+class TrackPoint {
+  const TrackPoint({required this.at, required this.lat, required this.lon, this.accuracy});
+
+  final DateTime at;
+  final double lat;
+  final double lon;
+
+  /// Horizontal accuracy in metres, as the phone reported it.
+  final double? accuracy;
+
+  Map<String, dynamic> toJson() => {
+        'timestamp': _utc(at),
+        'latitude': double.parse(lat.toStringAsFixed(6)),
+        'longitude': double.parse(lon.toStringAsFixed(6)),
+        if (accuracy != null) 'accuracy': double.parse(accuracy!.toStringAsFixed(1)),
+      };
+
+  static TrackPoint fromJson(Map<String, dynamic> j) => TrackPoint(
+        at: _local(j['timestamp'] as String),
+        lat: (j['latitude'] as num).toDouble(),
+        lon: (j['longitude'] as num).toDouble(),
+        accuracy: (j['accuracy'] as num?)?.toDouble(),
       );
 }
 
@@ -170,6 +208,10 @@ class Session {
   /// Folder name under sessions/, set when first written.
   String? folder;
 
+  /// Where the phone went while listening, oldest first (track.jsonl).
+  /// Recorded about every 30 seconds while moving, and at each detection.
+  final List<TrackPoint> track = [];
+
   bool get live => end == null;
   bool get hasPlace => lat != null && lon != null;
 
@@ -210,6 +252,7 @@ class Session {
         'summary': {
           'detections': inside.length,
           'species': {for (final d in inside) d.sci}.length,
+          if (track.isNotEmpty) 'trackPoints': track.length,
         },
       };
 
@@ -275,6 +318,7 @@ Future<void> _writeAtomic(File file, String text) async {
 ///   sessions/2026-11-18T221904Z_a91e4c/
 ///     session.json        the session (see [Session.toJson])
 ///     detections.jsonl    one detection per line (see [Detection.toJson])
+///     track.jsonl         position fixes on the way (see [TrackPoint]), if any
 ///     audio/<id>.wav      the clip around each detection
 ///     spectrograms/<id>.bmp
 ///
@@ -334,6 +378,16 @@ class DetectionStore extends ChangeNotifier {
               _nextId = max(_nextId, d.id + 1);
             } catch (_) {}
           }
+        }
+        final track = File('${e.path}/track.jsonl');
+        if (await track.exists()) {
+          for (final line in await track.readAsLines()) {
+            if (line.trim().isEmpty) continue;
+            try {
+              x.track.add(TrackPoint.fromJson(jsonDecode(line) as Map<String, dynamic>));
+            } catch (_) {}
+          }
+          x.track.sort((a, b) => a.at.compareTo(b.at));
         }
       } catch (e) {
         debugPrint('session ${file.path}: $e');
@@ -456,6 +510,10 @@ class DetectionStore extends ChangeNotifier {
     final inside = inSession(x);
     await _writeAtomic(File('${dir.path}/detections.jsonl'),
         inside.map((d) => '${jsonEncode(d.toJson())}\n').join());
+    if (x.track.isNotEmpty) {
+      await _writeAtomic(File('${dir.path}/track.jsonl'),
+          x.track.map((p) => '${jsonEncode(p.toJson())}\n').join());
+    }
     await _writeAtomic(File('${dir.path}/session.json'),
         const JsonEncoder.withIndent('  ').convert(x.toJson(inside)));
   }
@@ -555,6 +613,33 @@ class DetectionStore extends ChangeNotifier {
 
   List<Detection> inSession(Session x) => all.where((d) => x.contains(d.at)).toList();
 
+  /// Add a position fix to a session's trail.
+  void addTrackPoint(Session x, TrackPoint p) {
+    x.track.add(p);
+    _touch(x);
+    notifyListeners();
+  }
+
+  /// The walk [x] belongs to: [x] and the sessions run straight on from it
+  /// or into it because one filled up at [maxSessionSpecies] (stopReason
+  /// speciesLimit, the next starting within a few seconds). Oldest first.
+  List<Session> walkOf(Session x) {
+    final i = sessions.indexOf(x);
+    if (i < 0) return [x];
+    bool joined(Session a, Session b) =>
+        a.stopReason == 'speciesLimit' &&
+        a.end != null &&
+        b.start.difference(a.end!).abs() <= const Duration(seconds: 5);
+    var from = i, to = i;
+    while (from > 0 && joined(sessions[from - 1], sessions[from])) {
+      from--;
+    }
+    while (to < sessions.length - 1 && joined(sessions[to], sessions[to + 1])) {
+      to++;
+    }
+    return sessions.sublist(from, to + 1);
+  }
+
   Session? sessionOf(Detection d) {
     for (var i = sessions.length - 1; i >= 0; i--) {
       if (sessions[i].contains(d.at)) return sessions[i];
@@ -572,6 +657,8 @@ class DetectionStore extends ChangeNotifier {
     required DateTime at,
     double? windowSeconds,
     List<RankedScore> scores = const [],
+    double? lat,
+    double? lon,
   }) async {
     final d = Detection(
         id: _nextId++,
@@ -581,7 +668,9 @@ class DetectionStore extends ChangeNotifier {
         confidence: confidence,
         at: at,
         windowSeconds: windowSeconds,
-        scores: scores);
+        scores: scores,
+        lat: lat,
+        lon: lon);
     all.add(d);
     // Heard with no session open (shouldn't happen): give it one.
     var x = sessionOf(d);

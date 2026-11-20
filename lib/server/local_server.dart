@@ -64,10 +64,13 @@ class LocalServer {
     if (path == '/art/artwork/classic/birds/cardinalis-cardinalis.webp') {
       return _asset(res, 'assets/app/cardinal.webp', 'image/webp');
     }
-    // The app's own additions to the page: folding the index, pinch zoom.
-    if (path == '/app/plate-extras.js') {
-      return _asset(res, 'assets/app/plate-extras.js', 'text/javascript; charset=utf-8');
+    // The app's own additions to the page: folding the index, pinch zoom,
+    // and the map of the walk.
+    if (path == '/app/plate-extras.js' || path == '/app/map-mode.js') {
+      return _asset(res, 'assets$path', 'text/javascript; charset=utf-8');
     }
+    // The walk on the map: the selected session's trail and placed birds.
+    if (path == '/app/walk.json') return _json(res, _walk());
     if (path == '/source.json') return _json(res, _source());
     if (path == '/healthz') {
       res.write('ok\n');
@@ -95,6 +98,17 @@ class LocalServer {
       return {'birdnet': settings.birdnetBase.isNotEmpty};
     }
     return {'birdnet': true};
+  }
+
+  // ---- The map: the walk the selected session belongs to -----------------
+
+  Map<String, dynamic> _walk() {
+    final selected = store.selected;
+    if (settings.mode != AppMode.listen || selected == null) return {'available': false};
+    final sessions = store.walkOf(selected);
+    final model = plateModel?.call() ?? 'all';
+    final heard = [for (final x in sessions) ...store.forPlate(model, session: x)];
+    return api.walk(sessions, selected, heard);
   }
 
   // ---- Listen here: answer from this device's detections -----------------
@@ -328,7 +342,9 @@ class LocalServer {
       // the body's safe-area padding; count it, so nothing scrolls.
       'try{var mo=measureOthers;measureOthers=function(){var c=getComputedStyle(document.body);'
       'return mo()+Math.ceil(parseFloat(c.paddingTop)+parseFloat(c.paddingBottom));};}catch(e){}'
-      '})();</script><script src="/app/plate-extras.js"></script>';
+      '})();</script><script src="/app/plate-extras.js"></script>'
+      // Map mode: the walk on a map in place of the collage (assets/app/map-mode.js).
+      '<script src="/app/map-mode.js"></script>';
 
   String? _pageHtml;
 

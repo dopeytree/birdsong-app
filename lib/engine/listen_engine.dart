@@ -36,6 +36,16 @@ class ModelReport {
 /// starts a fresh session.
 const maxSessionSpecies = 42;
 
+/// The map's trail: keep a position at most this often while moving...
+const trackEvery = Duration(seconds: 30);
+
+/// ...and only once the phone has moved this far (metres), so standing
+/// still costs nothing. Rough is fine: the trail shows where the walk went.
+const trackMetres = 15;
+
+/// A detection takes the latest fix if it is no older than this.
+const fixFreshFor = Duration(minutes: 2);
+
 /// Listens to the microphone and runs every active model over it.
 class ListenEngine extends ChangeNotifier {
   ListenEngine(this.settings, this.models, this.store);
@@ -77,6 +87,13 @@ class ListenEngine extends ChangeNotifier {
 
   /// The session being recorded, while listening.
   Session? session;
+
+  // The trail: position updates while listening, the latest fix, and when
+  // a point was last kept.
+  StreamSubscription<Position>? _trackSub;
+  Position? _fix;
+  DateTime? _fixAt;
+  DateTime? _keptAt;
 
   /// Location problems, for the Listen tab; listening carries on without.
   String? locationNote;
@@ -154,6 +171,7 @@ class ListenEngine extends ChangeNotifier {
       await _recorder?.stop();
     } catch (_) {}
     running = false;
+    await _stopTrack();
     // Wait for a window still in flight before closing its sessions.
     while (_busy) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -322,6 +340,8 @@ class ListenEngine extends ChangeNotifier {
       }
       return;
     }
+    final fix = _freshFix(now);
+    if (fix != null) _keepFix(fix, now, always: true); // the trail passes each bird
     final d = await store.add(
         model: m.spec.id,
         sci: l.sci,
@@ -329,7 +349,9 @@ class ListenEngine extends ChangeNotifier {
         confidence: score,
         at: now,
         windowSeconds: m.spec.windowSeconds.toDouble(),
-        scores: ranked);
+        scores: ranked,
+        lat: fix?.latitude,
+        lon: fix?.longitude);
     _open[key] = d;
     unawaited(_saveClip(d, m));
   }
@@ -358,6 +380,9 @@ class ListenEngine extends ChangeNotifier {
     session!
       ..weather = old.weather
       ..locationSource = old.locationSource;
+    // The walk goes on: start the new session's trail where the last left off.
+    final fix = _fix;
+    if (fix != null) _keepFix(fix, now, always: true);
     _open.clear();
     _lastHeard.clear();
     notifyListeners();
@@ -387,8 +412,11 @@ class ListenEngine extends ChangeNotifier {
     try {
       final pos = await _gps();
       if (pos != null) {
-        ses.lat = pos.$1;
-        ses.lon = pos.$2;
+        // Location is allowed: the map's trail starts here.
+        _startTrack();
+        _onFix(pos);
+        ses.lat = pos.latitude;
+        ses.lon = pos.longitude;
         ses.locationSource = 'gps';
         locationNote = null;
       } else if (settings.latitude != null && settings.longitude != null) {
@@ -416,7 +444,7 @@ class ListenEngine extends ChangeNotifier {
   }
 
   /// The phone's position, or null (with [locationNote] saying why).
-  Future<(double, double)?> _gps() async {
+  Future<Position?> _gps() async {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
         locationNote = 'Location Services are off, so this session has no GPS place.';
@@ -434,11 +462,86 @@ class ListenEngine extends ChangeNotifier {
           timeLimit: Duration(seconds: 20),
         ),
       );
-      return (pos.latitude, pos.longitude);
+      return pos;
     } catch (e) {
       locationNote = 'Could not get a GPS place: $e';
       return null;
     }
+  }
+
+  // ---- the trail, for the map --------------------------------------------
+
+  /// Position updates while listening: only after moving [trackMetres],
+  /// kept at most every [trackEvery] (see [_onFix]). On iPhone they carry on
+  /// with the screen locked, like the listening (UIBackgroundModes location;
+  /// tool/patch_platforms.py).
+  void _startTrack() {
+    if (_trackSub != null || !running) return;
+    final LocationSettings how;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        how = AppleSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: trackMetres,
+          activityType: ActivityType.fitness,
+          // Paused updates don't come back by themselves in the background,
+          // which would cut the trail short; distanceFilter keeps it light.
+          pauseLocationUpdatesAutomatically: false,
+          allowBackgroundLocationUpdates: true,
+          showBackgroundLocationIndicator: false,
+        );
+      case TargetPlatform.macOS:
+        how = AppleSettings(accuracy: LocationAccuracy.high, distanceFilter: trackMetres);
+      case TargetPlatform.android:
+        how = AndroidSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: trackMetres,
+          intervalDuration: trackEvery,
+        );
+      default:
+        how = const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: trackMetres);
+    }
+    _trackSub = Geolocator.getPositionStream(locationSettings: how).listen(
+      _onFix,
+      onError: (Object e) => debugPrint('track: $e'),
+    );
+  }
+
+  Future<void> _stopTrack() async {
+    await _trackSub?.cancel();
+    _trackSub = null;
+    _fix = null;
+    _fixAt = null;
+    _keptAt = null;
+  }
+
+  void _onFix(Position p) {
+    final now = DateTime.now();
+    _fix = p;
+    _fixAt = now;
+    _keepFix(p, now);
+  }
+
+  /// Add [p] to the session's trail, unless one was kept under
+  /// [trackEvery] ago ([always]: at a detection, or a new session).
+  void _keepFix(Position p, DateTime at, {bool always = false}) {
+    final ses = session;
+    if (ses == null) return;
+    final kept = _keptAt;
+    if (!always && kept != null && at.difference(kept) < trackEvery) return;
+    final last = ses.track.isEmpty ? null : ses.track.last;
+    // The same fix again (a detection while standing still): nothing new.
+    if (last != null && last.lat == p.latitude && last.lon == p.longitude) return;
+    _keptAt = at;
+    store.addTrackPoint(
+        ses, TrackPoint(at: at, lat: p.latitude, lon: p.longitude, accuracy: p.accuracy));
+  }
+
+  /// The latest fix, if recent enough to say where a bird was heard.
+  Position? _freshFix(DateTime now) {
+    final f = _fix, at = _fixAt;
+    if (f == null || at == null || now.difference(at) > fixFreshFor) return null;
+    return f;
   }
 
   /// Disk used by recordings.

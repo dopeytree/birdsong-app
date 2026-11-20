@@ -40,6 +40,7 @@ class _PlateViewState extends State<PlateView> {
   Timer? _refreshSoon;
   String _livePushed = '';
   String _sessionPushed = '';
+  String _mapPushed = '';
 
   /// One of the page's own pop-ups (a creature's card, its dialog) is open:
   /// the app's buttons and arrows step aside.
@@ -201,10 +202,12 @@ class _PlateViewState extends State<PlateView> {
         _pushInsets();
         _livePushed = '';
         _sessionPushed = '';
+        _mapPushed = '';
         _pushLive();
         _pushSession();
         final mode = plateModes[_s.plateMode - 1];
         if (mode.sizeBy != null) app.page?.set('sizeBy', mode.sizeBy!);
+        _pushMap();
         widget.onLoaded?.call();
       }));
     _load();
@@ -235,6 +238,7 @@ class _PlateViewState extends State<PlateView> {
   }
 
   void _settingsChanged() {
+    _pushMap();
     final station = '${_s.birdnetBase}|${_s.stationDigits}';
     if (_s.mode != _mode || _s.plateModel != _plateModel || station != _station) {
       _mode = _s.mode;
@@ -253,9 +257,32 @@ class _PlateViewState extends State<PlateView> {
     _refreshSoon ??= Timer(const Duration(milliseconds: 500), () {
       _refreshSoon = null;
       _web
-          .runJavaScript('typeof refresh==="function"&&refresh(false)')
+          .runJavaScript('typeof refresh==="function"&&refresh(false);'
+              'window.birdsongMapRefresh&&window.birdsongMapRefresh()')
           .catchError((Object _) {});
     });
+  }
+
+  // Map or collage, and the map's options (assets/app/map-mode.js). The map
+  // is a Listen here view (a station has no walks) and takes the collage's
+  // place, so it has no room in views d and e, which show one bird alone.
+  bool get _mapAllowed =>
+      _s.mode == AppMode.listen && !plateModes[_s.plateMode - 1].currentOnly;
+  bool get _mapOn => _mapAllowed && _s.showMap;
+
+  void _pushMap() {
+    final opts = jsonEncode({'birds': _s.mapBirds, 'extras': _s.mapExtras});
+    final js = 'window.birdsongMapOptions&&window.birdsongMapOptions($opts);'
+        'window.birdsongMap&&window.birdsongMap($_mapOn)';
+    if (js == _mapPushed) return;
+    _mapPushed = js;
+    _web.runJavaScript(js).catchError((Object _) {});
+  }
+
+  void _toggleMap() {
+    final on = !_s.showMap;
+    _s.update((x) => x.showMap = on);
+    _say(on ? 'The walk, on a map.' : 'The plate.', seconds: 2);
   }
 
   // Tell the page which creatures are being heard right now, so they glow.
@@ -461,6 +488,14 @@ class _PlateViewState extends State<PlateView> {
                       color: Theme.of(context).colorScheme.primary,
                       onPressed: _nextMode,
                     ),
+                    // The walk on a map in place of the collage (Listen here).
+                    if (_mapAllowed)
+                      IconButton(
+                        tooltip: _mapOn ? 'Back to the plate' : 'The walk on a map',
+                        icon: Icon(_mapOn ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
+                        color: Theme.of(context).colorScheme.primary,
+                        onPressed: _toggleMap,
+                      ),
                     if (PlateShare.supported)
                       PopupMenuButton<String>(
                         key: _shareKey,

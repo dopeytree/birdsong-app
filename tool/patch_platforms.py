@@ -3,7 +3,8 @@
 
 Safe to run again: every change checks before it writes.
 
-iOS and macOS: microphone and local-network wording, background audio (iOS),
+iOS and macOS: microphone and local-network wording, background audio and
+location (iOS, for the map's trail),
 App Transport Security for the page served on 127.0.0.1 and plain-HTTP
 BirdNET-Go stations, sandbox entitlements (macOS), and the minimum OS
 (iOS 18, so iOS 18, 26 and 27; macOS 14, which ONNX Runtime needs).
@@ -24,8 +25,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 MIC = ("Birdsong listens for birds and identifies them on this device. "
        "Audio never leaves it.")
-LOC = ("Birdsong marks each listening session with where it happened, and leaves "
-       "out birds that don't live there.")
+LOC = ("Birdsong marks each listening session with where it happened, draws the "
+       "way you walked on its map, and leaves out birds that don't live there.")
 LAN = "Birdsong reads detections from your BirdNET-Go station on your home network."
 
 # Built with the iOS 27 SDK; runs on iOS 27 and the two releases before it
@@ -84,7 +85,9 @@ def ios():
         "NSMicrophoneUsageDescription": MIC,
         "NSLocalNetworkUsageDescription": LAN,
         "NSLocationWhenInUseUsageDescription": LOC,
-        "UIBackgroundModes": ["audio"],
+        # location: the map's trail carries on with the screen locked, like
+        # the listening (lib/engine/listen_engine.dart _startTrack).
+        "UIBackgroundModes": ["audio", "location"],
         "NSAppTransportSecurity": ATS,
     })
     podfile = ROOT / "ios/Podfile"

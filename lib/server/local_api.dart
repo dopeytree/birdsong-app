@@ -154,3 +154,51 @@ List<Map<String, dynamic>> detections(List<Detection> all, String species, int l
   }
   return out;
 }
+
+/// The walk the selected session belongs to, for the map: its trail and the
+/// detections that have a place. Not a BirdNET-Go endpoint (BirdNET-Go has
+/// no trail), so it lives under /app/ and the page feature-detects it.
+///
+/// [walk] is oldest first (DetectionStore.walkOf); [heard] is what the plate
+/// draws from those sessions (one model, or all).
+Map<String, dynamic> walk(List<Session> parts, Session selected, List<Detection> heard) {
+  final trail = [
+    for (final x in parts)
+      for (final p in x.track) [p.lon, p.lat, p.at.millisecondsSinceEpoch]
+  ];
+  final placed = heard.where((d) => d.hasPlace).toList()..sort((a, b) => a.at.compareTo(b.at));
+  final start = parts.first.start, end = parts.last.end;
+  // Where to centre a walk with no trail yet: the first session with a place.
+  Session? anchor;
+  for (final x in parts) {
+    if (x.hasPlace) {
+      anchor = x;
+      break;
+    }
+  }
+  return {
+    'available': true,
+    'live': parts.last.live,
+    'sessions': [for (final x in parts) x.id],
+    'selected': selected.id,
+    'start': isoWithOffset(start),
+    if (end != null) 'end': isoWithOffset(end),
+    if (anchor != null) 'place': [anchor.lon, anchor.lat],
+    // [longitude, latitude, epoch milliseconds], oldest first.
+    'trail': trail,
+    'detections': [
+      for (final d in placed)
+        {
+          'id': d.id,
+          'scientificName': d.sci,
+          'commonName': d.common,
+          'confidence': double.parse(d.confidence.toStringAsFixed(4)),
+          'timestamp': isoWithOffset(d.at),
+          'longitude': d.lon,
+          'latitude': d.lat,
+        }
+    ],
+    // Heard, but before the first fix or with location off.
+    'unplaced': heard.length - placed.length,
+  };
+}

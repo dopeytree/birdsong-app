@@ -179,7 +179,7 @@
     },
     {
       "find": "function measureOthers()",
-      "used_by": "local_server.dart: wrapped to count the safe-area padding"
+      "used_by": "local_server.dart: wrapped to count the safe-area padding; map-mode.js: sizes the map when the collage is off"
     },
     {
       "find": "plateEl.style.height = Math.max(140, innerHeight - measureOthers())",
@@ -191,7 +191,7 @@
     },
     {
       "find": "id=\"tip\"",
-      "used_by": "plate-extras.js: the name label is held back during a pinch"
+      "used_by": "plate-extras.js: the name label is held back during a pinch; map-mode.js: labels for landmarks on the map"
     },
     {
       "find": "#tip.on{",
@@ -223,7 +223,7 @@
     },
     {
       "find": "async function openDetail(sp)",
-      "used_by": "plate-extras.js: modes d and e open the shown bird's card"
+      "used_by": "plate-extras.js: modes d and e open the shown bird's card; map-mode.js: tapping a bird's cross opens its card"
     },
     {
       "find": "<div id=\"latestFig\"></div>",
@@ -236,6 +236,22 @@
     {
       "find": "if (tot / (W * H) > .5) return null;",
       "used_by": "plate-extras.js: the plates this gives up on are drawn whole and need the blend"
+    },
+    {
+      "find": "id=\"caption\"",
+      "used_by": "map-mode.js: caption reworded while the map is shown"
+    },
+    {
+      "find": "let species = []",
+      "used_by": "map-mode.js: the session's row for a bird, for its card"
+    },
+    {
+      "find": "body.no-plate #plate",
+      "used_by": "map-mode.js: the map still shows with the collage switched off"
+    },
+    {
+      "find": "<main>",
+      "used_by": "map-mode.js: 'Passed on the way' goes after the Index of species"
     }
   ],
   "endpoints": [

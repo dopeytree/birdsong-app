@@ -84,6 +84,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: EdgeInsets.fromLTRB(side, 4, side, 32),
             children: [
               _displaySection(context, listen),
+              if (listen) _mapSection(context),
               const SizedBox(height: 8),
               SegmentedButton<AppMode>(
                 segments: const [
@@ -528,6 +529,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// The map of the walk (the map button on the plate switches to it).
+  static const mapBirds = {
+    'first': 'Where each was first heard',
+    'all': 'Every call',
+  };
+
+  Widget _mapSection(BuildContext context) {
+    final theme = Theme.of(context);
+    return _section(
+      context,
+      'Map',
+      summary: s.showMap ? 'Showing the walk · ${mapBirds[s.mapBirds]}' : 'Showing the collage',
+      [
+        _switch('Show the walk on a map', s.showMap, (v) => s.update((x) => x.showMap = v)),
+        _dropdown('Crosses', s.mapBirds, mapBirds, (v) => s.update((x) => x.mapBirds = v)),
+        _switch('Landmarks, heritage and nature sites', s.mapExtras,
+            (v) => s.update((x) => x.mapExtras = v)),
+        Text(
+          'The map is drawn from OpenFreeMap and open elevation data, so the area of each walk '
+          'is sent to them. Landmarks also send it to Historic England, Natural England and '
+          'Wikipedia, and list what the walk passed under the index.',
+          style: theme.textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
   Widget _link(String label, String url) => TextButton(
         style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
         onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
@@ -549,7 +577,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Birdsong${snap.data == null ? '' : ' v${snap.data}'}. Created by Ed Stone. '
           'Detections by $detections. Bird cut-outs from the Fugleramme project by '
           'Arne Giacomo, after Gould, the von Wright brothers, Audubon and others, used under '
-          'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Weather from MET Norway, CC BY 4.0. Further plates from '
+          'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Weather from MET Norway, CC BY 4.0. '
+          'Maps from OpenFreeMap and OpenStreetMap contributors (ODbL), drawn with MapLibre; '
+          'heights from the Mapzen Terrain Tiles. Further plates from '
           'Nederlandsche Vogelen (Nozeman & Sepp, Amsterdam, 1770\u20131829), digitised by the '
           'Koninklijke Bibliotheek, with others from public-domain works held on Wikimedia Commons.',
           style: theme.textTheme.bodyMedium,
