@@ -28,6 +28,12 @@ dependencies:
   # audio session with the recorder (lib/native/bird_card.dart).
   audioplayers: ^6.4.0
 
+  # The walk on a map on the Flutter plate (lib/native/walk_map.dart):
+  # flutter_map, with the paper style drawn from OpenFreeMap's vector tiles.
+  flutter_map: ^8.2.0
+  flutter_map_vector_tiles: ^2.12.0
+  latlong2: ^0.9.1
+
   # Where models, detections and recordings live.
   path_provider: ^2.1.5
 

@@ -19,6 +19,7 @@ import 'bird_card.dart';
 import 'collage_view.dart';
 import 'index_view.dart';
 import 'plate_library.dart';
+import 'walk_map.dart';
 
 /// The plate drawn by Flutter itself instead of the web page: a first
 /// version, for Listen here. It has the heading, the collage, the Index of
@@ -49,8 +50,11 @@ import 'plate_library.dart';
 /// So are the caption, Limit species, and skulls, wings and eggs among a
 /// bird's plates (Settings > Experimental).
 ///
-/// Not moved across yet: the map, and remote stations (those still open
-/// the web plate).
+/// The map button shows the walk on a map in the collage's place
+/// (walk_map.dart), as the web plate's map mode.
+///
+/// Not moved across yet: the map's landmarks (Settings > Map, extras), and
+/// remote stations (those still open the web plate).
 class NativePlate extends StatefulWidget {
   const NativePlate({super.key, required this.app, required this.openSettings, this.onLoaded});
 
@@ -109,7 +113,8 @@ class _NativePlateState extends State<NativePlate> {
 
   // Room at the bottom for the share button, as the web plate makes for it
   // (--bs-ui-bottom), so the index rises clear of it.
-  static final double _bottomRoom = PlateShare.supported ? 40 + 8 + 6 : 0;
+  // (the map button is always there, so the room always is)
+  static const double _bottomRoom = 40 + 8 + 6;
   final _shotKey = GlobalKey(), _shareKey = GlobalKey();
 
   /// The most species drawn on the plate; the rest are in the index only
@@ -256,6 +261,36 @@ class _NativePlateState extends State<NativePlate> {
     }
   }
 
+  // ---- the walk on a map, in place of the collage --------------------------
+
+  /// The map button: the walk on a map, or back to the plate (shared with
+  /// the web plate, Settings.showMap).
+  void _toggleMap() {
+    final on = !app.settings.showMap;
+    app.settings.update((x) => x.showMap = on);
+    _say(on ? 'The walk, on a map.' : 'The plate.', seconds: 2);
+  }
+
+  /// A cross on the map: the bird's card, from this session's row when it
+  /// has one, else from what the walk heard (a bird from another part of
+  /// the same walk), as the web map's openBird.
+  void _openFromMap(String sci, String common, List<_Row> rows) {
+    for (final r in rows) {
+      if (r.sci == sci) return _openCard(r);
+    }
+    final store = app.store, ses = store.selected;
+    if (ses == null) return;
+    final model = app.settings.plateModel;
+    final walk = [for (final x in store.walkOf(ses)) ...store.forPlate(model, session: x)];
+    final r = _Row(sci, common);
+    for (final d in walk) {
+      if (d.sci != sci) continue;
+      r.count++;
+      if (r.last == null || d.at.isAfter(r.last!)) r.last = d.at;
+    }
+    _openCard(r, heard: walk);
+  }
+
   // ---- share or save the plate, as the web plate does -------------------
 
   /// A picture of the plate as it is on screen, without the buttons.
@@ -332,11 +367,11 @@ class _NativePlateState extends State<NativePlate> {
   /// The bird's card (bird_card.dart), as the web plate's: what is on the
   /// plate (the session's) for the facts and recordings, and everything on
   /// this device for how long the bird has been known here.
-  void _openCard(_Row r) {
+  void _openCard(_Row r, {List<Detection>? heard}) {
     final lib = _lib;
     if (lib == null) return;
     final store = app.store, model = app.settings.plateModel;
-    final heard = store.forPlate(model, session: store.selected);
+    heard ??= store.forPlate(model, session: store.selected);
     BirdCard.show(
       context,
       BirdCard(
@@ -381,7 +416,9 @@ class _NativePlateState extends State<NativePlate> {
         final red = Theme.of(context).colorScheme.primary;
         final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
         final single = mode.key == 'latest' || mode.key == 'top';
-        final showPlate = mode.key != 'index', showIndex = mode.key != 'noindex';
+        // the map takes the collage's place, and has one even in view c
+        final mapOn = app.settings.showMap && !mode.currentOnly && ses != null;
+        final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
         return Stack(
           children: [
             // The plate itself, without the buttons over it: what share takes.
@@ -397,7 +434,7 @@ class _NativePlateState extends State<NativePlate> {
                   final plateSide = (box.maxWidth * .02).clamp(8.0, 32.0);
                   final headSide = (box.maxWidth * .04).clamp(16.0, 48.0);
                   return SingleChildScrollView(
-                    physics: _holdFor != null && _holdFor == _showingFor(ses)
+                    physics: _holdFor != null && (_holdFor == _showingFor(ses) || _holdFor == 'map')
                         ? const NeverScrollableScrollPhysics()
                         : null,
                     padding: EdgeInsets.only(top: _padTop, bottom: _bottomRoom),
@@ -414,7 +451,7 @@ class _NativePlateState extends State<NativePlate> {
                         if (!showPlate) SizedBox(height: _indexAloneTop(box.maxHeight)),
                         if (!showPlate)
                           const SizedBox.shrink()
-                        else if (rows.isEmpty)
+                        else if (rows.isEmpty && !mapOn)
                           Padding(
                             key: _plateKey,
                             padding: const EdgeInsets.symmetric(vertical: 80),
@@ -439,8 +476,20 @@ class _NativePlateState extends State<NativePlate> {
                             children: [
                               Padding(
                                 padding: EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
-                                child: _collage(ses!, onPlate, newest, box.maxWidth - 2 * plateSide,
-                                    _plateHeight(box.maxWidth, box.maxHeight) - 12),
+                                child: mapOn
+                                    ? WalkMap(
+                                        walk: Walk.of(store, ses!, app.settings.plateModel),
+                                        allBirds: app.settings.mapBirds == 'all',
+                                        size: Size(box.maxWidth - 2 * plateSide,
+                                            _plateHeight(box.maxWidth, box.maxHeight) - 12),
+                                        onBird: (sci, common) => _openFromMap(sci, common, rows),
+                                        onHold: (held) {
+                                          final want = held ? 'map' : null;
+                                          if (want != _holdFor && mounted) setState(() => _holdFor = want);
+                                        },
+                                      )
+                                    : _collage(ses!, onPlate, newest, box.maxWidth - 2 * plateSide,
+                                        _plateHeight(box.maxWidth, box.maxHeight) - 12),
                               ),
                               // With no index there is no heading to carry the
                               // session arrows: the web plate's app draws a
@@ -474,8 +523,14 @@ class _NativePlateState extends State<NativePlate> {
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(16, 9.6, 16, 0),
                                 child: Text(
-                                  'Each bird is drawn in proportion to how often it was heard. '
-                                  'Select one to see its plate and its hours.',
+                                  !mapOn
+                                      ? 'Each bird is drawn in proportion to how often it was heard. '
+                                          'Select one to see its plate and its hours.'
+                                      : app.settings.mapBirds == 'all'
+                                          ? 'The way you walked, with a cross wherever a bird was heard. '
+                                              'Select one to see its plate and its hours.'
+                                          : 'The way you walked, with a cross where each bird was first heard. '
+                                              'Select one to see its plate and its hours.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                       fontFamily: serif,
@@ -571,6 +626,22 @@ class _NativePlateState extends State<NativePlate> {
                     ],
                   ),
                 ),
+                // The walk on a map in place of the collage, at the bottom
+                // left; not in the views of one bird (d and e).
+                if (!mode.currentOnly)
+                  Positioned(
+                    left: 8,
+                    bottom: 8,
+                    child: IconButton(
+                      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                      padding: EdgeInsets.zero,
+                      iconSize: 22,
+                      tooltip: app.settings.showMap ? 'Back to the plate' : 'The walk on a map',
+                      icon: Icon(app.settings.showMap ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
+                      color: red,
+                      onPressed: _toggleMap,
+                    ),
+                  ),
                 // Share or save, out of the way at the bottom right.
                 if (PlateShare.supported)
                   Positioned(
