@@ -13,6 +13,7 @@ import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
 import 'plate_buttons.dart';
+import 'plate_icons.dart';
 import 'station_editor.dart';
 
 /// Birdsong's own page, served by the app's local server. In Listen here it
@@ -548,7 +549,7 @@ class _PlateViewState extends State<PlateView> {
                       Builder(
                         builder: (bc) => IconButton(
                           tooltip: _s.stations.length == 2 ? 'Next: ${_s.nextStationName}' : 'Stations',
-                          icon: Icon(_s.stations.length == 2 ? Icons.swap_horiz : Icons.list),
+                          icon: PlateIcon(_s.stations.length == 2 ? PlateGlyph.swap : PlateGlyph.list),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: () => _stationsTap(bc),
                         ),
@@ -570,13 +571,13 @@ class _PlateViewState extends State<PlateView> {
                       children: [
                         IconButton(
                           tooltip: 'Settings',
-                          icon: const Icon(Icons.menu),
+                          icon: const PlateIcon(PlateGlyph.menu),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: widget.openSettings,
                         ),
                         IconButton(
                           tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
-                          icon: const Icon(Icons.dashboard_outlined),
+                          icon: const PlateIcon(PlateGlyph.plate),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: _nextMode,
                         ),
@@ -597,7 +598,7 @@ class _PlateViewState extends State<PlateView> {
                   padding: EdgeInsets.zero,
                   iconSize: 22,
                   tooltip: _mapOn ? 'Back to the plate' : 'The walk on a map',
-                  icon: Icon(_mapOn ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
+                  icon: PlateIcon(_mapOn ? PlateGlyph.plate : PlateGlyph.map),
                   color: Theme.of(context).colorScheme.primary,
                   onPressed: _toggleMap,
                 ),
@@ -612,7 +613,7 @@ class _PlateViewState extends State<PlateView> {
                   padding: const EdgeInsets.all(9),
                   iconSize: 22,
                   tooltip: 'Share or save the plate',
-                  icon: Icon(Icons.ios_share,
+                  icon: PlateIcon(PlateGlyph.share,
                       color: Theme.of(context).colorScheme.primary),
                   color: paper,
                   onSelected: (v) => v == 'save' ? _save() : _share(),
@@ -620,12 +621,12 @@ class _PlateViewState extends State<PlateView> {
                     PopupMenuItem(
                       value: 'share',
                       child: ListTile(
-                          leading: Icon(Icons.ios_share), title: Text('Share…')),
+                          leading: PlateIcon(PlateGlyph.share), title: Text('Share…')),
                     ),
                     PopupMenuItem(
                       value: 'save',
                       child: ListTile(
-                          leading: Icon(Icons.photo_library_outlined),
+                          leading: PlateIcon(PlateGlyph.save),
                           title: Text('Save to Photos')),
                     ),
                   ],
@@ -662,7 +663,7 @@ class _PlateViewState extends State<PlateView> {
                 left: safe.left,
                 top: _arrowTop(context),
                 child: _Arrow(
-                  icon: Icons.chevron_left,
+                  glyph: PlateGlyph.prev,
                   tooltip: 'Earlier session',
                   onPressed: i > 0 ? () => store.step(-1) : null,
                 ),
@@ -671,7 +672,7 @@ class _PlateViewState extends State<PlateView> {
                 right: safe.right,
                 top: _arrowTop(context),
                 child: _Arrow(
-                  icon: Icons.chevron_right,
+                  glyph: PlateGlyph.next,
                   tooltip: 'Later session',
                   onPressed: i >= 0 && i < n - 1 ? () => store.step(1) : null,
                 ),
@@ -686,9 +687,9 @@ class _PlateViewState extends State<PlateView> {
 
 /// A small arrow at the edge of the plate; hidden at the first or last session.
 class _Arrow extends StatelessWidget {
-  const _Arrow({required this.icon, required this.tooltip, required this.onPressed});
+  const _Arrow({required this.glyph, required this.tooltip, required this.onPressed});
 
-  final IconData icon;
+  final PlateGlyph glyph;
   final String tooltip;
   final VoidCallback? onPressed;
 
@@ -701,7 +702,7 @@ class _Arrow extends StatelessWidget {
       iconSize: 20,
       visualDensity: VisualDensity.compact,
       color: sepia.withValues(alpha: 0.75),
-      icon: Icon(icon),
+      icon: PlateIcon(glyph),
       onPressed: onPressed,
     );
   }
