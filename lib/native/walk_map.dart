@@ -184,6 +184,8 @@ class WalkMap extends StatefulWidget {
     required this.onBird,
     required this.onHold,
     this.landmarks,
+    this.onFullScreen,
+    this.fullScreen = false,
   });
 
   final Walk? walk;
@@ -194,6 +196,12 @@ class WalkMap extends StatefulWidget {
 
   /// The extras (Settings.mapExtras), or null when they are off.
   final LandmarkLookup? landmarks;
+
+  /// Opens the map full screen, or (when [fullScreen]) closes it again.
+  final VoidCallback? onFullScreen;
+
+  /// This map is the full-screen one: its button closes it.
+  final bool fullScreen;
 
   @override
   State<WalkMap> createState() => _WalkMapState();
@@ -877,6 +885,8 @@ class _WalkMapState extends State<WalkMap> {
                     map: _map,
                     home: w == null || (w.trail.isEmpty && w.birds.isEmpty && w.place == null) ? null : _home,
                     homeTip: w?.station != null ? 'Back to the station' : 'Back to the walk',
+                    full: widget.onFullScreen,
+                    isFull: widget.fullScreen,
                   ),
                 ),
               if (kit != null)
@@ -1154,13 +1164,17 @@ class _EndPainter extends CustomPainter {
 
 /// The map's + and − at the top left, on paper.
 class _ZoomButtons extends StatelessWidget {
-  const _ZoomButtons({required this.map, this.home, this.homeTip = ''});
+  const _ZoomButtons({required this.map, this.home, this.homeTip = '', this.full, this.isFull = false});
 
   final MapController map;
 
   /// Back to the walk or the station; null when there is nowhere to go.
   final VoidCallback? home;
   final String homeTip;
+
+  /// Full screen, or back from it.
+  final VoidCallback? full;
+  final bool isFull;
 
   @override
   Widget build(BuildContext context) {
@@ -1197,6 +1211,24 @@ class _ZoomButtons extends StatelessWidget {
                   width: 29,
                   height: 29,
                   child: Center(child: Icon(Icons.refresh, size: 17, color: ink)),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (full != null) ...[
+          Container(width: 29, height: 1, color: paperDeep),
+          Tooltip(
+            message: isFull ? 'Close the full-screen map' : 'Full screen',
+            child: Semantics(
+              button: true,
+              label: isFull ? 'Close the full-screen map' : 'Show the map full screen',
+              child: InkWell(
+                onTap: full,
+                child: SizedBox(
+                  width: 29,
+                  height: 29,
+                  child: Center(child: Icon(isFull ? Icons.fullscreen_exit : Icons.fullscreen, size: 19, color: ink)),
                 ),
               ),
             ),

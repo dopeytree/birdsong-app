@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
 import 'package:plate_share/plate_share.dart';
 
 import '../app_state.dart';
@@ -474,6 +474,48 @@ class _NativePlateState extends State<NativePlate> {
   /// A cross on the map: the bird's card, from this session's row when it
   /// has one, else from what the walk heard (a bird from another part of
   /// the same walk), as the web map's openBird.
+  /// The map on a page of its own, the whole screen (for small screens):
+  /// the same walk (kept up to date while listening), extras and search;
+  /// its button or Escape closes it, and a bird's cross closes it and opens
+  /// the bird's card.
+  void _mapFullScreen(Walk? Function() walk, List<_Row> rows) {
+    Navigator.of(context).push(PageRouteBuilder<void>(
+      fullscreenDialog: true,
+      transitionDuration: const Duration(milliseconds: 180),
+      reverseTransitionDuration: const Duration(milliseconds: 140),
+      transitionsBuilder: (_, a, __, child) => FadeTransition(opacity: a, child: child),
+      pageBuilder: (context, _, __) => CallbackShortcuts(
+        bindings: {const SingleActivator(LogicalKeyboardKey.escape): () => Navigator.of(context).maybePop()},
+        child: Focus(
+          autofocus: true,
+          child: Scaffold(
+            backgroundColor: paper,
+            body: SafeArea(
+              child: ListenableBuilder(
+                listenable: Listenable.merge([app.store, app.settings]),
+                builder: (context, _) => LayoutBuilder(
+                  builder: (context, box) => WalkMap(
+                    walk: walk(),
+                    allBirds: app.settings.mapBirds == 'all',
+                    size: box.biggest,
+                    onBird: (sci, common) {
+                      Navigator.of(context).pop();
+                      _openFromMap(sci, common, rows);
+                    },
+                    onHold: (_) {},
+                    landmarks: app.settings.mapExtras ? _landmarks : null,
+                    fullScreen: true,
+                    onFullScreen: () => Navigator.of(context).maybePop(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+  }
+
   void _openFromMap(String sci, String common, List<_Row> rows) {
     for (final r in rows) {
       if (r.sci == sci) return _openCard(r);
@@ -737,6 +779,23 @@ class _NativePlateState extends State<NativePlate> {
                       children: [
                         // the index alone sits in the middle of the window
                         if (!showPlate) SizedBox(height: _indexAloneTop(box.maxHeight)),
+                        // the map's extras: what the walk went by, above the map
+                        // (nothing at all when it passed nothing)
+                        if (showPlate && mapOn && app.settings.mapExtras)
+                          Center(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: fit ? double.infinity : 1248),
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(side, fit ? 4 : 12, side, 0),
+                                child: PassedView(
+                                  lookup: _landmarks,
+                                  fit: fit,
+                                  narrow: box.maxWidth <= 720,
+                                  width: math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side,
+                                ),
+                              ),
+                            ),
+                          ),
                         if (!showPlate)
                           const SizedBox.shrink()
                         else if (rows.isEmpty && !mapOn)
@@ -780,6 +839,13 @@ class _NativePlateState extends State<NativePlate> {
                                             : Walk.of(store, ses!, app.settings.plateModel),
                                         allBirds: app.settings.mapBirds == 'all',
                                         landmarks: app.settings.mapExtras ? _landmarks : null,
+                                        onFullScreen: () => _mapFullScreen(
+                                            () => feed != null
+                                                ? Walk.station(feed.station.name, feed.place)
+                                                : (store.selected == null
+                                                    ? null
+                                                    : Walk.of(store, store.selected!, app.settings.plateModel)),
+                                            rows),
                                         size: Size(box.maxWidth - 2 * plateSide,
                                             _plateHeight(box.maxWidth, box.maxHeight) - 12),
                                         onBird: (sci, common) => _openFromMap(sci, common, rows),
@@ -855,21 +921,6 @@ class _NativePlateState extends State<NativePlate> {
                             ),
                           ),
                         ),
-                        // the map's extras: what the walk went by, under the index
-                        if (mapOn && app.settings.mapExtras)
-                          Center(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: fit ? double.infinity : 1248),
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(side, showIndex && !foldedInline ? 0 : 24, side, fit ? 12.8 : 40),
-                                child: PassedView(
-                                  lookup: _landmarks,
-                                  fit: fit,
-                                  width: math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side,
-                                ),
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   );

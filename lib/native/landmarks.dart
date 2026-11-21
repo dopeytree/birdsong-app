@@ -45,7 +45,7 @@ typedef Shape = List<List<List<LatLng>>>;
 /// A listed building or a Wikipedia place: a point with a name and a line
 /// about it.
 class Spot {
-  const Spot(this.name, this.about, this.at, {this.grade = ''});
+  const Spot(this.name, this.about, this.at, {this.grade = '', this.link});
 
   final String name;
 
@@ -55,11 +55,14 @@ class Spot {
 
   /// A listed building's grade ("I", "II*"), for its size on the map.
   final String grade;
+
+  /// Its page: the Wikipedia article, or Historic England's list entry.
+  final String? link;
 }
 
 /// A scheduled monument or a nature site: an area with a name.
 class Area {
-  const Area(this.name, this.about, this.shape, {this.kind = ''});
+  const Area(this.name, this.about, this.shape, {this.kind = '', this.link});
 
   final String name;
 
@@ -69,12 +72,15 @@ class Area {
 
   /// A nature site's short kind (SSSI), so two kinds of one name both count.
   final String kind;
+
+  /// Its page, when it has one: Historic England's list entry.
+  final String? link;
 }
 
 /// A line of "Passed on the way": [at] null when the walk went through it
 /// (a nature site), with no one point to fly to.
 class Passed {
-  const Passed(this.name, this.about, this.at, this.metres, this.order);
+  const Passed(this.name, this.about, this.at, this.metres, this.order, {this.link});
 
   final String name;
   final String about;
@@ -84,7 +90,22 @@ class Passed {
   /// Reserves first, then Natural England's sites, then buildings and
   /// monuments, then Wikipedia.
   final int order;
+
+  /// Its page (Wikipedia, Historic England), or null: then a search.
+  final String? link;
+
+  /// Where selecting it goes: its page, or a web search for it.
+  Uri get page => link != null ? Uri.parse(link!) : Uri.https('www.google.com', '/search', {'q': '$name $about'});
 }
+
+/// Historic England's list entry for a feature of theirs, from its number.
+String? heLink(Map<String, dynamic> props) {
+  final n = props['ListEntry'] ?? props['LISTENTRY'] ?? props['List_Entry'];
+  return n == null || '$n'.isEmpty ? null : 'https://historicengland.org.uk/listing/the-list/list-entry/$n';
+}
+
+/// A Wikipedia article's address from its title.
+String wikiLink(String title) => 'https://en.wikipedia.org/wiki/${Uri.encodeComponent(title.replaceAll(' ', '_'))}';
 
 /// What was found in one area.
 class Landmarks {
@@ -261,7 +282,7 @@ List<Passed> passedOnTheWay(List<LatLng> path,
   if (probe.isEmpty) return const [];
   double near(LatLng p) => probe.map((q) => metresBetween(q, p)).reduce(math.min);
   final out = <Passed>[];
-  final described = {for (final s in wiki) plainName(s.name): s.about};
+  final described = {for (final s in wiki) plainName(s.name): s};
   final reserveNames = <String>{};
   final seenReserve = <String>{};
   for (final a in reserves) {
@@ -282,12 +303,12 @@ List<Passed> passedOnTheWay(List<LatLng> path,
       if (d > 50) continue;
     }
     reserveNames.add(key);
-    final about = described[key];
-    out.add(Passed(a.name, about != null && about != 'Wikipedia' ? about : a.about, at, d, 0));
+    final w = described[key];
+    out.add(Passed(a.name, w != null && w.about != 'Wikipedia' ? w.about : a.about, at, d, 0, link: w?.link ?? a.link));
   }
   for (final s in listed) {
     final d = near(s.at);
-    if (d <= 120) out.add(Passed(s.name, s.about, s.at, d, 2));
+    if (d <= 120) out.add(Passed(s.name, s.about, s.at, d, 2, link: s.link));
   }
   for (final a in monuments) {
     final pts = [for (final rings in a.shape) for (final r in rings) ...r];
@@ -295,18 +316,18 @@ List<Passed> passedOnTheWay(List<LatLng> path,
     final inside = probe.any((p) => inShape(p, a.shape));
     final every = math.max(1, pts.length ~/ 100);
     final d = inside ? 0.0 : [for (var i = 0; i < pts.length; i += every) near(pts[i])].reduce(math.min);
-    if (d <= 200) out.add(Passed(a.name, a.about, pts.first, d, 2));
+    if (d <= 200) out.add(Passed(a.name, a.about, pts.first, d, 2, link: a.link));
   }
   final seen = <String>{};
   for (final a in nature) {
     if (!seen.add('${a.kind}${a.name}')) continue;
     if (reserveNames.contains(plainName(a.name))) continue;
-    if (probe.any((p) => inShape(p, a.shape))) out.add(Passed(a.name, a.about, null, 0, 1));
+    if (probe.any((p) => inShape(p, a.shape))) out.add(Passed(a.name, a.about, null, 0, 1, link: a.link));
   }
   for (final s in wiki) {
     if (reserveNames.contains(plainName(s.name))) continue;
     final d = near(s.at);
-    if (d <= 400) out.add(Passed(s.name, s.about, s.at, d, 3));
+    if (d <= 400) out.add(Passed(s.name, s.about, s.at, d, 3, link: s.link));
   }
   out.sort((a, b) => a.order != b.order ? a.order - b.order : a.metres.compareTo(b.metres));
   return out;
@@ -379,6 +400,7 @@ List<Spot> wikiOf(Map<String, dynamic> j) {
     for (final p in pages.values.cast<Map<String, dynamic>>())
       if ((p['coordinates'] as List?)?.isNotEmpty ?? false)
         Spot(
+          link: wikiLink('${p['title']}'),
           '${p['title']}',
           (p['description'] as String?)?.isNotEmpty ?? false ? p['description'] as String : 'Wikipedia',
           LatLng(((p['coordinates'] as List).first['lat'] as num).toDouble(),
@@ -445,7 +467,8 @@ Future<Landmarks> lookUpFrame(List<double> frame, {bool gradeTwo = false, List<L
   Future<List<Area>> areas(String url, String about, String failed, {double simplify = .00002}) =>
       _arc(url, frame, simplify: simplify).then((fs) => [
             for (final f in fs)
-              Area(nameOf(f.props), f.props['Grade'] != null ? '$about, Grade ${f.props['Grade']}' : about, shapeOf(f.geometry))
+              Area(nameOf(f.props), f.props['Grade'] != null ? '$about, Grade ${f.props['Grade']}' : about, shapeOf(f.geometry),
+                  link: heLink(f.props))
           ]).catchError((Object _) {
         unreached.add(failed);
         return <Area>[];
@@ -456,13 +479,15 @@ Future<Landmarks> lookUpFrame(List<double> frame, {bool gradeTwo = false, List<L
         for (final f in fs)
           if (f.geometry['type'] == 'Point')
             Spot(nameOf(f.props), 'Listed building, Grade ${f.props['Grade'] ?? ''}', _ll(f.geometry['coordinates']),
-                grade: '${f.props['Grade'] ?? ''}'),
+                grade: '${f.props['Grade'] ?? ''}', link: heLink(f.props)),
       ];
     }).catchError((Object _) {
       unreached.add('Historic England (buildings)');
     }),
     _arc('$_he/6', frame, simplify: .00002).then((fs) {
-      monuments = [for (final f in fs) Area(nameOf(f.props), 'Scheduled monument', shapeOf(f.geometry))];
+      monuments = [
+        for (final f in fs) Area(nameOf(f.props), 'Scheduled monument', shapeOf(f.geometry), link: heLink(f.props))
+      ];
     }).catchError((Object _) {
       unreached.add('Historic England (monuments)');
     }),

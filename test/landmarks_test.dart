@@ -185,6 +185,20 @@ void main() {
     expect(nameOf({'NNR_NAME': 'SOMERSET WETLANDS'}), 'Somerset Wetlands');
   });
 
+  test("each line opens its page: Wikipedia, Historic England's entry, or a search", () {
+    expect(wikiLink('Ham Wall'), 'https://en.wikipedia.org/wiki/Ham_Wall');
+    expect(heLink({'ListEntry': 1234567}), 'https://historicengland.org.uk/listing/the-list/list-entry/1234567');
+    expect(heLink({'Name': 'x'}), isNull);
+    final passed = passedOnTheWay(walk, listed: [
+      Spot('Church of St Mary', 'Listed building, Grade I', LatLng(52 + north(50), -1.49), link: heLink({'ListEntry': 1})),
+    ], nature: [
+      Area('Long Meadow', 'Site of Special Scientific Interest', box(51.999, -1.4955, 52.001, -1.4935), kind: 'SSSI'),
+    ]);
+    expect(passed[0].page.host, 'www.google.com'); // no page of its own: a search
+    expect(passed[0].page.queryParameters['q'], 'Long Meadow Site of Special Scientific Interest');
+    expect(passed[1].page.toString(), 'https://historicengland.org.uk/listing/the-list/list-entry/1');
+  });
+
   test('Wikipedia places, with or without a description', () {
     final w = wikiOf({
       'query': {
@@ -207,5 +221,6 @@ void main() {
       }
     });
     expect([for (final s in w) '${s.name}: ${s.about}'], ['Ham Wall: nature reserve', 'Glastonbury: Wikipedia']);
+    expect(w.first.link, 'https://en.wikipedia.org/wiki/Ham_Wall');
   });
 }
