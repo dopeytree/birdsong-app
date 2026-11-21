@@ -480,12 +480,16 @@ Future<List<Spot>> _wikiNear(List<double> f, int limit) async => wikiOf(await _g
 /// is named in unreached. Grade II buildings only when [gradeTwo] (they are
 /// most of them, so only for a close view). [path], when given, is a walk:
 /// what it passed is worked out too.
-Future<Landmarks> lookUpFrame(List<double> frame, {bool gradeTwo = false, List<LatLng>? path, int wikiLimit = 20}) async {
+///
+/// [detail] is how simplified areas may be, in degrees (about a pixel at
+/// the zoom they're for); a walk's own lookup keeps the finest.
+Future<Landmarks> lookUpFrame(List<double> frame,
+    {bool gradeTwo = false, List<LatLng>? path, int wikiLimit = 20, double detail = 0}) async {
   final unreached = <String>[];
   var listed = <Spot>[], wiki = <Spot>[];
   var monuments = <Area>[], parks = <Area>[], battlefields = <Area>[], worldHeritage = <Area>[], nature = <Area>[];
   Future<List<Area>> areas(String url, String about, String failed, {double simplify = .00002}) =>
-      _arc(url, frame, simplify: simplify).then((fs) => [
+      _arc(url, frame, simplify: math.max(simplify, detail)).then((fs) => [
             for (final f in fs)
               Area(nameOf(f.props), f.props['Grade'] != null ? '$about, Grade ${f.props['Grade']}' : about, shapeOf(f.geometry),
                   link: heLink(f.props))
@@ -504,7 +508,7 @@ Future<Landmarks> lookUpFrame(List<double> frame, {bool gradeTwo = false, List<L
     }).catchError((Object _) {
       unreached.add('Historic England (buildings)');
     }),
-    _arc('$_he/6', frame, simplify: .00002).then((fs) {
+    _arc('$_he/6', frame, simplify: math.max(.00002, detail)).then((fs) {
       monuments = [
         for (final f in fs) Area(nameOf(f.props), 'Scheduled monument', shapeOf(f.geometry), link: heLink(f.props))
       ];
@@ -517,7 +521,7 @@ Future<Landmarks> lookUpFrame(List<double> frame, {bool gradeTwo = false, List<L
         .then((a) => worldHeritage = a),
     Future.wait([
       for (final k in natureKinds)
-        _arc(k.url, frame, simplify: .0001)
+        _arc(k.url, frame, simplify: math.max(.0001, detail))
             .then((fs) => [for (final f in fs) Area(nameOf(f.props), k.full, shapeOf(f.geometry), kind: k.kind)])
             .catchError((Object _) {
           unreached.add('Natural England (${k.kind})');
@@ -596,6 +600,9 @@ List<double> viewFrame(double west, double south, double east, double north) {
 bool frameHolds(List<double> outer, List<double> inner) =>
     outer[0] <= inner[0] && outer[1] <= inner[1] && outer[2] >= inner[2] && outer[3] >= inner[3];
 
+/// The zoom from which Grade II buildings are looked up and drawn.
+const gradeTwoZoom = 15.0;
+
 /// Looks up and keeps what is round each walk (by its key), and what is in
 /// the map's view as it moves. The map draws [current] (both together);
 /// "Passed on the way" lists [walk]; [show] asks the map to go to a place
@@ -626,12 +633,21 @@ class LandmarkLookup extends ChangeNotifier {
   /// Where the map is to go: the chosen line's place.
   LatLng? get focus => chosen?.where;
 
-  /// Everything to draw: the walk's and the view's, each once.
+  Landmarks? _merged;
+  Landmarks? _mergedWalk, _mergedView;
+
+  /// Everything to draw: the walk's and the view's, each once. Merged once
+  /// for each change, not each time it is read (the map reads it often).
   Landmarks? get current {
     final w = walk, v = view;
     if (w == null) return v;
     if (v == null) return w;
-    return w.merge(v);
+    if (!identical(w, _mergedWalk) || !identical(v, _mergedView)) {
+      _merged = w.merge(v);
+      _mergedWalk = w;
+      _mergedView = v;
+    }
+    return _merged;
   }
 
   /// What was found for [key], once looked up.
@@ -685,11 +701,11 @@ class LandmarkLookup extends ChangeNotifier {
   }
 
   /// Look up what is in the map's view, from about town scale in (zoom 12);
-  /// Grade II buildings from zoom 14. Nothing is asked again for a view
-  /// already covered.
+  /// Grade II buildings (most of them) only close in, from zoom
+  /// [gradeTwoZoom]. Nothing is asked again for a view already covered.
   Future<void> look(double west, double south, double east, double north, double zoom) async {
     if (zoom < 12) return;
-    final gradeTwo = zoom >= 14;
+    final gradeTwo = zoom >= gradeTwoZoom;
     final frame = viewFrame(west, south, east, north);
     // a covered view: no new question
     final have = _viewFrame;
@@ -706,7 +722,9 @@ class LandmarkLookup extends ChangeNotifier {
     final run = ++_viewRun;
     _viewFrame = frame;
     _viewGradeTwo = gradeTwo;
-    final found = await lookUpFrame(frame, gradeTwo: gradeTwo, wikiLimit: 50);
+    // areas simplified to about a pixel at this zoom
+    final detail = 360 / (256 * math.pow(2, zoom.floor()));
+    final found = await lookUpFrame(frame, gradeTwo: gradeTwo, wikiLimit: 50, detail: detail);
     if (found.unreached.isEmpty) {
       _views.add((frame, gradeTwo, found));
       if (_views.length > 12) _views.removeAt(0);

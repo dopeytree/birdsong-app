@@ -155,6 +155,18 @@ void main() {
     expect(m.passed.length, 1); // the walk's list stays the walk's
   });
 
+  test("the walk's and the view's places are merged once for each change, not each read", () {
+    final l = LandmarkLookup()
+      ..walk = Landmarks(listed: [Spot('A', 'x', const LatLng(52, -1.5))])
+      ..view = Landmarks(listed: [Spot('B', 'x', const LatLng(52, -1.49))]);
+    final first = l.current;
+    expect(identical(l.current, first), isTrue);
+    expect(first!.listed.length, 2);
+    l.view = const Landmarks();
+    expect(identical(l.current, first), isFalse);
+    expect(l.current!.listed.length, 1);
+  });
+
   test('parks, battlefields and World Heritage Sites count as passed like monuments', () {
     final p = passedOnTheWay(walk, monuments: [
       Area('Old Park', 'Registered park and garden, Grade II', box(51.999, -1.49, 52.001, -1.488)),

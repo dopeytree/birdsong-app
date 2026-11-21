@@ -479,10 +479,12 @@ class _WalkMapState extends State<WalkMap> {
     // the nearest building or Wikipedia place within a finger's reach
     Spot? spot;
     var best = 16.0;
+    // only what is drawn at this zoom (see _layers)
     for (final s in [
-      for (final s in found?.listed ?? const <Spot>[])
-        if (s.grade != 'II' || _zoom >= 14) s,
-      ...?found?.wiki,
+      if (_zoom >= 12)
+        for (final s in found?.listed ?? const <Spot>[])
+          if (s.grade != 'II' || _zoom >= gradeTwoZoom) s,
+      if (_zoom >= 12) ...?found?.wiki,
     ]) {
       final d = (camera.latLngToScreenOffset(s.at) - p).distance;
       if (d <= best) {
@@ -782,9 +784,54 @@ class _WalkMapState extends State<WalkMap> {
     return [...rest, ...firsts];
   }
 
+  // The extras as drawn, kept until what was found or a zoom step changes:
+  // building them (and placing area labels) for every frame of a zoom made
+  // a busy town (Falmouth) crawl.
+  ({List<Polygon> nature, List<Polygon> edges, List<Area> hatched, List<Marker> spots})? _layersMemo;
+  Object? _layersFound;
+  String _layersStep = '';
+
+  /// Which zoom thresholds the extras pass, as a key.
+  String get _zoomStep => [11, 12, 12.5, 13, 13.5, 14, 14.5, gradeTwoZoom, 16].map((z) => _zoom >= z ? 1 : 0).join();
+
+  /// The extras for this zoom: none when zoomed right out (below 11);
+  /// buildings and Wikipedia places from 12 (Grade II from [gradeTwoZoom]),
+  /// no more than [_maxSpots] of them, nearest the middle first.
+  ({List<Polygon> nature, List<Polygon> edges, List<Area> hatched, List<Marker> spots})? _layers() {
+    final found = widget.landmarks?.current;
+    if (found == null || _zoom < 11) return null;
+    final step = _zoomStep;
+    if (identical(found, _layersFound) && step == _layersStep && _layersMemo != null) return _layersMemo;
+    final listed = [
+      for (final s in found.listed)
+        if (_zoom >= (s.grade == 'II' ? gradeTwoZoom : 12)) s
+    ];
+    var spots = [...listed, if (_zoom >= 12) ...found.wiki];
+    if (spots.length > _maxSpots && _ready) {
+      final c = _map.camera.center;
+      spots.sort((a, b) => metresBetween(a.at, c).compareTo(metresBetween(b.at, c)));
+      spots = spots.take(_maxSpots).toList();
+    }
+    final wiki = found.wiki.toSet();
+    _layersFound = found;
+    _layersStep = step;
+    return _layersMemo = (
+      nature: _nature(),
+      edges: [..._monumentEdges(), ..._heritageAreas()],
+      hatched: found.monuments,
+      spots: [
+        ..._spots([for (final s in spots) if (!wiki.contains(s)) s], wiki: false),
+        ..._spots([for (final s in spots) if (wiki.contains(s)) s], wiki: true),
+      ],
+    );
+  }
+
+  static const _maxSpots = 400;
+
   @override
   Widget build(BuildContext context) {
     final kit = _kit, w = widget.walk, note = _note();
+    final layers = _layers();
     final pts = _points;
     final initial = pts.length > 1
         ? CameraFit.coordinates(
@@ -839,11 +886,10 @@ class _WalkMapState extends State<WalkMap> {
                       glyphs: kit.glyphs,
                     ),
                     // extras: protected nature sites, scheduled monuments
-                    if (widget.landmarks?.current != null) ...[
-                      PolygonLayer(polygons: _nature(), drawLabelsLast: true),
-                      _Hatch(widget.landmarks!.current!.monuments),
-                      PolygonLayer(polygons: _monumentEdges(), drawLabelsLast: true),
-                      PolygonLayer(polygons: _heritageAreas(), drawLabelsLast: true),
+                    if (layers != null) ...[
+                      PolygonLayer(polygons: layers.nature, drawLabelsLast: true),
+                      if (_zoom >= 13) _Hatch(layers.hatched),
+                      PolygonLayer(polygons: layers.edges, drawLabelsLast: true),
                     ],
                     // contours, traced here from the elevation tiles
                     PolylineLayer(polylines: _contourLines()),
@@ -864,14 +910,7 @@ class _WalkMapState extends State<WalkMap> {
                       glyphs: kit.glyphs,
                       controller: _peaks,
                     ),
-                    if (widget.landmarks?.current != null) ...[
-                      MarkerLayer(
-                          markers: _spots([
-                        for (final s in widget.landmarks!.current!.listed)
-                          if (s.grade != 'II' || _zoom >= 14) s
-                      ], wiki: false)),
-                      MarkerLayer(markers: _spots(widget.landmarks!.current!.wiki, wiki: true)),
-                    ],
+                    if (layers != null) MarkerLayer(markers: layers.spots),
                     // the walk
                     if (w != null && w.trail.length > 1)
                       PolylineLayer(polylines: [
