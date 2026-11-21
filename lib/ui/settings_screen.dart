@@ -83,60 +83,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return ListView(
             padding: EdgeInsets.fromLTRB(side, 4, side, 32),
             children: [
+              // the same menu whether listening here or showing a station:
+              // the plate, the map and the experiments apply to both
               _displaySection(context, listen),
-              if (listen) _mapSection(context),
-              if (listen)
-                _section(
-                  context,
-                  'Experimental',
-                  summary: s.nativePlate ? 'Plate drawn by Flutter' : 'Plate drawn by the web page',
-                  [
-                    _switch('Draw the plate in Flutter', s.nativePlate,
-                        (v) => s.update((x) => x.nativePlate = v)),
-                    _dropdown(
-                        'Plates on paper',
-                        s.nativePlateStyle,
-                        const {
-                          'cutout': 'Cut out, as the web plate does',
-                          'tint': 'Tinted into the page',
-                          'plain': 'As they come',
-                        },
-                        (v) => s.update((x) => x.nativePlateStyle = v)),
-                    _dropdown(
-                        'Latest marked by',
-                        s.nativeMarkAt,
-                        const {...PageControl.markAt, 'none': 'Nothing'},
-                        (v) => s.update((x) => x.nativeMarkAt = v)),
-                    _dropdown('Size by', s.nativeSizeBy, PageControl.sizeBy,
-                        (v) => s.update((x) => x.nativeSizeBy = v)),
-                    _switch('Fit on one screen', s.nativeFit,
-                        (v) => s.update((x) => x.nativeFit = v)),
-                    _switch('Heading in small capitals', s.nativeTitleCaps,
-                        (v) => s.update((x) => x.nativeTitleCaps = v)),
-                    _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
-                        const {'ink': 'Black, as the title (default)', 'sepia': 'Sepia'},
-                        (v) => s.update((x) => x.nativeHeadingInk = v == 'ink')),
-                    _switch('Species and calls under the date', s.nativeTotals,
-                        (v) => s.update((x) => x.nativeTotals = v)),
-                    _switch('Skulls, wings and eggs', s.nativeParts,
-                        (v) => s.update((x) => x.nativeParts = v)),
-                    _dropdown(
-                        'Limit species',
-                        '${s.nativeLimit}',
-                        {
-                          '0': 'All',
-                          for (final n in const [5, 10, 15, 20, 30, 40]) '$n': 'The $n most heard',
-                          if (!const [0, 5, 10, 15, 20, 30, 40].contains(s.nativeLimit))
-                            '${s.nativeLimit}': 'The ${s.nativeLimit} most heard',
-                        },
-                        (v) => s.update((x) => x.nativeLimit = int.tryParse(v) ?? 0)),
-                    Text(
-                      'The web plate being moved into Flutter: everything but the map so far. '
-                      'Switch this off for the web plate.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
+              _mapSection(context),
+              _section(
+                context,
+                'Experimental',
+                summary: s.nativePlate ? 'Plate drawn by Flutter' : 'Plate drawn by the web page',
+                [
+                  _switch('Draw the plate in Flutter', s.nativePlate,
+                      (v) => s.update((x) => x.nativePlate = v)),
+                  _dropdown(
+                      'Plates on paper',
+                      s.nativePlateStyle,
+                      const {
+                        'cutout': 'Cut out, as the web plate does',
+                        'tint': 'Tinted into the page',
+                        'plain': 'As they come',
+                      },
+                      (v) => s.update((x) => x.nativePlateStyle = v)),
+                  _dropdown(
+                      'Latest marked by',
+                      s.nativeMarkAt,
+                      const {...PageControl.markAt, 'none': 'Nothing'},
+                      (v) => s.update((x) => x.nativeMarkAt = v)),
+                  _dropdown('Size by', s.nativeSizeBy, PageControl.sizeBy,
+                      (v) => s.update((x) => x.nativeSizeBy = v)),
+                  _switch('Fit on one screen', s.nativeFit,
+                      (v) => s.update((x) => x.nativeFit = v)),
+                  _switch('Heading in small capitals', s.nativeTitleCaps,
+                      (v) => s.update((x) => x.nativeTitleCaps = v)),
+                  _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
+                      const {'ink': 'Black, as the title (default)', 'sepia': 'Sepia'},
+                      (v) => s.update((x) => x.nativeHeadingInk = v == 'ink')),
+                  _switch('Species and calls under the date', s.nativeTotals,
+                      (v) => s.update((x) => x.nativeTotals = v)),
+                  _switch('Skulls, wings and eggs', s.nativeParts,
+                      (v) => s.update((x) => x.nativeParts = v)),
+                  _dropdown(
+                      'Limit species',
+                      '${s.nativeLimit}',
+                      {
+                        '0': 'All',
+                        for (final n in const [5, 10, 15, 20, 30, 40]) '$n': 'The $n most heard',
+                        if (!const [0, 5, 10, 15, 20, 30, 40].contains(s.nativeLimit))
+                          '${s.nativeLimit}': 'The ${s.nativeLimit} most heard',
+                      },
+                      (v) => s.update((x) => x.nativeLimit = int.tryParse(v) ?? 0)),
+                  Text(
+                    'The web plate being moved into Flutter: everything but the map so far. '
+                    'Switch this off for the web plate.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               SegmentedButton<AppMode>(
                 segments: const [
@@ -159,13 +160,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
               const SizedBox(height: 8),
-              if (listen) ...[
-                _listening(context),
-                _models(context),
-                _location(context),
-                _data(context),
-              ] else
-                _remote(context),
+              // the saved stations, then listening here: both, either way
+              _remote(context),
+              _listening(context),
+              _models(context),
+              _location(context),
+              _data(context),
               const Divider(height: 32),
               _credits(context, listen),
               const Divider(height: 1),
