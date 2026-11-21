@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../settings.dart';
+import 'station_archive.dart';
 
 /// A remote station's plate: what it heard over a period, or on one day,
 /// asked of BirdNET-Go (its /api/v2) or of a public BirdWeather station
@@ -195,6 +196,58 @@ class StationRecording {
   final String? spectrogramUrl;
 }
 
+/// One call a station heard, as a day's folder keeps it.
+class StationCall {
+  const StationCall({
+    required this.id,
+    required this.at,
+    required this.sci,
+    required this.common,
+    required this.confidence,
+    this.verified,
+    this.audioUrl,
+    this.spectrogramUrl,
+    this.clip,
+  });
+
+  /// The station's own number for it.
+  final int id;
+  final DateTime at;
+  final String sci;
+  final String common;
+  final double confidence;
+
+  /// BirdNET-Go's review: correct, false_positive, or none yet.
+  final String? verified;
+  final String? audioUrl;
+  final String? spectrogramUrl;
+
+  /// The call within a longer recording (BirdWeather's soundscapes), in seconds.
+  final (double, double)? clip;
+}
+
+/// BirdNET-Go's daily lists for several [dates] ({date: [{scientific_name,
+/// count}]}, perhaps under data) as species and calls a day.
+Map<String, (int, int)> daySumsOf(Object? j, List<String> dates) {
+  final out = <String, (int, int)>{};
+  final m = j is Map ? ((j['data'] ?? j['results']) is Map ? (j['data'] ?? j['results']) as Map : j) : null;
+  if (m == null) return out;
+  for (final date in dates) {
+    final rows = m[date];
+    if (rows is! List) continue;
+    var species = 0, calls = 0;
+    for (final o in rows) {
+      if (o is! Map) continue;
+      final n = ((o['count'] ?? o['total'] ?? 0) as num).toInt();
+      if (n <= 0) continue;
+      species++;
+      calls += n;
+    }
+    out[date] = (species, calls);
+  }
+  return out;
+}
+
 String _two(int n) => n.toString().padLeft(2, '0');
 String ymd(DateTime d) => '${d.year}-${_two(d.month)}-${_two(d.day)}';
 DateTime _dayOf(DateTime t) => DateTime(t.year, t.month, t.day);
@@ -285,12 +338,19 @@ List<StationSpecies> birdnetRows(Object? j, DateTime day) {
 }
 
 class StationFeed extends ChangeNotifier {
-  StationFeed(this.station) {
+  /// [root] is the app's data folder: each day shown is kept there in the
+  /// session format, and the station's back days filled in
+  /// (station_archive.dart).
+  StationFeed(this.station, {Directory? root}) {
+    if (root != null) archive = StationArchive(root, this);
     _timer = Timer.periodic(const Duration(minutes: 1), (_) => load(quiet: true));
     load();
   }
 
   final Station station;
+
+  /// The station's days kept on the device; null in tests.
+  StationArchive? archive;
   final _client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
   Timer? _timer;
 
@@ -342,6 +402,7 @@ class StationFeed extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
+    archive?.close();
     _client.close(force: true);
     super.dispose();
   }
@@ -425,6 +486,11 @@ class StationFeed extends ChangeNotifier {
       }
       species = got;
       error = null;
+      // one day on show: keep it (today's again, as it fills); then the
+      // back days, quietly
+      final (from, to) = _range;
+      if (from == to) archive?.want(from);
+      archive?.fill();
     } catch (e) {
       if (run != _run) return;
       error = '$e'.replaceFirst('Exception: ', '');
@@ -543,6 +609,123 @@ class StationFeed extends ChangeNotifier {
         addHours(out, await _get('/api/v2/analytics/species/daily/batch?dates=$dates'));
       }
       return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ---- a day's every call, and the calendar's days ------------------------------
+
+  /// BirdNET-Go's address, for links to its recordings.
+  String get goBase => _base;
+
+  /// Every call the station heard on [d], oldest first: BirdNET-Go's
+  /// detections a thousand at a time, BirdWeather's a hundred.
+  Future<List<StationCall>> callsOn(DateTime d) => _bw ? _callsBW(d) : _callsGo(d);
+
+  Future<List<StationCall>> _callsGo(DateTime d) async {
+    final out = <StationCall>[], date = ymd(d);
+    var seen = 0;
+    for (var page = 0; page < 40; page++) {
+      final j = await _get('/api/v2/detections?start_date=$date&end_date=$date'
+          '&numResults=1000&offset=$seen&sortBy=date_asc');
+      final rows = j is Map ? (j['data'] as List? ?? const []) : (j is List ? j : const []);
+      seen += rows.length;
+      for (final r in rows) {
+        if (r is! Map) continue;
+        // an older BirdNET-Go lists its latest calls whatever the day
+        if (r['date'] != null && '${r['date']}' != date) {
+          throw Exception("This BirdNET-Go can't list one day's calls.");
+        }
+        final at = stationTime(r['time'], d);
+        final sci = '${r['scientificName'] ?? r['scientific_name'] ?? ''}';
+        if (at == null || sci.isEmpty) continue;
+        final id = (r['id'] as num?)?.toInt();
+        out.add(StationCall(
+          id: id ?? seen,
+          at: at,
+          sci: sci,
+          common: '${r['commonName'] ?? r['common_name'] ?? sci}',
+          confidence: ((r['confidence'] ?? 0) as num).toDouble(),
+          verified: r['verified'] as String?,
+          audioUrl: id != null && r['spectrogramOnly'] != true ? '$_base/api/v2/audio/$id' : null,
+          spectrogramUrl: id != null ? '$_base/api/v2/spectrogram/$id?size=md' : null,
+        ));
+      }
+      final total = j is Map ? (j['total'] as num?)?.toInt() : null;
+      if (rows.isEmpty || total == null || seen >= total) break;
+    }
+    out.sort((a, b) => a.at.compareTo(b.at));
+    return out;
+  }
+
+  Future<List<StationCall>> _callsBW(DateTime d) async {
+    final out = <StationCall>[];
+    String? after;
+    for (var page = 0; page < 100; page++) {
+      final j = await _gql(
+          r'query($ids:[ID!],$p:InputDuration,$after:String){detections(stationIds:$ids,period:$p,first:100,after:$after)'
+          r'{pageInfo{hasNextPage endCursor} nodes{id timestamp confidence species{commonName scientificName}'
+          r' soundscape{url startTime endTime}}}}',
+          {'ids': [_bwId], 'p': _bwPeriod((d, d)), 'after': after});
+      final c = (j['detections'] as Map?) ?? const {};
+      for (final n in (c['nodes'] as List?) ?? const []) {
+        if (n is! Map) continue;
+        final at = stationTime(n['timestamp'], d);
+        final sp = (n['species'] as Map?) ?? const {};
+        final sci = '${sp['scientificName'] ?? ''}';
+        if (at == null || sci.isEmpty) continue;
+        final sc = (n['soundscape'] as Map?) ?? const {};
+        final a = (sc['startTime'] as num?)?.toDouble(), b = (sc['endTime'] as num?)?.toDouble();
+        out.add(StationCall(
+          id: int.tryParse('${n['id']}') ?? out.length + 1,
+          at: at,
+          sci: sci,
+          common: '${sp['commonName'] ?? sci}',
+          confidence: ((n['confidence'] ?? 0) as num).toDouble(),
+          audioUrl: sc['url'] as String?,
+          clip: a != null && b != null && b > a ? (a, b) : null,
+        ));
+      }
+      final info = (c['pageInfo'] as Map?) ?? const {};
+      after = info['endCursor'] as String?;
+      if (info['hasNextPage'] != true || after == null) break;
+    }
+    out.sort((a, b) => a.at.compareTo(b.at));
+    return out;
+  }
+
+  /// How many species and calls on each day from [from] to [to], for the
+  /// calendar: BirdNET-Go's daily lists seven days a time, BirdWeather's
+  /// daily counts. Days it says nothing of are left out.
+  Future<Map<String, (int, int)>> daySums(DateTime from, DateTime to) async {
+    final out = <String, (int, int)>{};
+    if (_bw) {
+      final j = await _gql(
+          r'query($ids:[ID!],$p:InputDuration){dailyDetectionCounts(stationIds:$ids,period:$p){date total counts{count}}}',
+          {'ids': [_bwId], 'p': _bwPeriod((from, to))});
+      for (final r in (j['dailyDetectionCounts'] as List?) ?? const []) {
+        if (r is! Map || r['date'] == null) continue;
+        out['${r['date']}'.substring(0, 10)] =
+            (((r['counts'] as List?) ?? const []).length, ((r['total'] ?? 0) as num).toInt());
+      }
+      return out;
+    }
+    for (var d = from; !d.isAfter(to); d = d.add(const Duration(days: 7))) {
+      final dates = [
+        for (var k = 0; k < 7; k++)
+          if (!d.add(Duration(days: k)).isAfter(to)) ymd(d.add(Duration(days: k)))
+      ];
+      out.addAll(daySumsOf(await _get('/api/v2/analytics/species/daily/batch?dates=${dates.join(',')}'), dates));
+    }
+    return out;
+  }
+
+  /// BirdNET-Go's weather on [d], as a session keeps it; null without it.
+  Future<Map<String, dynamic>?> weatherOn(DateTime d) async {
+    if (_bw) return null;
+    try {
+      return dayWeather(await _get('/api/v2/weather/hourly/${ymd(d)}'), today: d == _dayOf(DateTime.now()));
     } catch (_) {
       return null;
     }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../engine/place_names.dart';
+import 'index_view.dart' show thousands;
+import 'station_archive.dart';
 import 'station_feed.dart';
 import '../store/detection_store.dart';
 import '../ui/format.dart';
@@ -193,7 +195,10 @@ class _DayPickerState extends State<DayPicker> {
 }
 
 /// The calendar button on a remote station: any day from when its records
-/// begin (as far as it says) to today. Returns the day picked, or null.
+/// begin (as far as it says) to today, each day like one of Listen's
+/// sessions. Days known to have heard nothing are greyed; under the month,
+/// the picked day's row: how many species and calls, and whether it is kept
+/// on the phone (station_archive.dart). Returns the day picked, or null.
 class StationDayPicker extends StatefulWidget {
   const StationDayPicker({super.key, required this.feed});
 
@@ -214,17 +219,26 @@ class _StationDayPickerState extends State<StationDayPicker> {
   late DateTime _picked = widget.feed.day ?? _today;
 
   @override
+  void initState() {
+    super.initState();
+    widget.feed.archive?.markMonth(_picked);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final since = widget.feed.since;
     final first = since == null ? DateTime(_today.year - 2, _today.month, _today.day) : _day(since);
+    final archive = widget.feed.archive;
     final screen = MediaQuery.sizeOf(context);
+    const small = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia);
+    final shown = _picked.isBefore(first) ? first : _picked;
     return Dialog(
       backgroundColor: paper,
       surfaceTintColor: Colors.transparent,
       insetPadding: EdgeInsets.symmetric(horizontal: screen.width * .04, vertical: screen.height * .04),
       shape: const RoundedRectangleBorder(side: BorderSide(color: sepia)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400),
+        constraints: BoxConstraints(maxWidth: 400, maxHeight: screen.height * .92),
         child: Stack(
           children: [
             const Positioned.fill(
@@ -235,42 +249,98 @@ class _StationDayPickerState extends State<StationDayPicker> {
                 ),
               ),
             ),
-            Padding(
+            SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(widget.feed.station.name,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 1.1, color: ink)),
-                  SizedBox(
-                    height: 352,
-                    child: CalendarDatePicker(
-                      initialDate: _picked.isBefore(first) ? first : _picked,
-                      firstDate: first,
-                      lastDate: _today,
-                      currentDate: _today,
-                      onDateChanged: (d) => setState(() => _picked = _day(d)),
+              child: ListenableBuilder(
+                listenable: archive ?? widget.feed,
+                builder: (context, _) => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(widget.feed.station.name,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 1.1, color: ink)),
+                    SizedBox(
+                      height: 352,
+                      child: CalendarDatePicker(
+                        initialDate: shown,
+                        firstDate: first,
+                        lastDate: _today,
+                        currentDate: _today,
+                        // a day known to have heard nothing can't be picked
+                        // (the one picked always can)
+                        selectableDayPredicate: (d) {
+                          final k = archive?.dayOf(d);
+                          return k == null || k.calls > 0 || _day(d) == shown;
+                        },
+                        onDisplayedMonthChanged: (m) => archive?.markMonth(m),
+                        onDateChanged: (d) => setState(() => _picked = _day(d)),
+                      ),
                     ),
-                  ),
-                  Text('The plate for ${day(_picked)}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia)),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-                      TextButton(onPressed: () => Navigator.of(context).pop(_picked), child: const Text('OK')),
+                    const Divider(color: rule, height: 1),
+                    const SizedBox(height: 8),
+                    _row(shown, archive?.dayOf(shown)),
+                    if (archive != null) ...[
+                      const SizedBox(height: 6),
+                      Text(_kept(archive), textAlign: TextAlign.center, style: small.copyWith(fontSize: 13)),
                     ],
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+                        TextButton(onPressed: () => Navigator.of(context).pop(shown), child: const Text('OK')),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// The day as one of Listen's session rows: "Sat 21 Nov  ·  17 species,
+  /// 412 calls", in madder when it is the day on show; a tap shows it.
+  Widget _row(DateTime d, StationDay? k) {
+    final on = widget.feed.day == d || (widget.feed.day == null && d == _today && widget.feed.span == Span.today);
+    final what = k == null
+        ? 'asking…'
+        : k.calls == 0
+            ? 'nothing heard'
+            : '${k.species == 1 ? '1 species' : '${k.species} species'}, '
+                '${k.calls == 1 ? '1 call' : '${thousands(k.calls)} calls'}';
+    return InkWell(
+      onTap: () => Navigator.of(context).pop(d),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: rule))),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Expanded(
+              child: Text(d == _today ? 'Today' : dayWords(d),
+                  style: TextStyle(fontFamily: serif, fontSize: 17, color: on ? madder : ink)),
+            ),
+            if (k != null && k.saved)
+              const Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: Icon(Icons.download_done, size: 15, color: sepia),
+              ),
+            Text(what, style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// How many of the station's days are kept on the phone.
+  String _kept(StationArchive a) {
+    if (a.unsupported) return "This station can't list a day's calls, so only its counts are kept.";
+    final n = a.days.values.where((k) => k.saved && k.calls > 0).length;
+    return n == 0 ? 'Keeping its days on this phone as they are shown.' : '${thousands(n)} ${n == 1 ? 'day' : 'days'} kept on this phone.';
   }
 }

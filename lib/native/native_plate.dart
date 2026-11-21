@@ -162,7 +162,8 @@ class _NativePlateState extends State<NativePlate> {
     }
     if (f != null && f.station.id == st.id && f.station.input == st.input) return f;
     f?.dispose();
-    return _feed = StationFeed(st);
+    // each day shown kept on the phone, as a session (station_archive.dart)
+    return _feed = StationFeed(st, root: app.store.root);
   }
 
   /// The four periods (Today, Week, Month, All), as the web plate's header
