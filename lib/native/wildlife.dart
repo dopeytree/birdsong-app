@@ -22,7 +22,8 @@ const habitatAnimals = <String, List<String>>{
   'heath': ['hare', 'grouse', 'hare'],
   'wetland': ['heron', 'heron', 'swan'],
   'water': ['otter', 'swan', 'kingfisher', 'heron'],
-  'sea': ['whale', 'dolphin', 'seal', 'puffin', 'whale'],
+  // no Bewick whale or dolphin yet: the sea has his seal and puffin
+  'sea': ['seal', 'puffin', 'seal'],
 };
 
 /// What each animal is called, for its label.

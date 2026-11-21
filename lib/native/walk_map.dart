@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
 import '../settings.dart';
 import 'bird_records.dart';
+import 'engravings.dart';
 import 'wildlife.dart';
 import '../store/detection_store.dart';
 import 'contours.dart';
@@ -421,6 +422,9 @@ class _WalkMapState extends State<WalkMap> {
         if (got != null) found.add(got);
       }
     }
+    for (final cr in found) {
+      Engravings.want(cr.animal);
+    }
     if (run == _critterRun && mounted) setState(() => _critters = found);
   }
 
@@ -618,14 +622,14 @@ class _WalkMapState extends State<WalkMap> {
     }
     if (spot != null) return _say(p, spot.name, spot.about, page: pageOf(spot.name, spot.about, spot.link));
     for (final cr in _critters) {
-      if (near(cr.at, 18)) {
+      if (Engravings.of(cr.animal) != null && near(cr.at, 22)) {
         return _say(p, animalNames[cr.animal] ?? cr.animal, 'A picture for the ${switch (cr.habitat) {
           'wood' => 'woods',
           'heath' => 'heath and moor',
           'wetland' => 'marsh',
           'water' => 'water',
           _ => 'sea',
-        }}, not a sighting');
+        }}, not a sighting. Engraving by Thomas Bewick');
       }
     }
     if (widget.landmarks != null && (widget.settings?.mapShowHides ?? true)) {
@@ -1168,16 +1172,26 @@ class _WalkMapState extends State<WalkMap> {
                         controller: _hides,
                       ),
                     // wildlife pictures, for decoration
+                    // (Bewick's engravings; only those that have arrived show)
                     if (_critters.isNotEmpty && (widget.settings?.mapWildlife ?? true))
-                      MarkerLayer(markers: [
-                        for (final cr in _critters)
-                          Marker(
-                            point: cr.at,
-                            width: _zoom >= 12 ? 36 : 30,
-                            height: _zoom >= 12 ? 36 : 30,
-                            child: IgnorePointer(child: CustomPaint(painter: CritterPainter(cr.animal))),
-                          ),
-                      ]),
+                      ValueListenableBuilder<int>(
+                        valueListenable: Engravings.loaded,
+                        builder: (context, n, child) => MarkerLayer(markers: [
+                          for (final cr in _critters)
+                            if (Engravings.of(cr.animal) case final img?)
+                              Marker(
+                                point: cr.at,
+                                width: _zoom >= 12 ? 64 : 52,
+                                height: _zoom >= 12 ? 64 : 52,
+                                child: IgnorePointer(
+                                  child: ColorFiltered(
+                                    colorFilter: engravingTone(),
+                                    child: RawImage(image: img, fit: BoxFit.contain),
+                                  ),
+                                ),
+                              ),
+                        ]),
+                      ),
                     // the walk
                     if (w != null && w.trail.length > 1)
                       PolylineLayer(polylines: [
@@ -1233,6 +1247,9 @@ class _WalkMapState extends State<WalkMap> {
                     child: _Credit(_credit +
                         (widget.landmarks != null ? _extrasCredit() : '') +
                         (_recordsKey != null ? '\nBird records: GBIF.org' : '') +
+                        (_critters.any((c) => Engravings.of(c.animal) != null)
+                            ? '\nEngravings: Thomas Bewick, Wellcome Collection'
+                            : '') +
                         _searchCredit)),
               if (kDebugMode && widget.landmarks != null)
                 Positioned(
