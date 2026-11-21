@@ -120,6 +120,14 @@ class StationArchive extends ChangeNotifier {
     await tmp.rename(f.path);
   }
 
+  /// A line in fill-log.txt, newest last, with when it was written.
+  Future<void> _log(String line) async {
+    try {
+      await File('${dir.path}/fill-log.txt')
+          .writeAsString('${DateTime.now().toIso8601String().substring(0, 19)}  $line\n', mode: FileMode.append);
+    } catch (_) {}
+  }
+
   Future<void> _saveIndex() => _write(File('${dir.path}/days.json'),
       jsonEncode({for (final e in (days.entries.toList()..sort((a, b) => a.key.compareTo(b.key)))) e.key: e.value}));
 
@@ -177,6 +185,7 @@ class StationArchive extends ChangeNotifier {
           _failures = 0;
         } catch (e) {
           debugPrint('station archive, ${ymd(d)}: $e');
+          await _log('${ymd(d)}  failed: $e');
           if ('$e'.contains("can't list")) {
             unsupported = true;
             break;
@@ -223,7 +232,9 @@ class StationArchive extends ChangeNotifier {
       await _saveIndex();
       return;
     }
+    final clock = Stopwatch()..start();
     final calls = await feed.callsOn(d);
+    final asked = clock.elapsedMilliseconds;
     if (_closed) return;
     final weather = await feed.weatherOn(d);
     final folder = Directory('${dir.path}/$key');
@@ -243,6 +254,10 @@ class StationArchive extends ChangeNotifier {
         species: {for (final c in calls) c.sci}.length, calls: calls.length, saved: true, complete: complete);
     _keptAt[key] = DateTime.now();
     await _saveIndex();
+    // how long each day takes, to judge filling in a station's history
+    await _log('$key  ${calls.length} calls  asked ${asked}ms  '
+        'weather ${clock.elapsedMilliseconds - asked}ms  total ${clock.elapsedMilliseconds}ms'
+        '${complete ? '' : '  (today, so far)'}');
     if (!_closed) notifyListeners();
   }
 }
