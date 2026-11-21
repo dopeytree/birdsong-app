@@ -36,7 +36,7 @@ void main() {
     expect((j['station'] as Map)['name'], 'Garden');
     expect((j['station'] as Map)['birdnetUrl'], 'http://garden.local:8080');
     expect(j['summary'], {'detections': 3, 'species': 2});
-    expect(DateTime.parse(j['startTime'] as String), DateTime(2026, 11, 20, 7, 42, 10));
+    expect(DateTime.parse(j['startTime'] as String).toLocal(), DateTime(2026, 11, 20, 7, 42, 10));
     // and it reads back as one of Listen's sessions
     final s = Session.fromJson(j, '2026-11-20');
     expect(s.start, DateTime(2026, 11, 20, 7, 42, 10));
