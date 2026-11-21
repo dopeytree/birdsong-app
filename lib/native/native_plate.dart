@@ -883,7 +883,7 @@ class _NativePlateState extends State<NativePlate> {
                             tooltip: 'Stations',
                             constraints: const BoxConstraints.tightFor(
                                 width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                            icon: Icon(Icons.list),
+                            icon: const Icon(Icons.add),
                             color: red,
                             onPressed: () => _stationsTap(bc),
                           ),

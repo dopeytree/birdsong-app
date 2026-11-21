@@ -545,7 +545,7 @@ class _PlateViewState extends State<PlateView> {
                           tooltip: 'Stations',
                           constraints: const BoxConstraints.tightFor(
                               width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                          icon: Icon(Icons.list),
+                          icon: const Icon(Icons.add),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: () => _stationsTap(bc),
                         ),
