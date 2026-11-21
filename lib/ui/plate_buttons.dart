@@ -52,11 +52,11 @@ class SourcePill extends StatelessWidget {
   });
 
   /// Each half's width.
-  static const half = 40.0;
+  static const half = 34.0;
 
   /// Its height: a little under the menu icon's 24 plus its own margin,
   /// so it sits with the round buttons rather than over them.
-  static const height = 30.0;
+  static const height = 26.0;
 
   final bool listen;
   final String? stationName;
@@ -79,7 +79,7 @@ class SourcePill extends StatelessWidget {
                 width: half,
                 height: height,
                 decoration: BoxDecoration(color: on ? red : Colors.transparent, borderRadius: r),
-                child: Icon(icon, size: 18, color: on ? paper : sepia.withValues(alpha: 0.7)),
+                child: Icon(icon, size: 16, color: on ? paper : sepia.withValues(alpha: 0.7)),
               ),
             ),
           ),

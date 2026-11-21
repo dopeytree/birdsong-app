@@ -641,7 +641,7 @@ class _NativePlateState extends State<NativePlate> {
                     children: [
                       RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
                       Padding(
-                        padding: const EdgeInsets.only(top: 9), // centred on the menu icon (48 tall)
+                        padding: const EdgeInsets.only(top: 11), // centred on the menu icon (48 tall)
                         child: SourcePill(
                           listen: true,
                           stationName: app.settings.station?.name,

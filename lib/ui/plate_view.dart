@@ -556,7 +556,7 @@ class _PlateViewState extends State<PlateView> {
                     // The source: a two-part pill, Listen here | remote
                     // station, the one shown filled.
                     Padding(
-                      padding: const EdgeInsets.only(top: 9), // centred on the menu icon (48 tall)
+                      padding: const EdgeInsets.only(top: 11), // centred on the menu icon (48 tall)
                       child: SourcePill(
                         listen: listen,
                         stationName: _s.station?.name,
