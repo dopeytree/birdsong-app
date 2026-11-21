@@ -548,6 +548,8 @@ class _PlateViewState extends State<PlateView> {
                       Builder(
                         builder: (bc) => IconButton(
                           tooltip: _s.stations.length == 2 ? 'Next: ${_s.nextStationName}' : 'Stations',
+                          constraints: const BoxConstraints.tightFor(
+                              width: SourcePill.rowHeight, height: SourcePill.rowHeight),
                           icon: Icon(_s.stations.length == 2 ? Icons.swap_horiz : Icons.list),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: () => _stationsTap(bc),
@@ -555,13 +557,17 @@ class _PlateViewState extends State<PlateView> {
                       ),
                     // The source: a two-part pill, Listen here | remote
                     // station, the one shown filled.
-                    Padding(
-                      padding: const EdgeInsets.only(top: 11), // centred on the menu icon (48 tall)
+                    SizedBox(
+                      // level with the record and menu buttons
+                      height: SourcePill.rowHeight,
+                      child: Center(
+                      
                       child: SourcePill(
                         listen: listen,
                         stationName: _s.station?.name,
                         onListen: _toListen,
                         onRemote: _toRemote,
+                      ),
                       ),
                     ),
                     // The menu, and the plate's view (a to g) under it.
@@ -570,6 +576,8 @@ class _PlateViewState extends State<PlateView> {
                       children: [
                         IconButton(
                           tooltip: 'Settings',
+                          constraints: const BoxConstraints.tightFor(
+                              width: SourcePill.rowHeight, height: SourcePill.rowHeight),
                           icon: const Icon(Icons.menu),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: widget.openSettings,

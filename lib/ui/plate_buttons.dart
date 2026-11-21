@@ -52,11 +52,15 @@ class SourcePill extends StatelessWidget {
   });
 
   /// Each half's width.
-  static const half = 34.0;
+  static const half = 40.0;
 
   /// Its height: a little under the menu icon's 24 plus its own margin,
   /// so it sits with the round buttons rather than over them.
-  static const height = 26.0;
+  static const height = 30.0;
+
+  /// The height of the row of round buttons along the top (record, menu):
+  /// each sits in a box this tall, its middle level with the others'.
+  static const rowHeight = 48.0;
 
   final bool listen;
   final String? stationName;
@@ -79,7 +83,7 @@ class SourcePill extends StatelessWidget {
                 width: half,
                 height: height,
                 decoration: BoxDecoration(color: on ? red : Colors.transparent, borderRadius: r),
-                child: Icon(icon, size: 16, color: on ? paper : sepia.withValues(alpha: 0.7)),
+                child: Icon(icon, size: 18, color: on ? paper : sepia.withValues(alpha: 0.7)),
               ),
             ),
           ),
@@ -145,9 +149,10 @@ class _RecordButtonState extends State<RecordButton> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     final red = Theme.of(context).colorScheme.primary;
     const size = 36.0;
+    // as tall as the menu button beside it, so their middles line up
     return SizedBox(
       width: size + 8,
-      height: size + 8,
+      height: SourcePill.rowHeight,
       child: Stack(
         alignment: Alignment.center,
         children: [

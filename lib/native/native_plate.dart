@@ -640,8 +640,10 @@ class _NativePlateState extends State<NativePlate> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 11), // centred on the menu icon (48 tall)
+                      SizedBox(
+                      // level with the record and menu buttons
+                      height: SourcePill.rowHeight,
+                      child: Center(
                         child: SourcePill(
                           listen: true,
                           stationName: app.settings.station?.name,
@@ -649,11 +651,14 @@ class _NativePlateState extends State<NativePlate> {
                           onRemote: _toRemote,
                         ),
                       ),
+                      ),
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
                             tooltip: 'Settings',
+                          constraints: const BoxConstraints.tightFor(
+                              width: SourcePill.rowHeight, height: SourcePill.rowHeight),
                             icon: const Icon(Icons.menu),
                             color: red,
                             onPressed: widget.openSettings,
