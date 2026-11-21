@@ -128,6 +128,44 @@ Map<String, Object?> baseStyle(String source) => {
       ],
     };
 
+/// The kinds of OpenStreetMap park drawn as reserves, and what each is
+/// called in a label.
+const reserveKinds = {
+  'nature_reserve': 'Nature reserve',
+  'protected_area': 'Protected area',
+  'national_park': 'National park',
+};
+
+/// Nature reserves from OpenStreetMap (the tiles' park layer: RSPB, Wildlife
+/// Trust and other reserves, protected areas, national parks), with the
+/// map's extras: a faint wash, a fine dashed edge in moss, the name from
+/// zoom 12. Above the contours, below the place names.
+Map<String, Object?> reservesStyle(String source) {
+  final kinds = ['in', ['get', 'class'], ['literal', reserveKinds.keys.toList()]];
+  const moss = '#56743f';
+  return {
+    'version': 8,
+    'sources': {source: {'type': 'vector'}},
+    'layers': [
+      {
+        'id': 'reserve-fill', 'type': 'fill', 'source': source, 'source-layer': 'park', 'filter': kinds,
+        'paint': {'fill-color': moss, 'fill-opacity': 0.05},
+      },
+      {
+        'id': 'reserve-edge', 'type': 'line', 'source': source, 'source-layer': 'park', 'filter': kinds,
+        'layout': {'line-join': 'round'},
+        'paint': {'line-color': moss, 'line-opacity': 0.75, 'line-width': 0.9, 'line-dasharray': [2, 1.5]},
+      },
+      {
+        'id': 'reserve-label', 'type': 'symbol', 'source': source, 'source-layer': 'park', 'minzoom': 12,
+        'filter': ['all', kinds, ['has', 'name']],
+        'layout': {'text-field': ['get', 'name'], 'text-font': _fontIt, 'text-size': 10, 'text-max-width': 9},
+        'paint': {'text-color': moss, 'text-halo-color': _hex(paper), 'text-halo-width': 1.5},
+      },
+    ],
+  };
+}
+
 /// The names of places and peaks: above the contours.
 Map<String, Object?> labelStyle(String source) => {
       'version': 8,

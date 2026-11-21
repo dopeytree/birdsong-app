@@ -120,10 +120,13 @@ class Walk {
 /// The map, its style and fonts, read once a run (and again after a
 /// failure, so a connection that comes back is used).
 class _Kit {
-  _Kit(this.base, this.labels, this.providers, this.sprites, this.glyphs);
+  _Kit(this.base, this.labels, this.reserves, this.providers, this.sprites, this.glyphs);
 
   final vt.Theme base;
   final vt.Theme labels;
+
+  /// OpenStreetMap's nature reserves, with the extras.
+  final vt.Theme reserves;
   final vt.TileProviders providers;
   final vt.SpriteAtlas sprites;
   final vt.GlyphSource glyphs;
@@ -152,6 +155,7 @@ class _Kit {
       return _Kit(
         reader.read(baseStyle('omt'), id: 'birdsong-walk-base-1'),
         reader.read(labelStyle('omt'), id: 'birdsong-walk-labels-1'),
+        reader.read(reservesStyle('omt'), id: 'birdsong-walk-reserves-1'),
         vt.TileProviders({'omt': provider}),
         await mapSprites(),
         vt.GlyphSource.network(_glyphs),
@@ -198,6 +202,7 @@ class WalkMap extends StatefulWidget {
 class _WalkMapState extends State<WalkMap> {
   final _map = MapController();
   final _peaks = vt.VectorTileLayerController();
+  final _reserves = vt.VectorTileLayerController();
   _Kit? _kit;
   String? _failed;
   bool _ready = false;
@@ -445,6 +450,14 @@ class _WalkMapState extends State<WalkMap> {
         ...?found?.nature,
       ]) {
         if (inShape(ll, a.shape)) return _say(p, a.name, a.about);
+      }
+      if (widget.landmarks != null) {
+        final r = _reserves.queryRenderedFeatures(p, layerIds: const ['reserve-fill']);
+        for (final f in r) {
+          final name = f.properties['name'];
+          if (name == null || '$name'.isEmpty) continue;
+          return _say(p, '$name', reserveKinds[f.properties['class']] ?? 'Nature reserve');
+        }
       }
       if (_tip != null) setState(() => _tip = null);
       return;
@@ -784,6 +797,15 @@ class _WalkMapState extends State<WalkMap> {
                     // contours, traced here from the elevation tiles
                     PolylineLayer(polylines: _contourLines()),
                     MarkerLayer(markers: _contourLabels()),
+                    // extras: OpenStreetMap's nature reserves, from the tiles
+                    if (widget.landmarks != null)
+                      vt.VectorTileLayer(
+                        theme: kit.reserves,
+                        tileProviders: kit.providers,
+                        sprites: kit.sprites,
+                        glyphs: kit.glyphs,
+                        controller: _reserves,
+                      ),
                     vt.VectorTileLayer(
                       theme: kit.labels,
                       tileProviders: kit.providers,
