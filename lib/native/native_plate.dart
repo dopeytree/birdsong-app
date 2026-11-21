@@ -198,7 +198,7 @@ class _NativePlateState extends State<NativePlate> {
   /// The sun and moon: a tap counts the station's day and night, the
   /// daytime alone (sunrise to sunset), or the night alone; in madder
   /// while one alone is shown.
-  Widget _lightToggle(StationFeed f, Color lines) {
+  Widget _lightToggle(StationFeed f, Color lines, {bool end = false}) {
     final icon = switch (f.light) {
       Light.all => Icons.brightness_6_outlined,
       Light.day => Icons.wb_sunny_outlined,
@@ -217,7 +217,7 @@ class _NativePlateState extends State<NativePlate> {
             width: 44,
             height: 44,
             child: Align(
-              alignment: AlignmentDirectional.centerStart,
+              alignment: end ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
               child: Icon(icon, size: 20, color: f.light == Light.all ? lines : madder),
             ),
           ),
@@ -936,6 +936,13 @@ class _NativePlateState extends State<NativePlate> {
                     right: 8 + 12,
                     child: _spanRow(feed, short: true),
                   ),
+                // and the sun and moon under All, ending with it
+                if (feed != null && feed.canLight && showHeading && MediaQuery.sizeOf(context).width < 900)
+                  Positioned(
+                    top: _buttonsTop + 34,
+                    right: 8 + 12,
+                    child: _lightToggle(feed, app.settings.nativeHeadingInk ? ink : sepia, end: true),
+                  ),
                 // Along the bottom at the left, quick things to do: the plate's
                 // view (a to g) in the corner, so it never moves while
                 // stepping through the views, then the map.
@@ -1081,7 +1088,6 @@ class _NativePlateState extends State<NativePlate> {
     // a station: its name beside the title (as a session's number), then
     // the dates shown, its place, its weather and the sun and moon; the
     // periods themselves sit with the buttons
-    final narrow = MediaQuery.sizeOf(context).width < 900;
     final when = feed != null
         ? feed.dates
         : ses == null
@@ -1150,9 +1156,6 @@ class _NativePlateState extends State<NativePlate> {
                     ],
                   ),
                 ),
-              // a station on a phone: the sun and moon, under the heading
-              // (on a wide screen they sit beside the periods at the top)
-              if (feed != null && feed.canLight && narrow) _lightToggle(feed, lines),
               if (feed != null && feed.lightNote != null && feed.light != Light.all)
                 Text(feed.lightNote!, style: sub.copyWith(color: sepia)),
               if (totals && app.settings.nativeTotals && species > 0)
