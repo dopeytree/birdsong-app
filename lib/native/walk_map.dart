@@ -243,7 +243,7 @@ class _WalkMapState extends State<WalkMap> {
   String _layersCost = '';
   Timer? _probeTick;
 
-  void _timings(List<FrameTiming> ts) {
+  void _timings(List<ui.FrameTiming> ts) {
     final now = DateTime.now();
     for (final t in ts) {
       _frames.add((at: now, build: t.buildDuration.inMilliseconds, raster: t.rasterDuration.inMilliseconds));
