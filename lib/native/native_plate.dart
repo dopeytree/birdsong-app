@@ -491,37 +491,51 @@ class _NativePlateState extends State<NativePlate> {
                 child: SafeArea(
                   child: single
                       ? _single(mode, rows, newest)
-                      // The page scrolls above the buttons along the bottom, never
-                      // under them, its last lines fading out as they reach them.
-                      : Padding(
-                          padding: EdgeInsets.only(bottom: _bottomRoom),
-                          child: ShaderMask(
+                      // The heading stays put beside the buttons at the top; the
+                      // rest scrolls between it and the buttons along the bottom,
+                      // never under either, fading out at both edges.
+                      : LayoutBuilder(builder: (context, outer) {
+                          final headSide = (outer.maxWidth * .04).clamp(16.0, 48.0);
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: _bottomRoom),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: EdgeInsets.fromLTRB(headSide, _padTop, headSide, 0),
+                                  child: _heading(ses, i, n, all.length, calls, outer.maxWidth - headSide,
+                                      totals: mode.key != 'index'),
+                                ),
+                                Expanded(
+                                  child: ShaderMask(
                             blendMode: BlendMode.dstIn,
-                            shaderCallback: (r) => LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: const [Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
-                              stops: [0, r.height <= _fadeRoom ? 0 : 1 - _fadeRoom / r.height, 1],
-                            ).createShader(r),
+                            shaderCallback: (r) {
+                              final f = r.height <= 2 * _fadeRoom ? .5 : _fadeRoom / r.height;
+                              return LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: const [
+                                  Color(0x00000000),
+                                  Color(0xFF000000),
+                                  Color(0xFF000000),
+                                  Color(0x00000000)
+                                ],
+                                stops: [0, f, 1 - f, 1],
+                              ).createShader(r);
+                            },
                             child: LayoutBuilder(builder: (context, box) {
                   final side = (box.maxWidth * (fit ? .03 : .04)).clamp(16.0, fit ? 32.0 : 48.0);
                   final plateSide = (box.maxWidth * .02).clamp(8.0, 32.0);
-                  final headSide = (box.maxWidth * .04).clamp(16.0, 48.0);
                   return SingleChildScrollView(
                     physics: _holdFor != null && (_holdFor == _showingFor(ses) || _holdFor == 'map')
                         ? const NeverScrollableScrollPhysics()
                         : null,
-                    // room at the end so the last lines can scroll clear of the fade
-                    padding: const EdgeInsets.only(top: _padTop, bottom: _fadeRoom),
+                    // room at both ends so the first and last lines sit clear of the fades
+                    padding: const EdgeInsets.symmetric(vertical: _fadeRoom),
                     child: Column(
                       key: _allKey,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: headSide),
-                          child: _heading(ses, i, n, all.length, calls, box.maxWidth - headSide,
-                              totals: mode.key != 'index'),
-                        ),
                         // the index alone sits in the middle of the window
                         if (!showPlate) SizedBox(height: _indexAloneTop(box.maxHeight)),
                         if (!showPlate)
@@ -634,8 +648,12 @@ class _NativePlateState extends State<NativePlate> {
                     ),
                   );
                 }),
-                          ),
-                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
                 ),
               ),
             ),
@@ -942,7 +960,8 @@ class _NativePlateState extends State<NativePlate> {
   /// middle of the window rather than of the room under the heading, as far
   /// as there is room (plate-extras.js, balance). The space above it.
   double _indexAloneTop(double screen) {
-    final room = screen - _padTop - _headH;
+    // [screen] is the scrolling part, under the heading
+    final room = screen - 2 * _fadeRoom;
     final pad = math.max(0.0, math.min(_headH, room - _indexH));
     return math.max(0.0, (room - pad - _indexH) / 2);
   }
@@ -1042,7 +1061,7 @@ class _NativePlateState extends State<NativePlate> {
     final all = _allKey.currentContext?.size?.height, plate = _plateKey.currentContext?.size?.height;
     if (all == null || plate == null) return;
     // and the scroll view's padding above and below
-    final others = all - plate + _padTop + _fadeRoom;
+    final others = all - plate + 2 * _fadeRoom;
     if (_others == null || (others - _others!).abs() > .5) setState(() => _others = others);
   }
 }
