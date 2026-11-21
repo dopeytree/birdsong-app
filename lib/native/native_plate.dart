@@ -476,8 +476,8 @@ class _NativePlateState extends State<NativePlate> {
   /// the same walk), as the web map's openBird.
   /// The map on a page of its own, the whole screen (for small screens):
   /// the same walk (kept up to date while listening), extras and search;
-  /// its button or Escape closes it, and a bird's cross closes it and opens
-  /// the bird's card.
+  /// its button or Escape closes it, and a bird's cross opens the bird's
+  /// card over it.
   void _mapFullScreen(Walk? Function() walk, List<_Row> rows) {
     Navigator.of(context).push(PageRouteBuilder<void>(
       fullscreenDialog: true,
@@ -498,10 +498,9 @@ class _NativePlateState extends State<NativePlate> {
                     walk: walk(),
                     allBirds: app.settings.mapBirds == 'all',
                     size: box.biggest,
-                    onBird: (sci, common) {
-                      Navigator.of(context).pop();
-                      _openFromMap(sci, common, rows);
-                    },
+                    // the card opens over the full-screen map; closing it
+                    // leaves the map full screen
+                    onBird: (sci, common) => _openFromMap(sci, common, rows),
                     onHold: (_) {},
                     landmarks: app.settings.mapExtras ? _landmarks : null,
                     fullScreen: true,
