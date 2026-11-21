@@ -12,13 +12,24 @@ import 'landmarks.dart';
 /// Species has it, and what the walk went by in centred columns of 16rem,
 /// most particular first. On a phone ([narrow]) the first three, and "and
 /// N more". Selecting the heading (or "more") shows the whole list in a
-/// box; selecting a line opens its page: its Wikipedia article or Historic
-/// England's list entry, else a web search for it.
+/// box. Selecting a line takes the map to it and labels it there; the
+/// label (or the line again) opens its page: its Wikipedia article or
+/// Historic England's list entry, else a web search for it.
 class PassedView extends StatelessWidget {
-  const PassedView({super.key, required this.lookup, required this.width, this.fit = false, this.narrow = false});
+  const PassedView({
+    super.key,
+    required this.lookup,
+    required this.width,
+    this.fit = false,
+    this.narrow = false,
+    this.about = true,
+  });
 
   final LandmarkLookup lookup;
   final double width;
+
+  /// Whether each line says what the place is (Settings.mapPassedAbout).
+  final bool about;
 
   /// Fitted on one screen: smaller and closer, as the index.
   final bool fit;
@@ -37,16 +48,16 @@ class PassedView extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                PassedHeading(fit: fit, onTap: () => showPassed(context, passed)),
+                PassedHeading(fit: fit, onTap: () => showPassed(context, lookup, about: about)),
                 SizedBox(height: fit ? 8 : 14),
-                PassedColumns(passed: shown, width: width, fit: fit, narrow: narrow),
+                PassedColumns(passed: shown, lookup: lookup, width: width, fit: fit, narrow: narrow, about: about),
                 if (more > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Semantics(
                       button: true,
                       child: InkWell(
-                        onTap: () => showPassed(context, passed),
+                        onTap: () => showPassed(context, lookup, about: about),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           child: Text('and $more more',
@@ -109,12 +120,26 @@ class PassedHeading extends StatelessWidget {
 
 /// The lines in centred columns, as the index sets its own.
 class PassedColumns extends StatelessWidget {
-  const PassedColumns({super.key, required this.passed, required this.width, this.fit = false, this.narrow = false});
+  const PassedColumns({
+    super.key,
+    required this.passed,
+    required this.lookup,
+    required this.width,
+    this.fit = false,
+    this.narrow = false,
+    this.about = true,
+    this.onChosen,
+  });
 
   final List<Passed> passed;
+  final LandmarkLookup lookup;
   final double width;
   final bool fit;
   final bool narrow;
+  final bool about;
+
+  /// After a line is chosen (the box of the whole list closes).
+  final VoidCallback? onChosen;
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +158,16 @@ class PassedColumns extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final p in passed.skip(c * cols.perColumn).take(cols.perColumn)) _Line(p, size: size),
+                for (final p in passed.skip(c * cols.perColumn).take(cols.perColumn))
+                  _Line(p, size: size, about: about, chosen: identical(lookup.chosen, p), onTap: () {
+                    // chosen already: its page; else to it on the map
+                    if (identical(lookup.chosen, p)) {
+                      launchUrl(p.page, mode: LaunchMode.externalApplication);
+                    } else {
+                      lookup.choose(p);
+                      onChosen?.call();
+                    }
+                  }),
               ],
             ),
           ),
@@ -143,8 +177,9 @@ class PassedColumns extends StatelessWidget {
   }
 }
 
-/// The whole list, in a box over the plate.
-Future<void> showPassed(BuildContext context, List<Passed> passed) => showDialog<void>(
+/// The whole list, in a box over the plate; choosing a line closes it and
+/// takes the map there.
+Future<void> showPassed(BuildContext context, LandmarkLookup lookup, {bool about = true}) => showDialog<void>(
       context: context,
       barrierColor: const Color(0x55000000),
       builder: (context) => Dialog(
@@ -162,7 +197,14 @@ Future<void> showPassed(BuildContext context, List<Passed> passed) => showDialog
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   const PassedHeading(),
                   const SizedBox(height: 18),
-                  PassedColumns(passed: passed, width: w, narrow: w < 400),
+                  PassedColumns(
+                    passed: lookup.walk?.passed ?? const [],
+                    lookup: lookup,
+                    width: w,
+                    narrow: w < 400,
+                    about: about,
+                    onChosen: () => Navigator.of(context).pop(),
+                  ),
                 ]),
               ),
               Positioned(
@@ -181,10 +223,15 @@ Future<void> showPassed(BuildContext context, List<Passed> passed) => showDialog
     );
 
 class _Line extends StatefulWidget {
-  const _Line(this.p, {required this.size});
+  const _Line(this.p, {required this.size, required this.about, required this.chosen, required this.onTap});
 
   final Passed p;
   final double size;
+  final bool about;
+
+  /// The line the map shows: its name in madder.
+  final bool chosen;
+  final VoidCallback onTap;
 
   @override
   State<_Line> createState() => _LineState();
@@ -199,27 +246,81 @@ class _LineState extends State<_Line> {
     final text = Text.rich(TextSpan(style: TextStyle(fontFamily: serif, fontSize: size, height: 1.4, color: ink), children: [
       TextSpan(
           text: p.name,
-          style: TextStyle(color: _hover ? madder : ink, decoration: _hover ? TextDecoration.underline : null)),
-      const TextSpan(text: ' '),
-      TextSpan(text: p.about, style: TextStyle(color: sepia, fontStyle: FontStyle.italic, fontSize: size * .85)),
+          style: TextStyle(
+              color: _hover || widget.chosen ? madder : ink, decoration: _hover ? TextDecoration.underline : null)),
+      if (widget.about) ...[
+        const TextSpan(text: ' '),
+        TextSpan(text: p.about, style: TextStyle(color: sepia, fontStyle: FontStyle.italic, fontSize: size * .85)),
+      ],
       TextSpan(
           text: ' ${p.at != null ? '${p.metres.round()} m' : 'walked through'}',
           style: TextStyle(color: sepia, fontSize: size * .8)),
     ]));
     return Semantics(
       button: true,
-      link: true,
-      hint: p.link != null ? 'Open its page' : 'Search for it',
+      selected: widget.chosen,
+      hint: widget.chosen ? (p.link != null ? 'Open its page' : 'Search for it') : 'Show it on the map',
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => launchUrl(p.page, mode: LaunchMode.externalApplication),
+          onTap: widget.onTap,
           child: Padding(padding: const EdgeInsets.symmetric(vertical: 2.4), child: text),
         ),
       ),
     );
   }
+}
+
+/// "Passed on the way" under the full-screen map: the heading (which folds
+/// the list away and back) and the lines in centred columns, scrolling
+/// within no more than [maxHeight]. Nothing when the walk passed nothing.
+class PassedStrip extends StatefulWidget {
+  const PassedStrip({super.key, required this.lookup, required this.maxHeight, this.about = true});
+
+  final LandmarkLookup lookup;
+  final double maxHeight;
+  final bool about;
+
+  @override
+  State<PassedStrip> createState() => _PassedStripState();
+}
+
+class _PassedStripState extends State<PassedStrip> {
+  bool _folded = false;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: widget.lookup,
+        builder: (context, _) {
+          final passed = widget.lookup.walk?.passed ?? const <Passed>[];
+          if (passed.isEmpty) return const SizedBox.shrink();
+          return LayoutBuilder(builder: (context, box) {
+            final w = box.maxWidth - 32;
+            return Container(
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: rule))),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                PassedHeading(fit: true, onTap: () => setState(() => _folded = !_folded)),
+                if (!_folded)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: widget.maxHeight),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: PassedColumns(
+                        passed: passed,
+                        lookup: widget.lookup,
+                        width: w,
+                        narrow: w < 600,
+                        about: widget.about,
+                      ),
+                    ),
+                  ),
+              ]),
+            );
+          });
+        },
+      );
 }

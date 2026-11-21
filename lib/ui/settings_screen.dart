@@ -633,10 +633,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _dropdown('Crosses', s.mapBirds, mapBirds, (v) => s.update((x) => x.mapBirds = v)),
         _switch('Landmarks, heritage and nature sites', s.mapExtras,
             (v) => s.update((x) => x.mapExtras = v)),
+        if (s.mapExtras)
+          _switch('Descriptions in Passed on the way', s.mapPassedAbout,
+              (v) => s.update((x) => x.mapPassedAbout = v)),
         Text(
           'The map is drawn from OpenFreeMap and open elevation data, so the area of each walk '
           'is sent to them. Landmarks also send it to Historic England, Natural England and '
-          'Wikipedia, and list what the walk passed under the index.',
+          'Wikipedia, and list what the walk passed above the map.',
           style: theme.textTheme.bodySmall,
         ),
       ],

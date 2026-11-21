@@ -80,7 +80,7 @@ class Area {
 /// A line of "Passed on the way": [at] null when the walk went through it
 /// (a nature site), with no one point to fly to.
 class Passed {
-  const Passed(this.name, this.about, this.at, this.metres, this.order, {this.link});
+  const Passed(this.name, this.about, this.at, this.metres, this.order, {this.link, LatLng? where}) : _where = where;
 
   final String name;
   final String about;
@@ -94,9 +94,27 @@ class Passed {
   /// Its page (Wikipedia, Historic England), or null: then a search.
   final String? link;
 
-  /// Where selecting it goes: its page, or a web search for it.
-  Uri get page => link != null ? Uri.parse(link!) : Uri.https('www.google.com', '/search', {'q': '$name $about'});
+  final LatLng? _where;
+
+  /// Where the map goes to show it: [at], or for a place walked through,
+  /// where the walk was inside it.
+  LatLng? get where => at ?? _where;
+
+  /// Its page, or a web search for it.
+  Uri get page => pageOf(name, about, link);
 }
+
+/// A place's page: [link] when it has one, else a web search for it.
+Uri pageOf(String name, String about, String? link) =>
+    link != null ? Uri.parse(link) : Uri.https('www.google.com', '/search', {'q': '$name $about'});
+
+/// What a page is, for the line that opens it: "Wikipedia", "Historic
+/// England", or "Search the web".
+String pageName(Uri page) => switch (page.host) {
+      'en.wikipedia.org' => 'Wikipedia',
+      'historicengland.org.uk' => 'Historic England',
+      _ => 'Search the web',
+    };
 
 /// Historic England's list entry for a feature of theirs, from its number.
 String? heLink(Map<String, dynamic> props) {
@@ -288,10 +306,10 @@ List<Passed> passedOnTheWay(List<LatLng> path,
   for (final a in reserves) {
     final key = plainName(a.name);
     if (!seenReserve.add(key)) continue;
-    final inside = probe.any((p) => inShape(p, a.shape));
+    final inside = probe.where((p) => inShape(p, a.shape)).firstOrNull;
     var d = 0.0;
     LatLng? at;
-    if (!inside) {
+    if (inside == null) {
       d = double.infinity;
       for (final p in probe) {
         final (m, q) = metresToEdge(p, a.shape);
@@ -304,7 +322,8 @@ List<Passed> passedOnTheWay(List<LatLng> path,
     }
     reserveNames.add(key);
     final w = described[key];
-    out.add(Passed(a.name, w != null && w.about != 'Wikipedia' ? w.about : a.about, at, d, 0, link: w?.link ?? a.link));
+    out.add(Passed(a.name, w != null && w.about != 'Wikipedia' ? w.about : a.about, at, d, 0,
+        link: w?.link ?? a.link, where: inside));
   }
   for (final s in listed) {
     final d = near(s.at);
@@ -322,7 +341,8 @@ List<Passed> passedOnTheWay(List<LatLng> path,
   for (final a in nature) {
     if (!seen.add('${a.kind}${a.name}')) continue;
     if (reserveNames.contains(plainName(a.name))) continue;
-    if (probe.any((p) => inShape(p, a.shape))) out.add(Passed(a.name, a.about, null, 0, 1, link: a.link));
+    final inside = probe.where((p) => inShape(p, a.shape)).firstOrNull;
+    if (inside != null) out.add(Passed(a.name, a.about, null, 0, 1, link: a.link, where: inside));
   }
   for (final s in wiki) {
     if (reserveNames.contains(plainName(s.name))) continue;
@@ -598,10 +618,13 @@ class LandmarkLookup extends ChangeNotifier {
   int _viewRun = 0;
   bool loading = false;
 
-  /// Where the list asked the map to go, and a count so the same place
-  /// asked for twice is gone to twice.
-  LatLng? focus;
+  /// The line of "Passed on the way" chosen last, which the map shows; a
+  /// count so the same line chosen twice is gone to twice.
+  Passed? chosen;
   int focusAsked = 0;
+
+  /// Where the map is to go: the chosen line's place.
+  LatLng? get focus => chosen?.where;
 
   /// Everything to draw: the walk's and the view's, each once.
   Landmarks? get current {
@@ -696,8 +719,9 @@ class LandmarkLookup extends ChangeNotifier {
     notifyListeners();
   }
 
-  void show(LatLng at) {
-    focus = at;
+  /// A line of the list chosen: the map goes to it and labels it.
+  void choose(Passed p) {
+    chosen = p;
     focusAsked++;
     notifyListeners();
   }

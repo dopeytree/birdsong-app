@@ -192,6 +192,11 @@ class Settings extends ChangeNotifier {
   /// Wikipedia.
   bool mapExtras = false;
 
+  /// Whether "Passed on the way" says what each place is (its kind, or its
+  /// Wikipedia description) after its name. The name alone is shorter; the
+  /// map's label still says it.
+  bool mapPassedAbout = true;
+
   static Future<Settings> load(Directory dir) async {
     final s = Settings._(File('${dir.path}/settings.json'));
     try {
@@ -268,6 +273,7 @@ class Settings extends ChangeNotifier {
     showMap = (j['showMap'] as bool?) ?? showMap;
     mapBirds = j['mapBirds'] == 'all' ? 'all' : 'first';
     mapExtras = (j['mapExtras'] as bool?) ?? mapExtras;
+    mapPassedAbout = (j['mapPassedAbout'] as bool?) ?? mapPassedAbout;
     // Settings saved before defaults v2 still carry the first test build's
     // defaults (3 s, 50 %); move those, and only those, to the new ones.
     if (((j['defaults'] as num?) ?? 1) < 2) {
@@ -328,6 +334,7 @@ class Settings extends ChangeNotifier {
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,
+        'mapPassedAbout': mapPassedAbout,
       };
 
   void update(void Function(Settings s) change) {

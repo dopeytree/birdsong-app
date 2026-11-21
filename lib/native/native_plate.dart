@@ -493,7 +493,9 @@ class _NativePlateState extends State<NativePlate> {
             body: SafeArea(
               child: ListenableBuilder(
                 listenable: Listenable.merge([app.store, app.settings]),
-                builder: (context, _) => LayoutBuilder(
+                builder: (context, _) => Column(children: [
+                  Expanded(
+                    child: LayoutBuilder(
                   builder: (context, box) => WalkMap(
                     walk: walk(),
                     allBirds: app.settings.mapBirds == 'all',
@@ -506,7 +508,16 @@ class _NativePlateState extends State<NativePlate> {
                     fullScreen: true,
                     onFullScreen: () => Navigator.of(context).maybePop(),
                   ),
-                ),
+                    ),
+                  ),
+                  // what the walk passed, under the map
+                  if (app.settings.mapExtras)
+                    PassedStrip(
+                      lookup: _landmarks,
+                      about: app.settings.mapPassedAbout,
+                      maxHeight: MediaQuery.sizeOf(context).height * .25,
+                    ),
+                ]),
               ),
             ),
           ),
@@ -790,6 +801,7 @@ class _NativePlateState extends State<NativePlate> {
                                   lookup: _landmarks,
                                   fit: fit,
                                   narrow: box.maxWidth <= 720,
+                                  about: app.settings.mapPassedAbout,
                                   width: math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side,
                                 ),
                               ),

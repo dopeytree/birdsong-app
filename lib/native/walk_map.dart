@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
 import 'package:latlong2/latlong.dart' hide Path;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
 import '../store/detection_store.dart';
@@ -230,7 +231,7 @@ class _WalkMapState extends State<WalkMap> {
   static final Map<String, Future<ui.Image>> _demTiles = {};
 
   // the label for a peak or an end, where it was tapped
-  ({String title, String sub, Offset at})? _tip;
+  ({String title, String sub, Offset at, Uri? page})? _tip;
   Timer? _tipTimer;
   Timer? _lookTimer;
 
@@ -336,6 +337,11 @@ class _WalkMapState extends State<WalkMap> {
       // map.flyTo({center, zoom: max(zoom, 15.5)})
       _map.move(l.focus!, math.max(_map.camera.zoom, 15.5));
       _dragged = true;
+      // and its label there, which opens its page
+      final p = l.chosen!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _ready) _say(_map.camera.latLngToScreenOffset(p.where!), p.name, p.about, page: p.page);
+      });
     }
     setState(() {});
   }
@@ -484,14 +490,14 @@ class _WalkMapState extends State<WalkMap> {
         spot = s;
       }
     }
-    if (spot != null) return _say(p, spot.name, spot.about);
+    if (spot != null) return _say(p, spot.name, spot.about, page: pageOf(spot.name, spot.about, spot.link));
     final peak = _peaks.queryRenderedFeatures(p, layerIds: const ['peaks']);
     if (peak.isNotEmpty) {
       final props = peak.first.properties, ele = props['ele'];
       return _say(p, '${props['name'] ?? ''}', ele != null ? '$ele m' : 'Summit');
     }
     for (final a in [...?found?.monuments, ...?found?.battlefields, ...?found?.parks]) {
-      if (inShape(ll, a.shape)) return _say(p, a.name, a.about);
+      if (inShape(ll, a.shape)) return _say(p, a.name, a.about, page: pageOf(a.name, a.about, a.link));
     }
     if (widget.landmarks != null) {
       for (final f in _reserves.queryRenderedFeatures(p, layerIds: const ['reserve-fill'])) {
@@ -500,19 +506,22 @@ class _WalkMapState extends State<WalkMap> {
         final plain = plainName('$name');
         // its Wikipedia line, when it has one ("Ham Wall": wetland nature reserve)
         final wiki = found?.wiki.where((s) => plainName(s.name) == plain && s.about != 'Wikipedia').firstOrNull;
-        return _say(p, '$name', wiki?.about ?? reserveKinds[f.properties['class']] ?? 'Nature reserve');
+        final about = wiki?.about ?? reserveKinds[f.properties['class']] ?? 'Nature reserve';
+        return _say(p, '$name', about, page: pageOf('$name', about, wiki?.link));
       }
     }
     for (final a in [...?found?.worldHeritage, ...?found?.nature]) {
-      if (inShape(ll, a.shape)) return _say(p, a.name, a.about);
+      if (inShape(ll, a.shape)) return _say(p, a.name, a.about, page: pageOf(a.name, a.about, a.link));
     }
     if (_tip != null) setState(() => _tip = null);
   }
 
-  void _say(Offset at, String title, String sub) {
+  /// The label at [at]: [title], then [sub]; with [page], a last line that
+  /// opens it (and the label stays a little longer to be reached).
+  void _say(Offset at, String title, String sub, {Uri? page}) {
     _tipTimer?.cancel();
-    setState(() => _tip = (title: title, sub: sub, at: at));
-    _tipTimer = Timer(const Duration(milliseconds: 3500), () {
+    setState(() => _tip = (title: title, sub: sub, at: at, page: page));
+    _tipTimer = Timer(Duration(milliseconds: page != null ? 8000 : 3500), () {
       if (mounted) setState(() => _tip = null);
     });
   }
@@ -710,7 +719,8 @@ class _WalkMapState extends State<WalkMap> {
                   child: Semantics(
                     button: true,
                     label: '${s.name}, ${s.about}',
-                    onTap: () => _say(_map.camera.latLngToScreenOffset(s.at), s.name, s.about),
+                    onTap: () => _say(_map.camera.latLngToScreenOffset(s.at), s.name, s.about,
+                        page: pageOf(s.name, s.about, s.link)),
                     child: IgnorePointer(
                       child: CustomPaint(
                         size: const Size.square(24),
@@ -930,11 +940,12 @@ class _WalkMapState extends State<WalkMap> {
 
   /// The page's #tip: name, then a line in italic, above where it was
   /// tapped (below when there is no room).
-  Widget _tipBox(({String title, String sub, Offset at}) t) => Positioned(
+  Widget _tipBox(({String title, String sub, Offset at, Uri? page}) t) => Positioned(
         left: (t.at.dx - 120).clamp(8.0, math.max(8.0, widget.size.width - 248)),
-        top: t.at.dy > 80 ? t.at.dy - 70 : t.at.dy + 22,
+        top: t.at.dy > (t.page != null ? 98 : 80) ? t.at.dy - (t.page != null ? 92 : 70) : t.at.dy + 22,
         width: 240,
         child: IgnorePointer(
+          ignoring: t.page == null,
           child: Center(
             child: Container(
               decoration: const BoxDecoration(color: paper, boxShadow: [
@@ -953,6 +964,28 @@ class _WalkMapState extends State<WalkMap> {
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                           fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14.4, height: 1.25, color: sepia)),
+                if (t.page != null)
+                  Semantics(
+                    link: true,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => launchUrl(t.page!, mode: LaunchMode.externalApplication),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text('${pageName(t.page!)} ↗',
+                              style: const TextStyle(
+                                  fontFamily: serif,
+                                  fontSize: 14.4,
+                                  height: 1.25,
+                                  color: madder,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: madder)),
+                        ),
+                      ),
+                    ),
+                  ),
               ]),
             ),
           ),
