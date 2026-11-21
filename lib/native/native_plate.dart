@@ -115,7 +115,8 @@ class _NativePlateState extends State<NativePlate> {
   // Room at the bottom for the share button, as the web plate makes for it
   // (--bs-ui-bottom), so the index rises clear of it.
   // Room at the bottom for the buttons there, so nothing sits under them:
-  // two on the left (map above view), or one in the views of one bird.
+  // two on the left (map above view), or one in the views of one bird or
+  // while the map is on screen.
   // Set in each build.
   double _bottomRoom = 40 + 8 + 6;
   final _shotKey = GlobalKey(), _shareKey = GlobalKey();
@@ -423,7 +424,7 @@ class _NativePlateState extends State<NativePlate> {
         final mapOn = app.settings.showMap && !mode.currentOnly && ses != null;
         final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
         final fit = app.settings.nativeFit;
-        _bottomRoom = (mode.currentOnly ? 40 : 40 + 40) + 8 + 6.0;
+        _bottomRoom = (mode.currentOnly || mapOn ? 40 : 40 + 40) + 8 + 6.0;
         // Folded away, the index's heading moves into the row along the
         // bottom, between the map and share buttons, and the plate takes
         // the room; opened, the list is where it always was.
@@ -631,15 +632,16 @@ class _NativePlateState extends State<NativePlate> {
                 ),
                 // The walk on a map in place of the collage, at the bottom
                 // left; not in the views of one bird (d and e).
-                // At the bottom left, each in a place of its own so neither
-                // moves while stepping through the views: the map button, and
-                // under it the plate's view (a to g). The map button is not
-                // there in the views of one bird (d, e); the view button is not
-                // there while the map is on screen.
+                // At the bottom left: the map button, and under it the plate's
+                // view (a to g), which keeps the corner so it never moves
+                // while stepping through the views. The map button is not
+                // there in the views of one bird (d, e). While the map is on
+                // screen the view button goes and the map button takes the
+                // corner, so the map has all the room it can.
                 if (!mode.currentOnly)
                   Positioned(
                     left: 8,
-                    bottom: 8 + 40,
+                    bottom: mapOn ? 8 : 8 + 40,
                     child: IconButton(
                       constraints: const BoxConstraints.tightFor(width: 40, height: 40),
                       padding: EdgeInsets.zero,
