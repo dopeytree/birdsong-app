@@ -13,6 +13,7 @@ import '../settings.dart';
 import 'format.dart';
 import 'splash.dart' show Cardinal, SupportQuote;
 import 'station_editor.dart';
+import 'station_history.dart';
 
 /// Everything that isn't the plate: where birds come from, listening,
 /// models, the location filter and stored data. Opened from the plate's
@@ -166,6 +167,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _models(context),
               _location(context),
               _data(context),
+              // what keeping the stations' days is doing (station_archive.dart)
+              if (s.stations.isNotEmpty)
+                _section(
+                  context,
+                  'Station history',
+                  summary: 'Days kept on this device, and the log',
+                  [StationHistory(root: app.store.root, stations: s.stations)],
+                ),
               const Divider(height: 32),
               _credits(context, listen),
               const Divider(height: 1),

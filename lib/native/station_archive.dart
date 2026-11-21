@@ -154,9 +154,11 @@ class StationArchive extends ChangeNotifier {
         days[e.key] = StationDay(species: e.value.$1, calls: e.value.$2, complete: e.key != ymd(today));
       }
       await _saveIndex();
+      await _log('${ymd(from).substring(0, 7)} counted for the calendar: ${sums.length} days');
       if (!_closed) notifyListeners();
     } catch (e) {
       debugPrint('station archive, month: $e');
+      await _log('${ymd(from).substring(0, 7)} could not be counted: $e');
     }
   }
 
@@ -175,11 +177,26 @@ class StationArchive extends ChangeNotifier {
     final rest = _restUntil;
     if (rest != null && DateTime.now().isBefore(rest)) return;
     _working = true;
+    var kept = 0;
+    final clock = Stopwatch()..start();
     try {
       await _ready;
       while (!_closed) {
-        final d = _wanted.isNotEmpty ? _wanted.removeAt(0) : (keepPast() ? _nextBackDay() : null);
-        if (d == null) break;
+        final back = keepPast();
+        final d = _wanted.isNotEmpty ? _wanted.removeAt(0) : (back ? _nextBackDay() : null);
+        if (d == null) {
+          if (kept > 0) {
+            await _log(back
+                ? 'all past days kept (${days.values.where((k) => k.saved).length} days)'
+                : 'past days not kept here: switched off, or not yet answered on this phone');
+          }
+          break;
+        }
+        if (kept == 0 && _wanted.isEmpty && back) await _log('filling in past days, from ${ymd(d)} back');
+        kept++;
+        if (kept % 25 == 0) {
+          await _log('$kept days in ${(clock.elapsedMilliseconds / 1000).toStringAsFixed(0)}s');
+        }
         try {
           await _keep(d);
           _failures = 0;
@@ -188,12 +205,14 @@ class StationArchive extends ChangeNotifier {
           await _log('${ymd(d)}  failed: $e');
           if ('$e'.contains("can't list")) {
             unsupported = true;
+            await _log("stopped: this station can't list one day's calls; only the calendar's counts are kept");
             break;
           }
           // try again in a while; after a run of failures, rest ten minutes
           if (++_failures >= 3) {
             _failures = 0;
             _restUntil = DateTime.now().add(const Duration(minutes: 10));
+            await _log('three failures in a row: resting ten minutes');
             break;
           }
           await Future<void>.delayed(const Duration(seconds: 20));
