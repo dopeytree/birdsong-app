@@ -91,8 +91,8 @@ class IndexView extends StatelessWidget {
 
   /// Folded away, the heading alone, in the row along the bottom of the
   /// screen between the map and share buttons (the Flutter plate's own
-  /// design): a tap on it opens the list again. Shorter rules, and none on
-  /// a narrow screen.
+  /// design): a tap on it opens the list again. Shorter rules as the room
+  /// narrows, but always some, so it reads as something to press.
   final bool inline;
 
   /// How many species the session heard, for the heading: "Index of
@@ -112,9 +112,20 @@ class IndexView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (inline) {
-      return LayoutBuilder(
-        builder: (context, box) => Center(child: _heading(rules: box.maxWidth < 340 ? 0 : 28, pad: 8)),
-      );
+      // Always some rule either side, so it reads as something to press:
+      // shorter as the room narrows, and the words a little smaller on a
+      // phone.
+      return LayoutBuilder(builder: (context, box) {
+        final w = box.maxWidth;
+        return Center(
+          child: _heading(
+            rules: w >= 360 ? 28 : (w >= 280 ? 16 : 10),
+            gap: w >= 280 ? 10 : 6,
+            pad: w >= 280 ? 8 : 5,
+            titleSize: w >= 300 ? null : 13.5,
+          ),
+        );
+      });
     }
     // rem is 16 throughout the page
     final colWidth = fit ? 176.0 : 256.0, gap = fit ? 25.6 : 41.6;
@@ -160,7 +171,7 @@ class IndexView extends StatelessWidget {
   }
 
   /// ‹ —— Index of species —— ›
-  Widget _heading({double rules = 56, double pad = 12}) {
+  Widget _heading({double rules = 56, double pad = 12, double gap = 14.4, double? titleSize}) {
     Widget step(int by, String glyph, String label, bool on) => Visibility(
           visible: on,
           maintainSize: true,
@@ -185,7 +196,8 @@ class IndexView extends StatelessWidget {
           ),
         );
     final line = SizedBox(width: rules, height: 1, child: const ColoredBox(color: rule));
-    final gap = SizedBox(width: rules == 0 ? 0 : 14.4);
+    final space = SizedBox(width: gap);
+    final size = titleSize ?? (fit ? 16.0 : 20.0);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -200,18 +212,18 @@ class IndexView extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   line,
-                  gap,
+                  space,
                   Flexible(
                     child: Text(species > 0 ? 'Index of Species | ${thousands(species)}' : 'Index of Species',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             fontFamily: caps,
-                            fontSize: fit ? 16 : 20,
-                            letterSpacing: (fit ? 16 : 20) * .06,
+                            fontSize: size,
+                            letterSpacing: size * .06,
                             height: 1.5,
                             color: ink)),
                   ),
-                  gap,
+                  space,
                   line,
                 ],
               ),

@@ -658,7 +658,9 @@ class _NativePlateState extends State<NativePlate> {
                       padding: EdgeInsets.zero,
                       iconSize: 22,
                       tooltip: app.settings.showMap ? 'Back to the plate' : 'The walk on a map',
-                      icon: Icon(app.settings.showMap ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
+                      // the same picture on and off, so it is plain what it does
+                      icon: const Icon(Icons.map_outlined),
+                      isSelected: app.settings.showMap,
                       color: red,
                       onPressed: _toggleMap,
                     ),
