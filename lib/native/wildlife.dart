@@ -16,6 +16,12 @@ import 'mvt.dart';
 /// map's own tiles show there (wood, heath, marsh, water, sea) and by the
 /// patch itself, so the same place always shows the same animal.
 
+/// Wildlife pictures are switched off for now (Ed, 21 Nov 2026): the drawn
+/// silhouettes didn't suit the map, and Bewick's engravings
+/// (engravings.dart) are an untried test. The code stays to work on; set
+/// this true to bring the pictures and their switch in the layers panel back.
+const wildlifePicturesOn = false;
+
 /// The habitats, and the animals drawn for each.
 const habitatAnimals = <String, List<String>>{
   'wood': ['deer', 'owl', 'deer', 'owl', 'squirrel'],

@@ -323,7 +323,7 @@ class _WalkMapState extends State<WalkMap> {
     }
     _askLandmarks();
     // the pictures switched on: find them for this view
-    if ((widget.settings?.mapWildlife ?? true) && _critters.isEmpty && _ready) {
+    if (wildlifePicturesOn && (widget.settings?.mapWildlife ?? true) && _critters.isEmpty && _ready) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _findCritters());
     }
     if (widget.walk?.key != old.walk?.key) _dragged = false;
@@ -392,7 +392,7 @@ class _WalkMapState extends State<WalkMap> {
   /// read on a background isolate and kept for the run.
   Future<void> _findCritters() async {
     final kit = _kit, omt = kit?.providers['omt'];
-    if (!mounted || !_ready || omt == null || !(widget.settings?.mapWildlife ?? true)) {
+    if (!wildlifePicturesOn || !mounted || !_ready || omt == null || !(widget.settings?.mapWildlife ?? true)) {
       if (_critters.isNotEmpty && mounted) setState(() => _critters = const []);
       return;
     }
@@ -1173,7 +1173,7 @@ class _WalkMapState extends State<WalkMap> {
                       ),
                     // wildlife pictures, for decoration
                     // (Bewick's engravings; only those that have arrived show)
-                    if (_critters.isNotEmpty && (widget.settings?.mapWildlife ?? true))
+                    if (wildlifePicturesOn && _critters.isNotEmpty && (widget.settings?.mapWildlife ?? true))
                       ValueListenableBuilder<int>(
                         valueListenable: Engravings.loaded,
                         builder: (context, n, child) => MarkerLayer(markers: [
@@ -1778,6 +1778,7 @@ class _LayersPanel extends StatelessWidget {
         row('Reserves', 'Nature reserves from OpenStreetMap', s.mapShowReserves, (x, v) => x.mapShowReserves = v),
         row('Hides & viewpoints', 'Where OpenStreetMap has them', s.mapShowHides, (x, v) => x.mapShowHides = v),
         row('Wikipedia places', 'With a line about each', s.mapShowWiki, (x, v) => x.mapShowWiki = v),
+        if (wildlifePicturesOn)
         InkWell(
           onTap: () => settings.update((x) => x.mapWildlife = !x.mapWildlife),
           child: Padding(

@@ -1,100 +1,176 @@
 # The Flutter refactor: where it stands
 
-Read this first in any new chat about the refactor. Branch: `flutter-plate-lab`.
-The full plan and its Progress table: [Birdsong Flutter plate plan](https://claude.ai/artifact/XfdX9oyxDrxf5y6g9TDnxr).
-Updated 21 Nov 2026.
+Read this first in any new session about the refactor (Claude Code or chat).
+Branch: `flutter-plate-lab`. Updated 21 Nov 2026, late evening.
+The full plan and its Progress table: [Birdsong Flutter plate plan](https://claude.ai/artifact/XfdX9oyxDrxf5y6g9TDnxr)
+(claude.ai artifact; may not be reachable from Claude Code).
 
 ## What the refactor is
 
-The app's plate (the collage of bird plates, index, heading, buttons, map, bird
-card) was a web page (`assets/web/index.html`, from dopeytree/birdsong) shown
-in a web view. It is being rebuilt as native Flutter, in `lib/native/`, so the
-app (and later Flutter web) no longer needs the page.
+The app's plate (the collage of bird plates, index, heading, buttons, map,
+bird card) was a web page (`assets/web/index.html`, from dopeytree/birdsong)
+shown in a web view. It is being rebuilt as native Flutter in `lib/native/`,
+so the app (and later Flutter web) no longer needs the page.
 
 **A faithful port:** "you are refactoring the old code into flutter. this
 doesn't mean you are removing functions or design choices." Every behaviour
-and look of the old plate carries over (hover grow, fades, marks, paper, fit,
-the 60 cap, etc.), then is improved on with Ed's say-so.
+and look of the old plate carries over, then is improved on with Ed's say-so.
 
 The Flutter plate is behind Settings → Experimental → Flutter plate
 (`nativePlate`, off by default). It shows both Listen here and remote stations.
 
-## How we work
+## How we work (Ed's rules)
 
-- **Ask before large decisions;** check in for input. Ed is the designer.
-- **Always push work on our branches,** so a new branch never clashes locally.
-- **Tick progress off** in the task list and in the plan doc's Progress table.
+- **Ed is the designer.** Ask before large or visual decisions; show ideas
+  or a small test first. The look is vintage natural history: paper, sepia
+  ink, serif (IM Fell English), engraved plates. Never modern or cartoon.
+- **Ed is cost-sensitive.** Measure before guessing (the debug readout on
+  the map exists for this); don't redo work; keep replies short.
+- **Commit on our branch and push every branch** so nothing clashes locally.
 - **No iPhone builds** until the app is complete, unless Ed asks.
-- **Ed builds after each change** with `Build on Mac.command`, which writes
-  `build-log.txt`. Read it yourself: grep `STATUS`, `error •`,
-  `Failing tests`; `git reflog --date=format:%H:%M:%S` shows which commit it built.
-- **Getting commits to the Mac** (`/Users/ed/birdsong-app`, which the cloud
-  can't push to directly): `git bundle create` the new commits, copy the bundle
-  into `build/`, then on the Mac `git fetch build/X.bundle
-  flutter-plate-lab:refs/remotes/origin/flutter-plate-lab && git merge
-  --ff-only origin/flutter-plate-lab` and delete the bundle. Git on the
-  Mac needs permission to delete files, or it leaves `.lock` files behind.
-- When editing with scripts, assert each replacement matched; a silent
-  miss broke a test once.
-- Flutter 3.50 on the Mac; Dart SDK lower bound 3.7 (no null-aware map
-  elements). `RenderRepaintBoundary` comes from `package:flutter/rendering.dart`;
-  latlong2 exports `Path`, so use `ui.Path`.
+- **Builds:** Ed runs `Build on Mac.command`, which bootstraps, analyzes,
+  runs the tests, builds macOS and opens the app, writing `build-log.txt`.
+  Read it: grep `STATUS`, `error •`, `Failing tests`;
+  `git reflog --date=format:%H:%M:%S` shows which commit was built.
+  **A failed build still opens the previous app.** Check the log before
+  trusting what Ed sees.
+- **Don't trust the analyzer alone.** It has missed real compile errors:
+  a const `StrokePattern.dashed(...)` (never make it const on flutter_map
+  8.3), and a missing import (`CustomPainter` is in
+  `package:flutter/rendering.dart`, not `painting.dart`). Read changed code
+  by eye.
+- **Isolates:** call `Isolate.run` from a top-level function, never from a
+  closure inside a widget's async method (it drags the State along and
+  fails to send). Don't swallow errors with `catch (_) {}`; `debugPrint` them.
+- When editing with scripts, assert each replacement matched.
+- **Git on the Mac via Claude's Cowork bridge** (if you're in that setup,
+  not Claude Code): ask for delete permission before committing so git can
+  remove `.lock` and `tmp_obj_*` files; that shell has no network, so Ed
+  pushes from his terminal. Commits need an identity:
+  `git -c user.name=… -c user.email=…` (copy them from `git log -1`).
+- The app is sandboxed: its data (fill logs, stations/) is under
+  `~/Library/Containers/…`. Ask Ed to paste what's needed.
 
-## Done (all built and passing on the Mac)
+## Versions
 
-- **Collage:** hover grow, fade, latest mark, glow, oval, paper, fit to
-  screen, 60 cap, pinch zoom.
-- **Index:** folded inline above the buttons, reading "Index of Species | 123";
-  ‹ › to flip sessions or days.
-- **Heading:** title in small capitals (setting), #n/n, date, coordinates,
-  weather icon and °C; Heading lines black by default; totals off by default.
-- **Buttons:** view and map bottom-left, calendar and share bottom-right;
-  record, source pill, stations (+) and menu top-right.
-- **Views:** in this order: recent ramblings (opens on it, index folded), latest, most calls, index
-  alone, collage alone (no heading), and two more.
-- **Bird card:** with audioplayers (clips, recordings, spectrograms).
-- **Share/save, caption, limit species, skulls/wings/eggs.**
-- **Map, part one:** flutter_map, OpenFreeMap tiles, contours from terrarium
-  elevation, trail and crosses; the station's spot.
-- **Calendar:** sessions under place names (OpenStreetMap Nominatim, cached).
-- **Remote stations** (BirdNET-Go and BirdWeather):
-  - Name beside the title (#garden); dates under it; coordinates; the day's
-    weather when one day is showing.
-  - Today, Week, Month, All: top centre on wide screens, under the buttons
-    on phones. Opens on Today.
-  - Day/night/all toggle (sunrise to sunset).
-  - The calendar treats each day as a session and greys days with nothing heard.
-  - Each day is kept as a session folder (`stations/<id>/<day>/`); past days
-    are filled in automatically on a computer, and only after asking on a
-    phone. Settings → Station history shows the log.
-- **Settings:** the same full menu in both modes.
+Flutter 3.50 (material.dart deprecated in favour of material_ui: infos only),
+Dart SDK lower bound 3.7, flutter_map 8.3.2, flutter_map_vector_tiles 2.12
+(supports `fill-pattern`, symbol icons, `global-state`; its MVT decoder isn't
+exported, so `lib/native/mvt.dart` is ours), latlong2 (exports `Path`: use
+`ui.Path`).
 
-## Next steps, in order
+## Done
 
-1. **Check the latest build** of `b800b3b` (Station history) and Ed's fill-log
-   timings. The companion server depends on how long filling in takes.
-2. **Map, part two:** heritage, nature sites, Wikipedia, "Passed on the way".
-3. **The app as Flutter web.**
-4. **Then:** the Birdsong companion server (Docker, reads `birdnet.db`; plan:
-   https://claude.ai/artifact/1KUPP1PLKcwMLGw2NDADWz).
+- **Collage, index, heading, buttons, views, bird card, share/save,
+  settings:** all ported (see the plan's Progress table).
+- **Calendar:** sessions under place names (Nominatim, cached).
+- **Remote stations** (BirdNET-Go, BirdWeather): name, dates, weather;
+  Today/Week/Month/All; day/night; each day kept as a session folder
+  (`stations/<id>/<day>/`), filled in automatically on a computer, after
+  asking on a phone; Settings → Station history shows the log.
+- **Map, part one:** flutter_map, OpenFreeMap vector tiles, contours from
+  terrarium elevation, trail and crosses, the station's spot.
+- **Map, part two:** Landmarks (Settings → Map): Historic England listed
+  buildings and monuments, Natural England sites, Wikipedia places, as the
+  web page's map-mode.js did (`landmarks.dart`, `passed_view.dart`).
+- **Map, part three:**
+  - Landmarks follow the view (zoom ≥ 12; Grade II from 15).
+  - Historic England parks and gardens, battlefields, World Heritage Sites.
+  - Nature reserves from OpenStreetMap tiles (not RSPB data: their licence
+    is non-commercial and needs written permission for public maps).
+  - Search box top right (Photon), deduped, `TextFieldTapRegion` (macOS
+    unfocuses before the tap lands otherwise).
+  - Reset button (↻) under + and −.
+  - The walk knows its reserve (`reservesAlong` reads the z14 park layer):
+    "Passed on the way" leads with "RSPB Ham Wall, walked through".
+  - Taps decided in one place, most particular first (`_tapped`).
+- **Map, part four:**
+  - Full-screen map (⛶); a bird card opens over it; Escape closes.
+  - "Passed on the way" above the map, only when something was passed;
+    3 + "and N more" on phones; a strip under the full-screen map; choose a
+    line to see it on the map, then its label links to Wikipedia, Historic
+    England or a web search. Setting: "Descriptions in Passed on the way".
+  - **Speed (Falmouth):** the real cause was flutter_map computing dashed
+    outlines along whole polygons on the UI thread (an 11.5 s frame). Edges
+    are now polylines cut to the view (`clipLine`); label points cached;
+    lookups on an isolate; no building footprints; contours ≥ 10 m; outlines
+    no finer than z13; ≤ 150 marks. Debug readout (debug builds, top left of
+    the map) showed 20–47 ms after.
+  - Islands and cities labelled (Isle of Mull, not just Tobermory).
+- **Map, part five: layers button** (built and in use): "On the map" panel
+  with Heritage, Nature sites (now also NatureScot and NRW, each asked only
+  for its own country), Reserves, Hides & viewpoints (OSM poi), Wikipedia,
+  and Bird records (GBIF density tiles for a chosen species,
+  `bird_records.dart`).
+- **Wildlife pictures: switched OFF** (`wildlifePicturesOn = false` in
+  `wildlife.dart`; the code stays for later):
+  - Drawn silhouettes per habitat from the map tiles: Ed rejected the look
+    ("vintage illustrations, not modern cartoon"), and they popped in and
+    jumped on zoom.
+  - `engravings.dart`: Thomas Bewick's woodcuts fetched from the Wellcome
+    Collection's IIIF scans (Public Domain Mark): Quadrupeds b33281294,
+    British Birds b29333131_0001 (land) / _0002 (water). Found by heading
+    via the IIIF search API, cut out with `cutout.dart`, toned to the map's
+    ink. Committed (`b167cc5`) but never built or seen. No Bewick whale.
+  - Better plan, agreed in principle: put pictures in the map style itself
+    (symbol layers with sprite icons, and `fill-pattern` textures), so they
+    arrive with the tiles and never jump. Optionally place animals only
+    where GBIF has records. Show Ed real engravings before building.
+
+## Next steps
+
+1. Build the latest commit; check the log; confirm the map still behaves
+   (Falmouth smooth, layers panel, NRW layers load, hides appear).
+2. Ed's fill-log timings (Settings → Station history), which size the
+   companion server.
+3. Offered: name calendar sessions by their reserve ("RSPB Ham Wall");
+   later, achievements kept on the phone. Ed is weighing an age question
+   and a safe mode for young people (UK Children's Code).
+4. The app as Flutter web.
+5. The Birdsong companion server (Docker, reads `birdnet.db`).
 
 ## Offered, not yet answered
 
-- Make the Flutter plate the default (and switch it on for existing installs).
-- Restyle the calendar grid.
-- Move the Experimental options into Display.
-- Quick fixes:
-  - Commit `pubspec.lock`.
-  - Ignore `android/`, `ios/`, `macos/`, `.bootstrap/`.
-  - A pull request for `flutter-plate-lab` (69+ commits ahead of main).
-  - Prune merged branches.
+- Make the Flutter plate the default.
+- Restyle the calendar grid; move Experimental options into Display.
+- Write to RSPB about their data.
+- Quick fixes: commit `pubspec.lock`; ignore `android/`, `ios/`, `macos/`,
+  `.bootstrap/`; a pull request for `flutter-plate-lab`; prune merged
+  branches; remove the map's debug readout when done with it.
+
+## Licences (see the project's licence audit)
+
+OGL v3: Historic England, Natural England, NatureScot, NRW. ODbL:
+OpenStreetMap (tiles by OpenFreeMap / OpenMapTiles). Wikipedia CC BY-SA.
+Photon: public instance, light use only. GBIF: attribution; some records
+CC BY-NC (check before commercial use). Bewick scans: Public Domain Mark.
+RSPB data: not used. Every source is credited on the map.
 
 ## Where things are
 
-- **Plate:** `lib/native/` (native_plate, collage_view, index_view, bird_card,
-  day_picker, walk_map, contours, station_feed, station_archive,
-  plate_library).
+- **Plate:** `lib/native/` — native_plate, collage_view, index_view,
+  bird_card, day_picker, walk_map (the map), map_style (vector styles,
+  sprites), landmarks (lookups, Passed on the way), mvt, passed_view,
+  place_search, contours, bird_records, wildlife, engravings, cutout,
+  plate_library (bird plates from Wikimedia Commons), station_feed,
+  station_archive.
 - **Shared buttons:** `lib/ui/plate_buttons.dart`.
-- **Settings:** `lib/settings.dart` (`native*` fields), with the screen in
+- **Settings:** `lib/settings.dart` (`native*`, `mapExtras` master switch,
+  `mapShow*`, `mapRecordsSci`, `mapPassedAbout`, `mapWildlife`), screen in
   `lib/ui/settings_screen.dart`.
-- **Tests:** `test/`.
+- **Tests:** `test/` (landmarks, mvt, place_search, bird_records, wildlife,
+  engravings, contours, and the rest).
+- **Scripts:** `Build on Mac.command`, `Run plate lab.command`,
+  `Update web page.command`, `Publish to GitHub.command`.
+
+## Skills that help
+
+Built-in Claude Code skill packs used or worth loading:
+- `flutter:flutter-performance` (rebuild scope, isolates, measuring).
+- `flutter:widget-composition`, `flutter:custom-canvas-and-gestures`.
+- `flutter:async-safety` (mounted checks, no swallowed errors).
+- `superpowers:systematic-debugging` (measure first: it found Falmouth).
+- `zizi-skills:git-sync` (own branch, push every branch).
+- `anthropic-skills:birdsong-web-sync` (Ed's own skill: moving features
+  between the web page dopeytree/birdsong and this app). If it isn't
+  installed in Claude Code, ask Ed for it.
