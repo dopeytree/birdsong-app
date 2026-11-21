@@ -91,10 +91,12 @@ void main() {
     final s = await loadWith({});
     expect(s.nativeMarkAt, 'below');
     expect(s.nativeFit, isTrue);
-    expect(s.nativeIndexFolded, isFalse);
+    expect(s.nativeIndexFolded, isTrue);
+    // a first run opens on recent ramblings
+    expect(plateModes[s.plateMode - 1].key, 'time');
     expect(s.nativeTotals, isFalse);
     expect((await loadWith({'nativeTotals': true})).toJson()['nativeTotals'], isTrue);
-    expect((await loadWith({'nativeIndexFolded': true})).toJson()['nativeIndexFolded'], isTrue);
+    expect((await loadWith({'nativeIndexFolded': false})).toJson()['nativeIndexFolded'], isFalse);
     final t = await loadWith({'nativeMarkAt': 'fade', 'nativeFit': false});
     expect(t.toJson()['nativeMarkAt'], 'fade');
     expect(t.toJson()['nativeFit'], isFalse);
