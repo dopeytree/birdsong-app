@@ -927,11 +927,13 @@ class _NativePlateState extends State<NativePlate> {
                     ),
                   ),
                 // On a phone, the four in short words at the right, under
-                // the buttons.
+                // the buttons, lined up with the menu icon's right edge.
                 if (feed != null && showHeading && MediaQuery.sizeOf(context).width < 900)
                   Positioned(
                     top: _buttonsTop,
-                    right: 8,
+                    // the menu's 48 square sits 8 in, its 24 icon 12 further:
+                    // All ends where the menu's lines end
+                    right: 8 + 12,
                     child: _spanRow(feed, short: true),
                   ),
                 // Along the bottom at the left, quick things to do: the plate's
