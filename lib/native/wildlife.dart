@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:isolate';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -122,6 +123,11 @@ double _sinh(double v) => (math.exp(v) - math.exp(-v)) / 2;
 /// [critterInTile] from a tile's bytes.
 Critter? critterFromBytes(Uint8List bytes, int z, int x, int y) =>
     critterInTile({'landcover': readMvtLayer(bytes, 'landcover'), 'water': readMvtLayer(bytes, 'water')}, z, x, y);
+
+/// [critterFromBytes] on a background isolate. Kept at the top level so
+/// the closure sent to the isolate holds only the tile, never a widget.
+Future<Critter?> critterAway(Uint8List bytes, int z, int x, int y) =>
+    Isolate.run(() => critterFromBytes(bytes, z, x, y));
 
 /// The tiles a view's animals come from: two zooms out from [zoom] (so a
 /// few per screen), no further out than 7 nor in than 13.

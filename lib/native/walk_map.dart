@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -410,10 +409,11 @@ class _WalkMapState extends State<WalkMap> {
           try {
             final res = await omt.load(vt.TileKey(z, x, y));
             if (res is vt.TileResponseData) {
-              final bytes = res.bytes, tz = z, tx = x, ty = y;
-              got = await Isolate.run(() => critterFromBytes(bytes, tz, tx, ty));
+              got = await critterAway(res.bytes, z, x, y);
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('wildlife: tile $key: $e');
+          }
           _critterCache[key] = got;
           if (run != _critterRun || !mounted) return;
         }
@@ -1045,7 +1045,7 @@ class _WalkMapState extends State<WalkMap> {
       final m = _layersMemo!;
       final pts = m.lines.fold(0, (n, p) => n + p.points.length);
       _layersCost = 'layers built in ${clock.elapsedMilliseconds} ms: ${m.fills.length} fills, ${m.lines.length} edges '
-          '($pts pts near view), ${m.spots.length} marks; ${countAreas(found)} areas, ${countPoints(found)} pts';
+          '($pts pts near view), ${m.spots.length} marks, ${_critters.length} pictures; ${countAreas(found)} areas, ${countPoints(found)} pts';
     }
     return _layersMemo;
   }
