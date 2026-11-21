@@ -5,7 +5,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show compute, consolidateHttpClientResponseBytes;
+import 'package:flutter/foundation.dart' show compute, consolidateHttpClientResponseBytes, kDebugMode;
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
@@ -237,9 +238,38 @@ class _WalkMapState extends State<WalkMap> {
 
   int _focusSeen = 0;
 
+  // ---- debug readout (debug builds only): where a slow frame's time goes
+  final List<({DateTime at, int build, int raster})> _frames = [];
+  String _layersCost = '';
+  Timer? _probeTick;
+
+  void _timings(List<FrameTiming> ts) {
+    final now = DateTime.now();
+    for (final t in ts) {
+      _frames.add((at: now, build: t.buildDuration.inMilliseconds, raster: t.rasterDuration.inMilliseconds));
+    }
+    _frames.removeWhere((f) => now.difference(f.at).inSeconds > 3);
+  }
+
+  String get _probe {
+    var b = 0, r = 0;
+    for (final f in _frames) {
+      b = math.max(b, f.build);
+      r = math.max(r, f.raster);
+    }
+    return 'worst frame, last 3 s: build ${b} ms (UI thread), raster ${r} ms (drawing thread) · '
+        'z${_zoom.toStringAsFixed(1)}\n$_layersCost\n$lastLook';
+  }
+
   @override
   void initState() {
     super.initState();
+    if (kDebugMode) {
+      SchedulerBinding.instance.addTimingsCallback(_timings);
+      _probeTick = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
     _focusSeen = widget.landmarks?.focusAsked ?? 0;
     widget.landmarks?.addListener(_landmarksChanged);
     _askLandmarks();
@@ -270,6 +300,8 @@ class _WalkMapState extends State<WalkMap> {
 
   @override
   void dispose() {
+    if (kDebugMode) SchedulerBinding.instance.removeTimingsCallback(_timings);
+    _probeTick?.cancel();
     widget.landmarks?.removeListener(_landmarksChanged);
     _lookTimer?.cancel();
     _contourTimer?.cancel();
@@ -848,7 +880,8 @@ class _WalkMapState extends State<WalkMap> {
     final wiki = found.wiki.toSet();
     _layersFound = found;
     _layersStep = step;
-    return _layersMemo = (
+    final clock = Stopwatch()..start();
+    _layersMemo = (
       nature: _nature(),
       edges: [..._monumentEdges(), ..._heritageAreas()],
       hatched: found.monuments,
@@ -857,6 +890,13 @@ class _WalkMapState extends State<WalkMap> {
         ..._spots([for (final s in spots) if (wiki.contains(s)) s], wiki: true),
       ],
     );
+    if (kDebugMode) {
+      final m = _layersMemo!;
+      final pts = [...m.nature, ...m.edges].fold(0, (n, p) => n + p.points.length);
+      _layersCost = 'layers built in ${clock.elapsedMilliseconds} ms: ${m.nature.length + m.edges.length} polygons, '
+          '$pts pts, ${m.spots.length} marks; drawing ${countAreas(found)} areas, ${countPoints(found)} pts';
+    }
+    return _layersMemo;
   }
 
   static const _maxSpots = 400;
@@ -986,6 +1026,19 @@ class _WalkMapState extends State<WalkMap> {
                     right: 0,
                     bottom: 0,
                     child: _Credit(_credit + (widget.landmarks != null ? _extrasCredit() : '') + _searchCredit)),
+              if (kDebugMode && widget.landmarks != null)
+                Positioned(
+                  left: 44,
+                  right: 8,
+                  top: 48,
+                  child: IgnorePointer(
+                    child: Container(
+                      color: const Color(0xCCFFFFFF),
+                      padding: const EdgeInsets.all(4),
+                      child: Text(_probe, style: const TextStyle(fontSize: 10, color: Color(0xFF000000), height: 1.25)),
+                    ),
+                  ),
+                ),
               if (note != null)
                 Positioned(
                   left: 8,

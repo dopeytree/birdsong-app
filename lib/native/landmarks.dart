@@ -624,6 +624,15 @@ Future<List<Passed>> _passedAway(List<LatLng> path, Landmarks found, List<Area> 
 bool frameHolds(List<double> outer, List<double> inner) =>
     outer[0] <= inner[0] && outer[1] <= inner[1] && outer[2] >= inner[2] && outer[3] >= inner[3];
 
+/// For the map's debug readout: the last view lookup, how long and how big.
+String lastLook = '';
+
+/// How many areas, and how many outline points in them, [l] holds.
+int countAreas(Landmarks l) =>
+    l.monuments.length + l.parks.length + l.battlefields.length + l.worldHeritage.length + l.nature.length;
+int countPoints(Landmarks l) => [...l.monuments, ...l.parks, ...l.battlefields, ...l.worldHeritage, ...l.nature]
+    .fold(0, (n, a) => n + a.shape.fold(0, (m, rings) => m + rings.fold(0, (k, r) => k + r.length)));
+
 /// The zoom from which Grade II buildings are looked up and drawn.
 const gradeTwoZoom = 15.0;
 
@@ -743,7 +752,14 @@ class LandmarkLookup extends ChangeNotifier {
     _viewGradeTwo = gradeTwo;
     // areas simplified to about a pixel at this zoom
     final detail = 360 / (256 * math.pow(2, zoom.floor()));
+    final clock = Stopwatch()..start();
     final found = await lookUpAway(frame, gradeTwo: gradeTwo, wikiLimit: 50, detail: detail);
+    if (kDebugMode) {
+      lastLook = 'look z${zoom.toStringAsFixed(1)} ${clock.elapsedMilliseconds} ms: '
+          '${found.listed.length} bldg, ${found.wiki.length} wiki, '
+          '${countAreas(found)} areas, ${countPoints(found)} pts'
+          '${found.unreached.isEmpty ? '' : ', failed ${found.unreached.length}'}';
+    }
     if (found.unreached.isEmpty) {
       _views.add((frame, gradeTwo, found));
       if (_views.length > 12) _views.removeAt(0);
