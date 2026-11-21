@@ -784,14 +784,14 @@ class LandmarkLookup extends ChangeNotifier {
   /// Which kinds are looked up (Settings: the map's layers), and the
   /// reserves from the tiles for what the walk passed.
   Set<String> layers = allLayers;
-  bool reserves = true;
+  bool readReserves = true;
 
   /// Look up only [kinds] (and [withReserves]) from now on; when that
   /// changes, forget what was found and say so, so the map asks again.
   void useLayers(Set<String> kinds, {required bool withReserves}) {
-    if (setEquals(kinds, layers) && withReserves == reserves) return;
+    if (setEquals(kinds, layers) && withReserves == readReserves) return;
     layers = Set.of(kinds);
-    reserves = withReserves;
+    readReserves = withReserves;
     _kept.clear();
     _views.clear();
     _key = null;
@@ -857,7 +857,7 @@ class LandmarkLookup extends ChangeNotifier {
     notifyListeners();
     final results = await Future.wait([
       lookUpAway(frameOf(path), path: path, layers: layers),
-      tile == null || !reserves ? Future.value(const <Area>[]) : reservesAlong(path, tile),
+      tile == null || !readReserves ? Future.value(const <Area>[]) : reservesAlong(path, tile),
     ]);
     var found = results[0] as Landmarks;
     final reserves = results[1] as List<Area>;
