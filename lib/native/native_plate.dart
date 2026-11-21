@@ -9,7 +9,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:plate_share/plate_share.dart';
 
 import '../app_state.dart';
-import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
@@ -142,7 +142,7 @@ class _NativePlateState extends State<NativePlate> {
     final f = _feed;
     final what = f == null
         ? '${ses?.id}'
-        : 'station:${f.station.id}:${f.day != null ? ymd(f.day!) : f.span.name}';
+        : 'station:${f.station.id}:${f.day != null ? ymd(f.day!) : f.span.name}:${f.light.name}';
     return '$what|${_style.name}|${app.settings.nativeParts ? 'parts' : ''}';
   }
 
@@ -165,20 +165,14 @@ class _NativePlateState extends State<NativePlate> {
     return _feed = StationFeed(st);
   }
 
-  /// The station's period in a word, tapped on a narrow screen: the next
-  /// period, or back to Today from a day.
-  void _nextSpan(StationFeed f) {
-    if (f.day != null) return f.setSpan(Span.today);
-    f.setSpan(Span.values[(f.span.index + 1) % Span.values.length]);
-  }
-
   /// The four periods, as the web plate's header has them: the one shown
-  /// in madder italic.
-  Widget _spanRow(StationFeed f) => Row(
+  /// in madder italic; [short] on a phone, in the corner under the buttons
+  /// (Today, Week, Month, All).
+  Widget _spanRow(StationFeed f, {bool short = false}) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (final s in Span.values) ...[
-            if (s != Span.values.first) const SizedBox(width: 25.6),
+            if (s != Span.values.first) SizedBox(width: short ? 12 : 25.6),
             Semantics(
               button: true,
               selected: f.day == null && f.span == s,
@@ -186,11 +180,11 @@ class _NativePlateState extends State<NativePlate> {
                 behavior: HitTestBehavior.opaque,
                 onTap: () => f.setSpan(s),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 1.6),
-                  child: Text(s.label,
+                  padding: EdgeInsets.symmetric(vertical: short ? 6 : 1.6),
+                  child: Text(short ? s.short : s.label,
                       style: TextStyle(
                         fontFamily: serif,
-                        fontSize: 16,
+                        fontSize: short ? 15 : 16,
                         fontStyle: f.day == null && f.span == s ? FontStyle.italic : FontStyle.normal,
                         color: f.day == null && f.span == s ? madder : sepia,
                       )),
@@ -200,6 +194,37 @@ class _NativePlateState extends State<NativePlate> {
           ],
         ],
       );
+
+  /// The sun and moon: a tap counts the station's day and night, the
+  /// daytime alone (sunrise to sunset), or the night alone; in madder
+  /// while one alone is shown.
+  Widget _lightToggle(StationFeed f, Color lines) {
+    final icon = switch (f.light) {
+      Light.all => Icons.brightness_6_outlined,
+      Light.day => Icons.wb_sunny_outlined,
+      Light.night => Icons.nightlight_outlined,
+    };
+    return Semantics(
+      button: true,
+      label: 'Showing ${f.light.label.toLowerCase()}; tap for ${f.light.next.label.toLowerCase()}',
+      excludeSemantics: true,
+      child: Tooltip(
+        message: f.light.label,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: f.nextLight,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Icon(icon, size: 20, color: f.light == Light.all ? lines : madder),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   /// The stations button, left of the pill on a remote station: it lists
   /// them, to choose one, with Add a station (as plate_view.dart's).
@@ -705,7 +730,11 @@ class _NativePlateState extends State<NativePlate> {
                                     ? (feed.error ??
                                         (feed.loading || feed.species == null
                                             ? 'Asking the station…'
-                                            : 'Nothing heard ${feed.day != null ? 'that day' : 'in this period'}.'))
+                                            : 'Nothing heard ${switch (feed.light) {
+                                                Light.all => '',
+                                                Light.day => 'in the daytime ',
+                                                Light.night => 'at night ',
+                                              }}${feed.day != null ? 'that day' : 'in this period'}.'))
                                     : engine.running
                                         ? 'Listening. Birds appear here as they are heard.'
                                         : 'Nothing heard yet. Press record to listen.',
@@ -884,7 +913,26 @@ class _NativePlateState extends State<NativePlate> {
                     left: 0,
                     right: 0,
                     height: SourcePill.rowHeight,
-                    child: Center(child: _spanRow(feed)),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _spanRow(feed),
+                          if (feed.canLight) ...[
+                            const SizedBox(width: 25.6),
+                            _lightToggle(feed, app.settings.nativeHeadingInk ? ink : sepia),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                // On a phone, the four in short words at the right, under
+                // the buttons.
+                if (feed != null && showHeading && MediaQuery.sizeOf(context).width < 900)
+                  Positioned(
+                    top: _buttonsTop,
+                    right: 8,
+                    child: _spanRow(feed, short: true),
                   ),
                 // Along the bottom at the left, quick things to do: the plate's
                 // view (a to g) in the corner, so it never moves while
@@ -1029,9 +1077,9 @@ class _NativePlateState extends State<NativePlate> {
     final temp = (weather?['temperatureC'] as num?)?.round();
     final sky = weather?['symbol'] as String?;
     // a station: its name beside the title (as a session's number), then
-    // the dates shown, its place, and on a narrow screen the period as one
-    // word to tap for the next; on a wide one the period's name leads the
-    // dates ("Seven days, Sun 15 Nov – Sat 21 Nov"), as the four sit at the top
+    // the dates shown, its place, its weather and the sun and moon; on a
+    // wide screen the period's name leads the dates ("Seven days, Sun 15
+    // Nov – Sat 21 Nov"); the periods themselves sit with the buttons
     final narrow = MediaQuery.sizeOf(context).width < 900;
     final when = feed != null
         ? (narrow || feed.dates == feed.showing ? feed.dates : '${feed.showing}, ${feed.dates}')
@@ -1086,18 +1134,6 @@ class _NativePlateState extends State<NativePlate> {
             children: [
               Text(when, style: sub),
               if (where.isNotEmpty) Text(where, style: sub),
-              if (feed != null && narrow)
-                Semantics(
-                  button: true,
-                  label: 'Showing ${feed.showing}; tap for the next period',
-                  excludeSemantics: true,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _nextSpan(feed),
-                    child: Text(feed.showing,
-                        style: sub.copyWith(color: madder, decoration: TextDecoration.underline, decorationColor: rule)),
-                  ),
-                ),
               if (temp != null || sky != null)
                 Tooltip(
                   message: weatherWords(weather),
@@ -1113,6 +1149,11 @@ class _NativePlateState extends State<NativePlate> {
                     ],
                   ),
                 ),
+              // a station on a phone: the sun and moon, under the heading
+              // (on a wide screen they sit beside the periods at the top)
+              if (feed != null && feed.canLight && narrow) _lightToggle(feed, lines),
+              if (feed != null && feed.lightNote != null && feed.light != Light.all)
+                Text(feed.lightNote!, style: sub.copyWith(color: sepia)),
               if (totals && app.settings.nativeTotals && species > 0)
                 Text('$species species from ${thousands(calls)} ${calls == 1 ? 'call' : 'calls'}.',
                     style: sub),

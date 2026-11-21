@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -13,13 +14,119 @@ import '../settings.dart';
 
 /// The four periods of the web plate.
 enum Span {
-  today('Today'),
-  week('Seven days'),
-  month('Thirty days'),
-  all('Since records began');
+  today('Today', 'Today'),
+  week('Seven days', 'Week'),
+  month('Thirty days', 'Month'),
+  all('Since records began', 'All');
 
-  const Span(this.label);
+  const Span(this.label, this.short);
   final String label;
+
+  /// The word on a phone, where the four share a corner.
+  final String short;
+}
+
+/// Which part of the day a station's plate counts: all of it, the hours
+/// of daylight (sunrise to sunset), or the night.
+enum Light {
+  all('Day and night'),
+  day('Daytime'),
+  night('Night-time');
+
+  const Light(this.label);
+  final String label;
+
+  Light get next => Light.values[(index + 1) % Light.values.length];
+}
+
+/// Whether hour [h] (0 to 23, the station's own clock) counts for [light],
+/// given sunrise and sunset in hours (6.5 is 06:30): an hour is daytime
+/// when its middle is between them.
+bool inLight(int h, Light light, (double, double) sun) {
+  if (light == Light.all) return true;
+  final mid = h + .5, isDay = mid >= sun.$1 && mid < sun.$2;
+  return light == Light.day ? isDay : !isDay;
+}
+
+/// [rows] counted again over the hours [light] keeps, from [hours] (each
+/// species' calls by hour); those heard none of those hours drop out, the
+/// rest are most heard first. A species with no hours given keeps none.
+List<StationSpecies> byLight(
+    List<StationSpecies> rows, Map<String, List<int>> hours, Light light, (double, double) sun) {
+  if (light == Light.all) return rows;
+  final out = <StationSpecies>[];
+  for (final r in rows) {
+    final h = hours[r.sci] ?? r.hourly;
+    if (h == null || h.length != 24) continue;
+    var n = 0;
+    for (var i = 0; i < 24; i++) {
+      if (inLight(i, light, sun)) n += h[i];
+    }
+    if (n > 0) out.add(r.withCount(n));
+  }
+  out.sort((a, b) => b.count.compareTo(a.count));
+  return out;
+}
+
+/// Sunrise and sunset as hours of [day] on a clock [offset] from UTC, at
+/// [lat], [lon] (NOAA's sunrise equation); null where the sun stays up or
+/// down all day.
+(double, double)? sunHours(DateTime day, double lat, double lon, Duration offset) {
+  // whole days from noon on 1 Jan 2000 (UTC) to noon on [day]
+  final n = DateTime.utc(day.year, day.month, day.day, 12).difference(DateTime.utc(2000, 1, 1, 12)).inDays;
+  final jStar = n - lon / 360;
+  double rad(double d) => d * math.pi / 180;
+  double deg(double r) => r * 180 / math.pi;
+  final m = (357.5291 + .98560028 * jStar) % 360;
+  final c = 1.9148 * math.sin(rad(m)) + .02 * math.sin(rad(2 * m)) + .0003 * math.sin(rad(3 * m));
+  final l = (m + c + 180 + 102.9372) % 360;
+  final transit = jStar + .0053 * math.sin(rad(m)) - .0069 * math.sin(rad(2 * l));
+  final dec = math.asin(math.sin(rad(l)) * math.sin(rad(23.44)));
+  final cosW = (math.sin(rad(-.833)) - math.sin(rad(lat)) * math.sin(dec)) / (math.cos(rad(lat)) * math.cos(dec));
+  if (cosW.abs() > 1) return null;
+  final w = deg(math.acos(cosW)) / 360;
+  // a time in days from noon on 1 Jan 2000 (UTC), as hours on [day]'s clock
+  double clock(double j) => ((j - n) * 24 + 12 + offset.inMinutes / 60) % 24;
+  return (clock(transit - w), clock(transit + w));
+}
+
+/// BirdNET-Go's sun times for a day ({sunrise, sunset}, in the station's
+/// own time) as hours; null without them.
+(double, double)? sunFrom(Object? j) {
+  if (j is! Map) return null;
+  double? at(Object? v) {
+    final m = RegExp(r'T(\d\d):(\d\d)').firstMatch('$v');
+    return m == null ? null : int.parse(m[1]!) + int.parse(m[2]!) / 60;
+  }
+  final a = at(j['sunrise']), b = at(j['sunset']);
+  return a != null && b != null && b > a ? (a, b) : null;
+}
+
+/// Each species' calls by hour from BirdNET-Go: its acoustic succession
+/// ([{scientificName, counts}]) or its daily lists ({date: [{scientific_name,
+/// hourly_counts}]}, perhaps under data), added up.
+void addHours(Map<String, List<int>> into, Object? j) {
+  void add(String sci, Object? counts) {
+    if (sci.isEmpty || counts is! List || counts.length != 24) return;
+    final h = into.putIfAbsent(sci, () => List.filled(24, 0));
+    for (var i = 0; i < 24; i++) {
+      h[i] += ((counts[i] as num?) ?? 0).toInt();
+    }
+  }
+  void rows(Object? l) {
+    if (l is! List) return;
+    for (final o in l) {
+      if (o is! Map) continue;
+      add('${o['scientificName'] ?? o['scientific_name'] ?? ''}', o['counts'] ?? o['hourly_counts']);
+    }
+  }
+  if (j is List) return rows(j);
+  if (j is! Map) return;
+  final inner = j['data'] ?? j['results'];
+  if (inner is List) return rows(inner);
+  for (final v in (inner is Map ? inner : j).values) {
+    rows(v);
+  }
 }
 
 /// One species on a station's plate.
@@ -51,6 +158,19 @@ class StationSpecies {
 
   /// BirdWeather's own id for the species, for its card.
   final String? bwId;
+
+  /// The same species, heard [n] times (the day or the night alone).
+  StationSpecies withCount(int n) => StationSpecies(
+      sci: sci,
+      common: common,
+      count: n,
+      first: first,
+      last: last,
+      maxConf: maxConf,
+      avgConf: avgConf,
+      daysKnown: daysKnown,
+      hourly: hourly,
+      bwId: bwId);
 }
 
 /// One of a species' latest recordings at a station.
@@ -179,7 +299,25 @@ class StationFeed extends ChangeNotifier {
   Span span = Span.today;
   DateTime? day;
 
+  /// What the plate shows: the period's species, by the part of the day
+  /// chosen ([light]).
   List<StationSpecies>? species;
+
+  /// Day and night, daytime or night-time (the heading's sun and moon).
+  Light light = Light.all;
+
+  /// Why the part of the day can't be told apart, when it can't.
+  String? lightNote;
+
+  /// Whether the part of the day can be chosen (BirdNET-Go gives calls by
+  /// the hour; BirdWeather's list doesn't).
+  bool get canLight => !_bw;
+
+  /// The next part of the day: all, day, night.
+  void nextLight() {
+    light = light.next;
+    load();
+  }
   String? error;
   bool loading = false;
 
@@ -269,8 +407,22 @@ class StationFeed extends ChangeNotifier {
       notifyListeners();
     }
     try {
-      final got = _bw ? await _speciesBW() : await _speciesGo();
+      var got = _bw ? await _speciesBW() : await _speciesGo();
       if (run != _run) return;
+      lightNote = null;
+      if (light != Light.all && !_bw) {
+        final (from, to) = _range;
+        final sun = await _sun(from, to);
+        final hours = sun == null ? null : await _hoursGo(got, from, to);
+        if (run != _run) return;
+        if (sun == null) {
+          lightNote = "The station doesn't say when the sun rose there.";
+        } else if (hours == null) {
+          lightNote = 'This BirdNET-Go gives calls by the hour for up to two months at a time.';
+        } else {
+          got = byLight(got, hours, light, sun);
+        }
+      }
       species = got;
       error = null;
     } catch (e) {
@@ -352,6 +504,48 @@ class StationFeed extends ChangeNotifier {
         notifyListeners();
       }
     }).catchError((Object _) {});
+  }
+
+  /// Sunrise and sunset in the middle of the dates shown: BirdNET-Go's own,
+  /// else worked out from where the station is, on this phone's clock.
+  Future<(double, double)?> _sun(DateTime from, DateTime to) async {
+    final mid = from.add(Duration(days: to.difference(from).inDays ~/ 2));
+    try {
+      final s = sunFrom(await _get('/api/v2/weather/sun/${ymd(mid)}'));
+      if (s != null) return s;
+    } catch (_) {}
+    final p = place;
+    return p == null ? null : sunHours(mid, p.$1, p.$2, mid.timeZoneOffset);
+  }
+
+  /// Each species' calls by hour over the dates: from the day's list for
+  /// one day; else BirdNET-Go's acoustic succession, ten species a time;
+  /// else its daily lists, seven days a time, up to two months.
+  Future<Map<String, List<int>>?> _hoursGo(List<StationSpecies> rows, DateTime from, DateTime to) async {
+    if (from == to && rows.every((r) => r.hourly != null)) return {};
+    final out = <String, List<int>>{};
+    try {
+      for (var i = 0; i < rows.length; i += 10) {
+        final q = rows.skip(i).take(10).map((r) => 'species=${Uri.encodeQueryComponent(r.sci)}').join('&');
+        addHours(out, await _get('/api/v2/analytics/time/succession?start_date=${ymd(from)}&end_date=${ymd(to)}&limit=10&$q'));
+      }
+      return out;
+    } catch (_) {
+      out.clear();
+    }
+    if (to.difference(from).inDays > 62) return null;
+    try {
+      for (var d = from; !d.isAfter(to); d = d.add(const Duration(days: 7))) {
+        final dates = [
+          for (var k = 0; k < 7; k++)
+            if (!d.add(Duration(days: k)).isAfter(to)) ymd(d.add(Duration(days: k)))
+        ].join(',');
+        addHours(out, await _get('/api/v2/analytics/species/daily/batch?dates=$dates'));
+      }
+      return out;
+    } catch (_) {
+      return null;
+    }
   }
 
   // ---- BirdWeather -------------------------------------------------------------
