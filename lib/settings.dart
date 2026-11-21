@@ -21,6 +21,15 @@ class Settings extends ChangeNotifier {
   List<Station> stations = [];
   String? stationId;
 
+  /// Whether each station's past days are filled in on this device (by
+  /// its id): a phone asks first; elsewhere they are, unless switched off.
+  Map<String, bool> stationKeepPast = {};
+
+  /// Whether this device fills in [st]'s past days: as answered, else yes
+  /// on a computer and not yet on a phone; null on a phone not yet asked.
+  bool? keepPastOf(Station st) =>
+      stationKeepPast[st.id] ?? (Platform.isIOS || Platform.isAndroid ? null : true);
+
   /// The station a remote plate shows: the chosen one, else the first.
   Station? get station {
     for (final x in stations) {
@@ -211,6 +220,13 @@ class Settings extends ChangeNotifier {
       if (bw.isNotEmpty) stations.add(Station(id: 'birdweather', name: 'BirdWeather $bw', birdweather: bw));
       stationId = stations.isEmpty ? null : stations.last.id;
     }
+    final keep = j['stationKeepPast'];
+    if (keep is Map) {
+      stationKeepPast = {
+        for (final e in keep.entries)
+          if (e.value is bool) '${e.key}': e.value as bool
+      };
+    }
     threshold = (j['threshold'] as num?)?.toDouble() ?? threshold;
     hopSeconds = (j['hopSeconds'] as num?)?.toDouble() ?? hopSeconds;
     micSource = j['micSource'] == 'headset' ? 'headset' : 'phone';
@@ -280,6 +296,7 @@ class Settings extends ChangeNotifier {
         'mode': mode.name,
         'stations': [for (final st in stations) st.toJson()],
         'station': stationId,
+        if (stationKeepPast.isNotEmpty) 'stationKeepPast': stationKeepPast,
         // the station in use, as builds before saved stations read it
         'birdnetUrl': birdnetUrl,
         'birdweatherStation': birdweatherStation,

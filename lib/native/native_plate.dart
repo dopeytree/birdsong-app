@@ -163,7 +163,8 @@ class _NativePlateState extends State<NativePlate> {
     if (f != null && f.station.id == st.id && f.station.input == st.input) return f;
     f?.dispose();
     // each day shown kept on the phone, as a session (station_archive.dart)
-    return _feed = StationFeed(st, root: app.store.root);
+    // (the back days too, when allowed: a phone asks in the calendar)
+    return _feed = StationFeed(st, root: app.store.root, keepPast: () => app.settings.keepPastOf(st) ?? false);
   }
 
   /// The four periods (Today, Week, Month, All), as the web plate's header
@@ -431,7 +432,18 @@ class _NativePlateState extends State<NativePlate> {
     final f = _feed;
     if (f != null) {
       // a station: any day since its records began
-      final picked = await StationDayPicker.show(context, StationDayPicker(feed: f));
+      final st = f.station;
+      final picked = await StationDayPicker.show(
+        context,
+        StationDayPicker(
+          feed: f,
+          keepPast: app.settings.keepPastOf(st),
+          onKeepPast: (v) {
+            app.settings.update((x) => x.stationKeepPast[st.id] = v);
+            if (v) f.archive?.fill();
+          },
+        ),
+      );
       if (picked != null && mounted) f.setDay(picked);
       return;
     }

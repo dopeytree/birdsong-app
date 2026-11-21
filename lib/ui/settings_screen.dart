@@ -247,6 +247,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
+          // each station's past days, kept on this device in the session
+          // format (a phone asks first, in the calendar)
+          for (final st in s.stations)
+            _switch('Keep ${st.name}\'s past days on this device', s.keepPastOf(st) ?? false,
+                (v) => s.update((x) => x.stationKeepPast[st.id] = v)),
           const SizedBox(height: 4),
           Wrap(
             spacing: 8,

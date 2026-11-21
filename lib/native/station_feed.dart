@@ -341,8 +341,8 @@ class StationFeed extends ChangeNotifier {
   /// [root] is the app's data folder: each day shown is kept there in the
   /// session format, and the station's back days filled in
   /// (station_archive.dart).
-  StationFeed(this.station, {Directory? root}) {
-    if (root != null) archive = StationArchive(root, this);
+  StationFeed(this.station, {Directory? root, bool Function()? keepPast}) {
+    if (root != null) archive = StationArchive(root, this, keepPast: keepPast);
     _timer = Timer.periodic(const Duration(minutes: 1), (_) => load(quiet: true));
     load();
   }

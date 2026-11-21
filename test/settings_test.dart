@@ -103,4 +103,18 @@ void main() {
     // a value this version does not know falls back
     expect((await loadWith({'nativeMarkAt': 'sideways'})).nativeMarkAt, 'below');
   });
+
+  test("a station's past days: as answered, else yes on a computer", () async {
+    final s = await loadWith({
+      'stations': [
+        {'id': 'a', 'name': 'Garden', 'birdnetUrl': 'http://garden.local'},
+        {'id': 'b', 'name': 'Wood', 'birdweather': '1234'},
+      ],
+      'stationKeepPast': {'a': false},
+    });
+    expect(s.keepPastOf(s.stations[0]), isFalse);
+    // the tests run on a computer, which doesn't ask
+    expect(s.keepPastOf(s.stations[1]), isTrue);
+    expect(s.toJson()['stationKeepPast'], {'a': false});
+  });
 }

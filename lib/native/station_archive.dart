@@ -47,16 +47,22 @@ class StationDay {
 ///
 /// Recordings stay on the station: each call keeps a link to its own.
 /// A day shown is kept first (today again as it fills, at most every ten
-/// minutes); then, while the station is on show, the back days are filled
-/// in one at a time, newest first, back to when its records begin.
+/// minutes); then, while the station is on show and when allowed (a phone
+/// asks first), the back days are filled in one at a time, newest first,
+/// back to when its records begin.
 class StationArchive extends ChangeNotifier {
-  StationArchive(Directory root, this.feed)
-      : dir = Directory('${root.path}/stations/${safeName(feed.station.id)}') {
+  StationArchive(Directory root, this.feed, {bool Function()? keepPast})
+      : dir = Directory('${root.path}/stations/${safeName(feed.station.id)}'),
+        keepPast = keepPast ?? (() => true) {
     _ready = _open();
   }
 
   final StationFeed feed;
   final Directory dir;
+
+  /// Whether the back days may be filled in (Settings.keepPastOf): a phone
+  /// asks first. The days shown are kept either way.
+  final bool Function() keepPast;
 
   /// What is known of each day, by its date ("2026-11-21").
   final Map<String, StationDay> days = {};
@@ -164,7 +170,7 @@ class StationArchive extends ChangeNotifier {
     try {
       await _ready;
       while (!_closed) {
-        final d = _wanted.isNotEmpty ? _wanted.removeAt(0) : _nextBackDay();
+        final d = _wanted.isNotEmpty ? _wanted.removeAt(0) : (keepPast() ? _nextBackDay() : null);
         if (d == null) break;
         try {
           await _keep(d);

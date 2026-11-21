@@ -200,9 +200,14 @@ class _DayPickerState extends State<DayPicker> {
 /// the picked day's row: how many species and calls, and whether it is kept
 /// on the phone (station_archive.dart). Returns the day picked, or null.
 class StationDayPicker extends StatefulWidget {
-  const StationDayPicker({super.key, required this.feed});
+  const StationDayPicker({super.key, required this.feed, this.keepPast, this.onKeepPast});
 
   final StationFeed feed;
+
+  /// Whether the station's past days are filled in on this device; null on
+  /// a phone not yet asked, when the calendar asks, and [onKeepPast] hears.
+  final bool? keepPast;
+  final ValueChanged<bool>? onKeepPast;
 
   static Future<DateTime?> show(BuildContext context, StationDayPicker picker) => showDialog<DateTime>(
         context: context,
@@ -217,6 +222,7 @@ class StationDayPicker extends StatefulWidget {
 class _StationDayPickerState extends State<StationDayPicker> {
   late final DateTime _today = _day(DateTime.now());
   late DateTime _picked = widget.feed.day ?? _today;
+  late bool? _keep = widget.keepPast;
 
   @override
   void initState() {
@@ -280,7 +286,9 @@ class _StationDayPickerState extends State<StationDayPicker> {
                     const Divider(color: rule, height: 1),
                     const SizedBox(height: 8),
                     _row(shown, archive?.dayOf(shown)),
-                    if (archive != null) ...[
+                    if (archive != null && _keep == null && widget.onKeepPast != null)
+                      _ask(archive)
+                    else if (archive != null) ...[
                       const SizedBox(height: 6),
                       Text(_kept(archive), textAlign: TextAlign.center, style: small.copyWith(fontSize: 13)),
                     ],
@@ -337,10 +345,48 @@ class _StationDayPickerState extends State<StationDayPicker> {
     );
   }
 
-  /// How many of the station's days are kept on the phone.
+  /// A phone asks once before filling in a station's past days: each is a
+  /// request to the station and a little room on the phone.
+  Widget _ask(StationArchive a) {
+    final since = widget.feed.since;
+    final back = since == null ? null : _today.difference(_day(since)).inDays;
+    void answer(bool v) {
+      setState(() => _keep = v);
+      widget.onKeepPast?.call(v);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Keep ${widget.feed.station.name}\'s past days on this phone? '
+            '${back == null ? 'Every day back to when its records begin' : 'About ${thousands(back)} days'}, '
+            'fetched quietly while the station is shown, so they open without it. '
+            'Days you open are kept either way.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14, color: sepia),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton(onPressed: () => answer(false), child: const Text('Not now')),
+              TextButton(onPressed: () => answer(true), child: const Text('Keep them')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// How many of the station's days are kept on this device.
   String _kept(StationArchive a) {
     if (a.unsupported) return "This station can't list a day's calls, so only its counts are kept.";
     final n = a.days.values.where((k) => k.saved && k.calls > 0).length;
-    return n == 0 ? 'Keeping its days on this phone as they are shown.' : '${thousands(n)} ${n == 1 ? 'day' : 'days'} kept on this phone.';
+    final past = _keep == true ? '' : ' Its past days are kept as you open them.';
+    return n == 0
+        ? 'Keeping its days on this device as they are shown.'
+        : '${thousands(n)} ${n == 1 ? 'day' : 'days'} kept on this device.$past';
   }
 }
