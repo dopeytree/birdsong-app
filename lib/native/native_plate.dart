@@ -418,9 +418,11 @@ class _NativePlateState extends State<NativePlate> {
         final i = store.selectedIndex, n = store.sessions.length;
         final red = Theme.of(context).colorScheme.primary;
         final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
-        final single = mode.key == 'latest' || mode.key == 'top';
+        // views d and e show one bird, unless the map is on: then the map
+        // is drawn as in the other views
+        final mapOn = app.settings.showMap && ses != null;
+        final single = (mode.key == 'latest' || mode.key == 'top') && !mapOn;
         // the map takes the collage's place, and has one even in view c
-        final mapOn = app.settings.showMap && !mode.currentOnly && ses != null;
         final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
         final fit = app.settings.nativeFit;
         _bottomRoom = 40 + 8 + 6.0;
@@ -633,8 +635,8 @@ class _NativePlateState extends State<NativePlate> {
                 // left; not in the views of one bird (d and e).
                 // Along the bottom at the left: the plate's view (a to g) in the
                 // corner, so it never moves while stepping through the views,
-                // and the map button beside it (not in the views of one bird,
-                // d and e, which have no map).
+                // and the map button beside it, in every view (in d and e the
+                // map is drawn as in the others).
                 Positioned(
                   left: 8,
                   bottom: 8,
@@ -648,8 +650,7 @@ class _NativePlateState extends State<NativePlate> {
                     onPressed: _nextMode,
                   ),
                 ),
-                if (!mode.currentOnly)
-                  Positioned(
+                Positioned(
                     left: 8 + 40,
                     bottom: 8,
                     child: IconButton(
@@ -667,7 +668,7 @@ class _NativePlateState extends State<NativePlate> {
                   Positioned(
                     // clear of the view and map buttons on the left, and of
                     // share on the right
-                    left: mode.currentOnly ? 56 : 96,
+                    left: 96,
                     right: 56,
                     bottom: 8,
                     height: 40,
