@@ -831,8 +831,8 @@ class _NativePlateState extends State<NativePlate> {
   /// The page's header as the app fills it in Listen here: the title with
   /// the session's number, then, each on its own line, when, where (just
   /// the position), the weather (its picture and the temperature), and,
-  /// when switched on (Settings > Experimental, nativeTotals), the totals. The title stops short of the buttons' row; the lines under it
-  /// stop short of the menu and view column. [width] is the room from the
+  /// when switched on (Settings > Experimental, nativeTotals), the totals. Every line stops short of the buttons beside it
+  /// (record, pill, menu). [width] is the room from the
   /// left padding to the screen's right edge.
   Widget _heading(Session? ses, int i, int n, int species, int calls, double width, {bool totals = true}) {
     // #sub{font-style:italic;color:sepia;font-size:.95rem}, three block spans;
@@ -845,8 +845,9 @@ class _NativePlateState extends State<NativePlate> {
     final sub = capsOn
         ? TextStyle(fontFamily: caps, fontSize: 14.4, letterSpacing: 14.4 * .06, color: lines, height: 1.5)
         : TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: lines, height: 1.5);
-    // record 44, pill 94, menu 48, and 8 from the edge; the column is the last two
-    const row1 = 194.0, col = 56.0;
+    // record 44, pill 82, menu 48, and 8 from the edge, and a little air:
+    // the heading sits beside them, so every line stops short of them
+    const row1 = 194.0;
     final weather = ses?.weather;
     final temp = (weather?['temperatureC'] as num?)?.round();
     final sky = weather?['symbol'] as String?;
@@ -891,7 +892,7 @@ class _NativePlateState extends State<NativePlate> {
         ),
         const SizedBox(height: 3.2),
         ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: math.max(120, width - col)),
+          constraints: BoxConstraints(maxWidth: math.max(120, width - row1)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

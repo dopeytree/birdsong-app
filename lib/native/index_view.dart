@@ -294,8 +294,11 @@ class _LineState extends State<_Line> {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
+                  // the name takes what it needs, wrapping only when it must:
+                  // room is kept for a short leader and a count of up to four
+                  // figures
                   ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: widget.width * .78),
+                    constraints: BoxConstraints(maxWidth: math.max(40, widget.width - 56)),
                     child: Text.rich(
                       TextSpan(text: e.common, children: [
                         if (e.noPlate)
