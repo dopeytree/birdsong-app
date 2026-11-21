@@ -163,6 +163,28 @@ void main() {
     expect(p.map((x) => x.name), ['Old Park']);
   });
 
+  test('a reserve leads, then the designation it lies in; a reserve within 50 m counts', () {
+    final p = passedOnTheWay(walk, nature: [
+      Area('Somerset Wetlands', 'National Nature Reserve', box(51.99, -1.6, 52.01, -1.4), kind: 'NNR'),
+    ], reserves: [
+      Area('RSPB Ham Wall', 'Nature reserve', box(51.999, -1.4955, 52.001, -1.4935), kind: 'OSM'),
+      Area('Just Over the Hedge', 'Nature reserve', box(52 + north(30), -1.49, 52 + north(200), -1.488), kind: 'OSM'),
+      Area('Far Fen', 'Nature reserve', box(52 + north(120), -1.49, 52 + north(300), -1.488), kind: 'OSM'),
+    ]);
+    expect(p.map((x) => x.name), ['RSPB Ham Wall', 'Just Over the Hedge', 'Somerset Wetlands']);
+    expect(p[1].metres, closeTo(30, 1));
+    expect(p[1].at, isNotNull);
+  });
+
+  test('names: capitals made ordinary, and matched without RSPB or reserve', () {
+    expect(tidyName('SOMERSET WETLANDS'), 'Somerset Wetlands');
+    expect(tidyName('ISLE OF PORTLAND AND THE SOLENT'), 'Isle of Portland and the Solent');
+    expect(tidyName('Ham Wall'), 'Ham Wall');
+    expect(plainName('RSPB Ham Wall'), plainName('Ham Wall'));
+    expect(plainName('Shapwick Heath National Nature Reserve'), 'shapwick heath');
+    expect(nameOf({'NNR_NAME': 'SOMERSET WETLANDS'}), 'Somerset Wetlands');
+  });
+
   test('Wikipedia places, with or without a description', () {
     final w = wikiOf({
       'query': {

@@ -235,7 +235,10 @@ class _WalkMapState extends State<WalkMap> {
     widget.landmarks?.addListener(_landmarksChanged);
     _askLandmarks();
     _Kit.load().then((k) {
-      if (mounted) setState(() => _kit = k);
+      if (!mounted) return;
+      setState(() => _kit = k);
+      // the tiles' reserves need the kit: ask (again) now it's here
+      _askLandmarks();
     }).catchError((Object _) {
       if (mounted) setState(() => _failed = 'The map needs an internet connection the first time it opens.');
     });
@@ -271,13 +274,21 @@ class _WalkMapState extends State<WalkMap> {
   /// The page's loadPlaces() path: the trail and the crosses, or just the
   /// place when that is all there is.
   void _askLandmarks() {
-    final l = widget.landmarks, w = widget.walk;
-    if (l == null || w == null) return;
+    final l = widget.landmarks, w = widget.walk, kit = _kit;
+    // with the kit, so the reserves can be read from its tiles
+    if (l == null || w == null || kit == null) return;
     final path = [...w.trail, for (final b in w.birds) b.at];
     if (path.isEmpty && w.place != null) path.add(w.place!);
+    final omt = kit.providers['omt'];
+    Future<Uint8List?> tile(int z, int x, int y) async {
+      if (omt == null) return null;
+      final r = await omt.load(vt.TileKey(math.min(z, omt.maximumZoom), x, y));
+      return r is vt.TileResponseData ? r.bytes : null;
+    }
+
     // not while building: the lookup tells its listeners at once
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) l.want(w.key, path);
+      if (mounted) l.want(w.key, path, tile: tile);
     });
   }
 
@@ -436,35 +447,58 @@ class _WalkMapState extends State<WalkMap> {
 
   // ---- taps -----------------------------------------------------------------
 
+  /// A tap on the map names what is there, most particular first: a bird's
+  /// cross or an end (they answer for themselves), a building or Wikipedia
+  /// place, a peak, a monument, battlefield or park, a reserve, then the
+  /// wider designations (World Heritage Sites, Natural England's sites).
   void _tapped(TapPosition at, LatLng ll) {
     final p = at.relative;
     if (p == null) return;
-    final hit = _peaks.queryRenderedFeatures(p, layerIds: const ['peaks']);
-    if (hit.isEmpty) {
-      final found = widget.landmarks?.current;
-      for (final a in [
-        ...?found?.monuments,
-        ...?found?.battlefields,
-        ...?found?.parks,
-        ...?found?.worldHeritage,
-        ...?found?.nature,
-      ]) {
-        if (inShape(ll, a.shape)) return _say(p, a.name, a.about);
-      }
-      if (widget.landmarks != null) {
-        final r = _reserves.queryRenderedFeatures(p, layerIds: const ['reserve-fill']);
-        for (final f in r) {
-          final name = f.properties['name'];
-          if (name == null || '$name'.isEmpty) continue;
-          return _say(p, '$name', reserveKinds[f.properties['class']] ?? 'Nature reserve');
-        }
-      }
-      if (_tip != null) setState(() => _tip = null);
-      return;
+    final camera = _map.camera;
+    bool near(LatLng q, double px) => (camera.latLngToScreenOffset(q) - p).distance <= px;
+    final w = widget.walk;
+    if (w != null) {
+      final ends = [if (w.trail.isNotEmpty) w.trail.first else if (w.place != null) w.place!, if (w.trail.length > 1) w.trail.last];
+      if (w.birds.any((b) => near(b.at, 16)) || ends.any((e) => near(e, 14))) return;
     }
-    final props = hit.first.properties;
-    final ele = props['ele'];
-    _say(p, '${props['name'] ?? ''}', ele != null ? '$ele m' : 'Summit');
+    final found = widget.landmarks?.current;
+    // the nearest building or Wikipedia place within a finger's reach
+    Spot? spot;
+    var best = 16.0;
+    for (final s in [
+      for (final s in found?.listed ?? const <Spot>[])
+        if (s.grade != 'II' || _zoom >= 14) s,
+      ...?found?.wiki,
+    ]) {
+      final d = (camera.latLngToScreenOffset(s.at) - p).distance;
+      if (d <= best) {
+        best = d;
+        spot = s;
+      }
+    }
+    if (spot != null) return _say(p, spot.name, spot.about);
+    final peak = _peaks.queryRenderedFeatures(p, layerIds: const ['peaks']);
+    if (peak.isNotEmpty) {
+      final props = peak.first.properties, ele = props['ele'];
+      return _say(p, '${props['name'] ?? ''}', ele != null ? '$ele m' : 'Summit');
+    }
+    for (final a in [...?found?.monuments, ...?found?.battlefields, ...?found?.parks]) {
+      if (inShape(ll, a.shape)) return _say(p, a.name, a.about);
+    }
+    if (widget.landmarks != null) {
+      for (final f in _reserves.queryRenderedFeatures(p, layerIds: const ['reserve-fill'])) {
+        final name = f.properties['name'];
+        if (name == null || '$name'.isEmpty) continue;
+        final plain = plainName('$name');
+        // its Wikipedia line, when it has one ("Ham Wall": wetland nature reserve)
+        final wiki = found?.wiki.where((s) => plainName(s.name) == plain && s.about != 'Wikipedia').firstOrNull;
+        return _say(p, '$name', wiki?.about ?? reserveKinds[f.properties['class']] ?? 'Nature reserve');
+      }
+    }
+    for (final a in [...?found?.worldHeritage, ...?found?.nature]) {
+      if (inShape(ll, a.shape)) return _say(p, a.name, a.about);
+    }
+    if (_tip != null) setState(() => _tip = null);
   }
 
   void _say(Offset at, String title, String sub) {
@@ -662,15 +696,14 @@ class _WalkMapState extends State<WalkMap> {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
+                // drawn only: a tap goes to the map, which names the nearest
+                // thing (so a place inside a reserve isn't answered twice)
                 Center(
                   child: Semantics(
                     button: true,
                     label: '${s.name}, ${s.about}',
-                    child: GestureDetector(
-                      onTapUp: (d) {
-                        final box = context.findRenderObject() as RenderBox?;
-                        _say(box?.globalToLocal(d.globalPosition) ?? Offset.zero, s.name, s.about);
-                      },
+                    onTap: () => _say(_map.camera.latLngToScreenOffset(s.at), s.name, s.about),
+                    child: IgnorePointer(
                       child: CustomPaint(
                         size: const Size.square(24),
                         painter: wiki

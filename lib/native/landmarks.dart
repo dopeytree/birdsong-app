@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart' hide Path;
+
+import 'mvt.dart';
 
 /// The map's extras, from assets/app/map-mode.js loadPlaces(): listed
 /// buildings, scheduled monuments, registered parks and gardens and
@@ -16,6 +19,14 @@ const _he = 'https://services-eu1.arcgis.com/ZOdPfBS3aqqDYPUQ/arcgis/rest/servic
     'National_Heritage_List_for_England_NHLE_v02_VIEW/FeatureServer';
 const _ne = 'https://services.arcgis.com/JJzESW51TqeY9uat/arcgis/rest/services';
 const _agent = 'Birdsong/0.1 github.com/dopeytree/birdsong';
+
+/// The kinds of OpenStreetMap park (the map tiles' park layer) taken as
+/// reserves, and what each is called.
+const reserveKinds = {
+  'nature_reserve': 'Nature reserve',
+  'protected_area': 'Protected area',
+  'national_park': 'National park',
+};
 
 /// A nature site's kind: its short name, what it stands for, and where it
 /// is looked up.
@@ -70,7 +81,8 @@ class Passed {
   final LatLng? at;
   final double metres;
 
-  /// Nature sites first, then buildings and monuments, then Wikipedia.
+  /// Reserves first, then Natural England's sites, then buildings and
+  /// monuments, then Wikipedia.
   final int order;
 }
 
@@ -83,6 +95,7 @@ class Landmarks {
     this.battlefields = const [],
     this.worldHeritage = const [],
     this.nature = const [],
+    this.reserves = const [],
     this.wiki = const [],
     this.passed = const [],
     this.unreached = const [],
@@ -98,6 +111,10 @@ class Landmarks {
   /// World Heritage Sites.
   final List<Area> worldHeritage;
   final List<Area> nature;
+
+  /// OpenStreetMap's reserves round a walk, read from the map tiles (the
+  /// map draws them itself; these are for what the walk passed).
+  final List<Area> reserves;
   final List<Spot> wiki;
 
   /// What the walk passed; only for a walk's own lookup.
@@ -125,6 +142,7 @@ class Landmarks {
       battlefields: both(battlefields, other.battlefields, area),
       worldHeritage: both(worldHeritage, other.worldHeritage, area),
       nature: both(nature, other.nature, area),
+      reserves: both(reserves, other.reserves, area),
       wiki: both(wiki, other.wiki, spot),
       passed: passed,
       unreached: unreached,
@@ -158,6 +176,53 @@ bool _inRing(LatLng p, List<LatLng> ring) {
 bool inShape(LatLng p, Shape shape) => shape.any((rings) =>
     rings.isNotEmpty && _inRing(p, rings.first) && !rings.skip(1).any((h) => _inRing(p, h)));
 
+/// Metres from [p] to the nearest edge of [shape], and that nearest point
+/// (flat-earth sums: fine over the few hundred metres they're used for).
+(double, LatLng) metresToEdge(LatLng p, Shape shape) {
+  final kx = 111320 * math.cos(p.latitude * math.pi / 180), ky = 110540.0;
+  var best = double.infinity;
+  var at = p;
+  for (final rings in shape) {
+    for (final r in rings) {
+      for (var i = 0; i + 1 < r.length; i++) {
+        final ax = (r[i].longitude - p.longitude) * kx, ay = (r[i].latitude - p.latitude) * ky;
+        final bx = (r[i + 1].longitude - p.longitude) * kx, by = (r[i + 1].latitude - p.latitude) * ky;
+        final dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+        final t = len == 0 ? 0.0 : (-(ax * dx + ay * dy) / len).clamp(0.0, 1.0);
+        final cx = ax + t * dx, cy = ay + t * dy;
+        final d = math.sqrt(cx * cx + cy * cy);
+        if (d < best) {
+          best = d;
+          at = LatLng(p.latitude + cy / ky, p.longitude + cx / kx);
+        }
+      }
+    }
+  }
+  return (best, at);
+}
+
+/// A place's name with "RSPB", "nature reserve" and the like taken off,
+/// in small letters, so "RSPB Ham Wall" and Wikipedia's "Ham Wall" match.
+String plainName(String name) => name
+    .toLowerCase()
+    .replaceAll(RegExp(r'\b(rspb|nnr|lnr|national nature reserve|local nature reserve|nature reserve|reserve)\b'), ' ')
+    .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+    .trim();
+
+/// A name sent in capitals (Natural England's are) in ordinary letters:
+/// "SOMERSET WETLANDS" → "Somerset Wetlands"; others as they are.
+String tidyName(String name) {
+  if (name != name.toUpperCase() || !RegExp('[A-Z]{2}').hasMatch(name)) return name;
+  const small = {'and', 'of', 'the', 'on', 'in', 'at', 'by', 'upon', 'de', 'la'};
+  var first = true;
+  return name.toLowerCase().replaceAllMapped(RegExp(r"[a-z][a-z']*"), (m) {
+    final w = m[0]!;
+    final keep = !first && small.contains(w);
+    first = false;
+    return keep ? w : w[0].toUpperCase() + w.substring(1);
+  });
+}
+
 /// The box looked in: the walk's, a fifth again on each side, and at least
 /// about 300 m across. [west, south, east, north].
 List<double> frameOf(List<LatLng> path) {
@@ -178,19 +243,51 @@ List<LatLng> probeOf(List<LatLng> path) {
   return [for (var i = 0; i < path.length; i += every) path[i]];
 }
 
-/// What the walk passed: buildings within 120 m, monuments (and parks,
-/// battlefields and World Heritage Sites) within 200 m or walked through,
-/// nature sites walked through (each name and kind once), Wikipedia places
-/// within 400 m; nature first, then nearest first.
+/// What the walk passed, most particular first: reserves (OpenStreetMap's,
+/// from the tiles) walked through or within 50 m, then Natural England's
+/// sites walked through (each name and kind once), then buildings within
+/// 120 m and monuments (and parks, battlefields and World Heritage Sites)
+/// within 200 m or walked through, then Wikipedia places within 400 m;
+/// nearest first in each. A Wikipedia place of a passed reserve's name
+/// ("Ham Wall" for "RSPB Ham Wall") is that reserve: it isn't listed again,
+/// and lends the reserve its description.
 List<Passed> passedOnTheWay(List<LatLng> path,
-    {List<Spot> listed = const [], List<Area> monuments = const [], List<Area> nature = const [], List<Spot> wiki = const []}) {
+    {List<Spot> listed = const [],
+    List<Area> monuments = const [],
+    List<Area> nature = const [],
+    List<Area> reserves = const [],
+    List<Spot> wiki = const []}) {
   final probe = probeOf(path);
   if (probe.isEmpty) return const [];
   double near(LatLng p) => probe.map((q) => metresBetween(q, p)).reduce(math.min);
   final out = <Passed>[];
+  final described = {for (final s in wiki) plainName(s.name): s.about};
+  final reserveNames = <String>{};
+  final seenReserve = <String>{};
+  for (final a in reserves) {
+    final key = plainName(a.name);
+    if (!seenReserve.add(key)) continue;
+    final inside = probe.any((p) => inShape(p, a.shape));
+    var d = 0.0;
+    LatLng? at;
+    if (!inside) {
+      d = double.infinity;
+      for (final p in probe) {
+        final (m, q) = metresToEdge(p, a.shape);
+        if (m < d) {
+          d = m;
+          at = q;
+        }
+      }
+      if (d > 50) continue;
+    }
+    reserveNames.add(key);
+    final about = described[key];
+    out.add(Passed(a.name, about != null && about != 'Wikipedia' ? about : a.about, at, d, 0));
+  }
   for (final s in listed) {
     final d = near(s.at);
-    if (d <= 120) out.add(Passed(s.name, s.about, s.at, d, 1));
+    if (d <= 120) out.add(Passed(s.name, s.about, s.at, d, 2));
   }
   for (final a in monuments) {
     final pts = [for (final rings in a.shape) for (final r in rings) ...r];
@@ -198,16 +295,18 @@ List<Passed> passedOnTheWay(List<LatLng> path,
     final inside = probe.any((p) => inShape(p, a.shape));
     final every = math.max(1, pts.length ~/ 100);
     final d = inside ? 0.0 : [for (var i = 0; i < pts.length; i += every) near(pts[i])].reduce(math.min);
-    if (d <= 200) out.add(Passed(a.name, a.about, pts.first, d, 1));
+    if (d <= 200) out.add(Passed(a.name, a.about, pts.first, d, 2));
   }
   final seen = <String>{};
   for (final a in nature) {
     if (!seen.add('${a.kind}${a.name}')) continue;
-    if (probe.any((p) => inShape(p, a.shape))) out.add(Passed(a.name, a.about, null, 0, 0));
+    if (reserveNames.contains(plainName(a.name))) continue;
+    if (probe.any((p) => inShape(p, a.shape))) out.add(Passed(a.name, a.about, null, 0, 1));
   }
   for (final s in wiki) {
+    if (reserveNames.contains(plainName(s.name))) continue;
     final d = near(s.at);
-    if (d <= 400) out.add(Passed(s.name, s.about, s.at, d, 2));
+    if (d <= 400) out.add(Passed(s.name, s.about, s.at, d, 3));
   }
   out.sort((a, b) => a.order != b.order ? a.order - b.order : a.metres.compareTo(b.metres));
   return out;
@@ -219,7 +318,7 @@ List<Passed> passedOnTheWay(List<LatLng> path,
 String nameOf(Map<String, dynamic> p) {
   final re = RegExp(r'(^|_)name$', caseSensitive: false);
   for (final e in p.entries) {
-    if (re.hasMatch(e.key) && e.value != null && '${e.value}'.isNotEmpty) return '${e.value}';
+    if (re.hasMatch(e.key) && e.value != null && '${e.value}'.isNotEmpty) return tidyName('${e.value}');
   }
   return 'Unnamed';
 }
@@ -401,6 +500,44 @@ Future<Landmarks> lookUpFrame(List<double> frame, {bool gradeTwo = false, List<L
   );
 }
 
+/// Loads one map tile's bytes (z, x, y), or null.
+typedef TileLoader = Future<Uint8List?> Function(int z, int x, int y);
+
+/// OpenStreetMap's reserves under [path], from the map's own vector tiles
+/// at zoom [z] (the park layer: nature reserves, protected areas, national
+/// parks, with names): the pieces each tile holds, joined by name. Nothing
+/// for a walk over more than 40 tiles (a long drive).
+Future<List<Area>> reservesAlong(List<LatLng> path, TileLoader tile, {int z = 14}) async {
+  final tiles = {for (final p in probeOf(path)) tileOf(p, z)};
+  if (tiles.isEmpty || tiles.length > 40) return const [];
+  final shapes = <String, Shape>{}, kinds = <String, String>{};
+  for (final (x, y) in tiles) {
+    Uint8List? bytes;
+    try {
+      bytes = await tile(z, x, y);
+    } catch (_) {
+      continue;
+    }
+    if (bytes == null) continue;
+    final List<MvtFeature> fs;
+    try {
+      fs = readMvtLayer(bytes, 'park');
+    } catch (_) {
+      continue;
+    }
+    for (final f in fs) {
+      final kind = reserveKinds[f.props['class']];
+      final name = f.props['name'] ?? f.props['name:en'] ?? f.props['name:latin'];
+      if (kind == null || name is! String || name.isEmpty || f.type != 3) continue;
+      (shapes[name] ??= []).addAll(mvtPolygons(f, z, x, y));
+      kinds[name] = kind;
+    }
+  }
+  return [
+    for (final e in shapes.entries) Area(e.key, kinds[e.key]!, e.value, kind: 'OSM'),
+  ];
+}
+
 /// The area a view is looked up for: [bounds] and a quarter again round it,
 /// snapped out to a hundredth of a degree so small moves ask nothing new.
 List<double> viewFrame(double west, double south, double east, double north) {
@@ -452,8 +589,9 @@ class LandmarkLookup extends ChangeNotifier {
   /// What was found for [key], once looked up.
   static Landmarks? keptFor(String key) => _kept[key];
 
-  /// Look up round [path] for the walk [key], unless that is already done.
-  Future<void> want(String key, List<LatLng> path) async {
+  /// Look up round [path] for the walk [key], unless that is already done;
+  /// with [tile], OpenStreetMap's reserves from the map tiles too.
+  Future<void> want(String key, List<LatLng> path, {TileLoader? tile}) async {
     if (key == _key || path.isEmpty) return;
     _key = key;
     final had = _kept[key];
@@ -466,7 +604,31 @@ class LandmarkLookup extends ChangeNotifier {
     walk = null;
     loading = true;
     notifyListeners();
-    final found = await lookUpFrame(frameOf(path), path: path);
+    final results = await Future.wait([
+      lookUpFrame(frameOf(path), path: path),
+      tile == null ? Future.value(const <Area>[]) : reservesAlong(path, tile),
+    ]);
+    var found = results[0] as Landmarks;
+    final reserves = results[1] as List<Area>;
+    if (reserves.isNotEmpty) {
+      found = Landmarks(
+        listed: found.listed,
+        monuments: found.monuments,
+        parks: found.parks,
+        battlefields: found.battlefields,
+        worldHeritage: found.worldHeritage,
+        nature: found.nature,
+        reserves: reserves,
+        wiki: found.wiki,
+        passed: passedOnTheWay(path,
+            listed: found.listed,
+            monuments: [...found.monuments, ...found.parks, ...found.battlefields, ...found.worldHeritage],
+            nature: found.nature,
+            reserves: reserves,
+            wiki: found.wiki),
+        unreached: found.unreached,
+      );
+    }
     if (found.unreached.isEmpty) _kept[key] = found;
     if (_key != key) return;
     walk = found;

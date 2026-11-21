@@ -10,6 +10,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
 
 import '../main.dart' show ink, paper, sepia;
+import 'landmarks.dart' show reserveKinds;
 
 const _fontIt = ['Noto Sans Italic'];
 
@@ -127,14 +128,6 @@ Map<String, Object?> baseStyle(String source) => {
         },
       ],
     };
-
-/// The kinds of OpenStreetMap park drawn as reserves, and what each is
-/// called in a label.
-const reserveKinds = {
-  'nature_reserve': 'Nature reserve',
-  'protected_area': 'Protected area',
-  'national_park': 'National park',
-};
 
 /// Nature reserves from OpenStreetMap (the tiles' park layer: RSPB, Wildlife
 /// Trust and other reserves, protected areas, national parks), with the
