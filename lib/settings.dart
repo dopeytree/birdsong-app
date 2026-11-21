@@ -211,6 +211,10 @@ class Settings extends ChangeNotifier {
   /// name; '' for none.
   String mapRecordsSci = '';
 
+  /// Wildlife pictures on the map: a deer in a wood, a whale at sea, for
+  /// decoration (from the map's own tiles; nothing looked up).
+  bool mapWildlife = true;
+
   static Future<Settings> load(Directory dir) async {
     final s = Settings._(File('${dir.path}/settings.json'));
     try {
@@ -294,6 +298,7 @@ class Settings extends ChangeNotifier {
     mapShowReserves = (j['mapShowReserves'] as bool?) ?? mapShowReserves;
     mapShowHides = (j['mapShowHides'] as bool?) ?? mapShowHides;
     mapRecordsSci = (j['mapRecordsSci'] as String?) ?? mapRecordsSci;
+    mapWildlife = (j['mapWildlife'] as bool?) ?? mapWildlife;
     // Settings saved before defaults v2 still carry the first test build's
     // defaults (3 s, 50 %); move those, and only those, to the new ones.
     if (((j['defaults'] as num?) ?? 1) < 2) {
@@ -361,6 +366,7 @@ class Settings extends ChangeNotifier {
         'mapShowReserves': mapShowReserves,
         'mapShowHides': mapShowHides,
         'mapRecordsSci': mapRecordsSci,
+        'mapWildlife': mapWildlife,
       };
 
   void update(void Function(Settings s) change) {

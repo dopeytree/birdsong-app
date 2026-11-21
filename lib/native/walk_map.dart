@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -16,6 +17,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
 import '../settings.dart';
 import 'bird_records.dart';
+import 'wildlife.dart';
 import '../store/detection_store.dart';
 import 'contours.dart';
 import 'landmarks.dart';
@@ -233,6 +235,12 @@ class _WalkMapState extends State<WalkMap> {
 
   // the layers panel, and the GBIF number of the bird whose records show
   bool _layersOpen = false;
+
+  // wildlife pictures: the animal (or none) for each tile asked, and those
+  // for the view
+  static final Map<String, Critter?> _critterCache = {};
+  List<Critter> _critters = const [];
+  int _critterRun = 0;
   String _recordsFor = '';
   int? _recordsKey;
   _Kit? _kit;
@@ -314,6 +322,10 @@ class _WalkMapState extends State<WalkMap> {
       _focusSeen = widget.landmarks?.focusAsked ?? 0;
     }
     _askLandmarks();
+    // the pictures switched on: find them for this view
+    if ((widget.settings?.mapWildlife ?? true) && _critters.isEmpty && _ready) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _findCritters());
+    }
     if (widget.walk?.key != old.walk?.key) _dragged = false;
     if (_ready && !_dragged && widget.walk?.key != _fittedTo) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _fit());
@@ -374,6 +386,42 @@ class _WalkMapState extends State<WalkMap> {
     if (l == null || !mounted || !_ready) return;
     final c = _map.camera, b = c.visibleBounds;
     l.look(b.west, b.south, b.east, b.north, c.zoom);
+  }
+
+  /// The wildlife pictures for the view: one tile two zooms out at a time,
+  /// read on a background isolate and kept for the run.
+  Future<void> _findCritters() async {
+    final kit = _kit, omt = kit?.providers['omt'];
+    if (!mounted || !_ready || omt == null || !(widget.settings?.mapWildlife ?? true)) {
+      if (_critters.isNotEmpty && mounted) setState(() => _critters = const []);
+      return;
+    }
+    final run = ++_critterRun;
+    final c = _map.camera, b = c.visibleBounds;
+    final z = math.min(critterZoom(c.zoom), omt.maximumZoom);
+    final r = tileRange(b.west, math.max(-85.0, b.south), b.east, math.min(85.0, b.north), z);
+    if ((r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1) > 36) return;
+    final found = <Critter>[];
+    for (var x = r.x0; x <= r.x1; x++) {
+      for (var y = r.y0; y <= r.y1; y++) {
+        final key = '$z/$x/$y';
+        if (!_critterCache.containsKey(key)) {
+          Critter? got;
+          try {
+            final res = await omt.load(vt.TileKey(z, x, y));
+            if (res is vt.TileResponseData) {
+              final bytes = res.bytes, tz = z, tx = x, ty = y;
+              got = await Isolate.run(() => critterFromBytes(bytes, tz, tx, ty));
+            }
+          } catch (_) {}
+          _critterCache[key] = got;
+          if (run != _critterRun || !mounted) return;
+        }
+        final got = _critterCache[key];
+        if (got != null) found.add(got);
+      }
+    }
+    if (run == _critterRun && mounted) setState(() => _critters = found);
   }
 
   /// Back to the walk, or the station: the home button.
@@ -452,7 +500,10 @@ class _WalkMapState extends State<WalkMap> {
     _contourTimer?.cancel();
     _contourTimer = Timer(const Duration(milliseconds: 150), _traceContours);
     _lookTimer?.cancel();
-    _lookTimer = Timer(const Duration(milliseconds: 600), _lookAround);
+    _lookTimer = Timer(const Duration(milliseconds: 600), () {
+      _lookAround();
+      _findCritters();
+    });
   }
 
   // ---- contours, traced here from terrarium tiles -------------------------
@@ -566,6 +617,17 @@ class _WalkMapState extends State<WalkMap> {
       }
     }
     if (spot != null) return _say(p, spot.name, spot.about, page: pageOf(spot.name, spot.about, spot.link));
+    for (final cr in _critters) {
+      if (near(cr.at, 18)) {
+        return _say(p, animalNames[cr.animal] ?? cr.animal, 'A picture for the ${switch (cr.habitat) {
+          'wood' => 'woods',
+          'heath' => 'heath and moor',
+          'wetland' => 'marsh',
+          'water' => 'water',
+          _ => 'sea',
+        }}, not a sighting');
+      }
+    }
     if (widget.landmarks != null && (widget.settings?.mapShowHides ?? true)) {
       final h = _hides.queryRenderedFeatures(p, layerIds: const ['hides', 'viewpoints']);
       if (h.isNotEmpty) {
@@ -1049,6 +1111,7 @@ class _WalkMapState extends State<WalkMap> {
                       _zoom = _map.camera.zoom;
                       _traceContours();
                       _lookAround();
+                      _findCritters();
                     },
                     onPositionChanged: _moved,
                     onTap: _tapped,
@@ -1104,6 +1167,17 @@ class _WalkMapState extends State<WalkMap> {
                         glyphs: kit.glyphs,
                         controller: _hides,
                       ),
+                    // wildlife pictures, for decoration
+                    if (_critters.isNotEmpty && (widget.settings?.mapWildlife ?? true))
+                      MarkerLayer(markers: [
+                        for (final cr in _critters)
+                          Marker(
+                            point: cr.at,
+                            width: _zoom >= 12 ? 36 : 30,
+                            height: _zoom >= 12 ? 36 : 30,
+                            child: IgnorePointer(child: CustomPaint(painter: CritterPainter(cr.animal))),
+                          ),
+                      ]),
                     // the walk
                     if (w != null && w.trail.length > 1)
                       PolylineLayer(polylines: [
@@ -1687,6 +1761,29 @@ class _LayersPanel extends StatelessWidget {
         row('Reserves', 'Nature reserves from OpenStreetMap', s.mapShowReserves, (x, v) => x.mapShowReserves = v),
         row('Hides & viewpoints', 'Where OpenStreetMap has them', s.mapShowHides, (x, v) => x.mapShowHides = v),
         row('Wikipedia places', 'With a line about each', s.mapShowWiki, (x, v) => x.mapShowWiki = v),
+        InkWell(
+          onTap: () => settings.update((x) => x.mapWildlife = !x.mapWildlife),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
+            child: Row(children: [
+              const Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Wildlife pictures', style: TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
+                  Text('A few, for decoration: a deer in the woods',
+                      style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia, height: 1.2)),
+                ]),
+              ),
+              Transform.scale(
+                scale: .75,
+                child: Switch(
+                  value: s.mapWildlife,
+                  activeTrackColor: madder,
+                  onChanged: (v) => settings.update((x) => x.mapWildlife = v),
+                ),
+              ),
+            ]),
+          ),
+        ),
         const Divider(height: 1, color: paperDeep),
         Padding(
           padding: const EdgeInsets.fromLTRB(10, 6, 10, 2),
