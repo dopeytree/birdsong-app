@@ -115,7 +115,8 @@ class _NativePlateState extends State<NativePlate> {
   // Room at the bottom for the share button, as the web plate makes for it
   // (--bs-ui-bottom), so the index rises clear of it.
   // Room at the bottom for the buttons there, so nothing sits under them:
-  // one row: view and map at the left, share at the right.
+  // one row (view, map, calendar at the left, share at the right), and
+  // one more above it for the folded index's heading.
   // Set in each build.
   double _bottomRoom = 40 + 8 + 6;
   final _shotKey = GlobalKey(), _shareKey = GlobalKey();
@@ -274,6 +275,35 @@ class _NativePlateState extends State<NativePlate> {
     _say(on ? 'The walk, on a map.' : 'The plate.', seconds: 2);
   }
 
+  /// The calendar button: a month calendar with the days that have a
+  /// session; picking one shows that day's first session, and the ‹ ›
+  /// step through the rest.
+  Future<void> _pickDay() async {
+    final store = app.store;
+    if (store.sessions.isEmpty) {
+      _say('Nothing recorded yet.', seconds: 2);
+      return;
+    }
+    DateTime day(DateTime t) => DateTime(t.year, t.month, t.day);
+    final days = {for (final x in store.sessions) day(x.start)};
+    final first = days.reduce((a, b) => a.isBefore(b) ? a : b);
+    final last = days.reduce((a, b) => a.isAfter(b) ? a : b);
+    final shown = store.selected;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: shown == null ? last : day(shown.start),
+      firstDate: first,
+      lastDate: last,
+      selectableDayPredicate: (d) => days.contains(day(d)),
+      helpText: 'Sessions on',
+    );
+    if (picked == null || !mounted) return;
+    final that = [for (final x in store.sessions) if (sameDay(x.start, picked)) x];
+    if (that.isEmpty) return;
+    store.select(that.first);
+    if (that.length > 1) _say('${that.length} sessions that day: ‹ › for the others.', seconds: 3);
+  }
+
   /// A cross on the map: the bird's card, from this session's row when it
   /// has one, else from what the walk heard (a bird from another part of
   /// the same walk), as the web map's openBird.
@@ -426,10 +456,12 @@ class _NativePlateState extends State<NativePlate> {
         final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
         final fit = app.settings.nativeFit;
         _bottomRoom = 40 + 8 + 6.0;
+        // the folded index's heading has a row above the buttons
         // Folded away, the index's heading moves into the row along the
         // bottom, between the map and share buttons, and the plate takes
         // the room; opened, the list is where it always was.
         final foldedInline = showIndex && showPlate && !single && app.settings.nativeIndexFolded;
+        if (foldedInline) _bottomRoom += 40;
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
               entries: [
                 for (final r in rows)
@@ -633,46 +665,54 @@ class _NativePlateState extends State<NativePlate> {
                 ),
                 // The walk on a map in place of the collage, at the bottom
                 // left; not in the views of one bird (d and e).
-                // Along the bottom at the left: the plate's view (a to g) in the
-                // corner, so it never moves while stepping through the views,
-                // and the map button beside it, in every view (in d and e the
-                // map is drawn as in the others).
+                // Along the bottom at the left, quick things to do: the plate's
+                // view (a to g) in the corner, so it never moves while
+                // stepping through the views, then the map, then the calendar.
                 Positioned(
                   left: 8,
                   bottom: 8,
-                  child: IconButton(
-                    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                    padding: EdgeInsets.zero,
-                    iconSize: 22,
-                    tooltip: 'Plate: ${mode.name}',
-                    icon: const Icon(Icons.dashboard_outlined),
-                    color: red,
-                    onPressed: _nextMode,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                        padding: EdgeInsets.zero,
+                        iconSize: 22,
+                        tooltip: 'Plate: ${mode.name}',
+                        icon: const Icon(Icons.dashboard_outlined),
+                        color: red,
+                        onPressed: _nextMode,
+                      ),
+                      IconButton(
+                        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                        padding: EdgeInsets.zero,
+                        iconSize: 22,
+                        tooltip: app.settings.showMap ? 'Back to the plate' : 'The walk on a map',
+                        // the same picture on and off, so it is plain what it does
+                        icon: const Icon(Icons.map_outlined),
+                        isSelected: app.settings.showMap,
+                        color: red,
+                        onPressed: _toggleMap,
+                      ),
+                      IconButton(
+                        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                        padding: EdgeInsets.zero,
+                        iconSize: 22,
+                        tooltip: 'Pick a day',
+                        icon: const Icon(Icons.calendar_today_outlined),
+                        color: red,
+                        onPressed: _pickDay,
+                      ),
+                    ],
                   ),
                 ),
-                Positioned(
-                    left: 8 + 40,
-                    bottom: 8,
-                    child: IconButton(
-                      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                      padding: EdgeInsets.zero,
-                      iconSize: 22,
-                      tooltip: app.settings.showMap ? 'Back to the plate' : 'The walk on a map',
-                      // the same picture on and off, so it is plain what it does
-                      icon: const Icon(Icons.map_outlined),
-                      isSelected: app.settings.showMap,
-                      color: red,
-                      onPressed: _toggleMap,
-                    ),
-                  ),
-                // The folded index's heading, level with the two buttons.
+                // The folded index's heading, on a row of its own just above
+                // the buttons along the bottom.
                 if (foldedInline)
                   Positioned(
-                    // clear of the view and map buttons on the left, and of
-                    // share on the right
-                    left: 96,
-                    right: 56,
-                    bottom: 8,
+                    left: 8,
+                    right: 8,
+                    bottom: 8 + 40,
                     height: 40,
                     child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
                         inline: true),

@@ -564,6 +564,13 @@ class DetectionStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Show [x] on the plate (the calendar's choice).
+  void select(Session x) {
+    if (x.id == _selectedId || !sessions.contains(x)) return;
+    _selectedId = x.id;
+    notifyListeners();
+  }
+
   Future<Session> startSession({
     DateTime? at,
     double? lat,
