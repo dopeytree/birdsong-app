@@ -114,7 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _switch('Heading in small capitals', s.nativeTitleCaps,
                         (v) => s.update((x) => x.nativeTitleCaps = v)),
                     _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
-                        const {'sepia': 'Sepia (default)', 'ink': 'Black, as the title'},
+                        const {'ink': 'Black, as the title (default)', 'sepia': 'Sepia'},
                         (v) => s.update((x) => x.nativeHeadingInk = v == 'ink')),
                     _switch('Species and calls under the date', s.nativeTotals,
                         (v) => s.update((x) => x.nativeTotals = v)),

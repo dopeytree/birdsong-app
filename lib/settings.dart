@@ -167,8 +167,8 @@ class Settings extends ChangeNotifier {
   bool nativeTitleCaps = true;
 
   /// The Flutter plate: the lines under the title (session number, date,
-  /// place, weather) in the title's ink rather than sepia.
-  bool nativeHeadingInk = false;
+  /// place, weather) in the title's ink (the default) or in sepia.
+  bool nativeHeadingInk = true;
 
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;

@@ -118,15 +118,11 @@ class IndexView extends StatelessWidget {
       return LayoutBuilder(builder: (context, box) {
         final w = box.maxWidth;
         return Center(
-          // the rules run as wide as the row allows, within reason
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
-            child: _heading(
-              stretch: true,
-              gap: w >= 280 ? 12 : 6,
-              pad: w >= 280 ? 8 : 5,
-              titleSize: w >= 300 ? null : 13.5,
-            ),
+          child: _heading(
+            rules: w >= 360 ? 28 : (w >= 280 ? 16 : 10),
+            gap: w >= 280 ? 10 : 6,
+            pad: w >= 280 ? 8 : 5,
+            titleSize: w >= 300 ? null : 13.5,
           ),
         );
       });
@@ -175,9 +171,7 @@ class IndexView extends StatelessWidget {
   }
 
   /// ‹ —— Index of species —— ›
-  /// [stretch]: the rules take whatever room the row has (the folded
-  /// heading); otherwise they are [rules] wide.
-  Widget _heading({double rules = 56, double pad = 12, double gap = 14.4, double? titleSize, bool stretch = false}) {
+  Widget _heading({double rules = 56, double pad = 12, double gap = 14.4, double? titleSize}) {
     Widget step(int by, String glyph, String label, bool on) => Visibility(
           visible: on,
           maintainSize: true,
@@ -201,9 +195,7 @@ class IndexView extends StatelessWidget {
             ),
           ),
         );
-    final Widget line = stretch
-        ? const Expanded(child: SizedBox(height: 1, child: ColoredBox(color: rule)))
-        : SizedBox(width: rules, height: 1, child: const ColoredBox(color: rule));
+    final line = SizedBox(width: rules, height: 1, child: const ColoredBox(color: rule));
     final space = SizedBox(width: gap);
     final size = titleSize ?? (fit ? 16.0 : 20.0);
     return Row(
@@ -211,14 +203,13 @@ class IndexView extends StatelessWidget {
       children: [
         if (steps) step(-1, '‹', 'Earlier session', canPrev),
         Flexible(
-          fit: stretch ? FlexFit.tight : FlexFit.loose,
           child: Semantics(
             button: foldable,
             expanded: foldable ? !folded : null,
             child: InkWell(
               onTap: foldable ? onFold : null,
               child: Row(
-                mainAxisSize: stretch ? MainAxisSize.max : MainAxisSize.min,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   line,
                   space,

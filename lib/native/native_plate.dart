@@ -799,7 +799,7 @@ class _NativePlateState extends State<NativePlate> {
     // or, when chosen (Settings > Experimental, nativeTitleCaps), the whole
     // heading in small capitals as Index of Species is set
     final capsOn = app.settings.nativeTitleCaps;
-    // the lines under the title in sepia, or in the title's ink when chosen
+    // the lines under the title in the title's ink, or in sepia when chosen
     // (Settings > Experimental, nativeHeadingInk)
     final lines = app.settings.nativeHeadingInk ? ink : sepia;
     final sub = capsOn
