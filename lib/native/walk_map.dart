@@ -14,6 +14,8 @@ import 'package:latlong2/latlong.dart' hide Path;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
+import '../settings.dart';
+import 'bird_records.dart';
 import '../store/detection_store.dart';
 import 'contours.dart';
 import 'landmarks.dart';
@@ -29,8 +31,9 @@ const _credit = 'Elevation: Mapzen Terrain Tiles (AWS) · OpenFreeMap © OpenMap
 /// v3; Wikipedia CC BY-SA), shown while they are on.
 String _extrasCredit() {
   final y = DateTime.now().year;
-  return '\n© Historic England $y. © Natural England copyright. Contains Ordnance Survey data '
-      '© Crown copyright and database right $y · Places from Wikipedia (CC BY-SA)';
+  return '\n© Historic England $y. © Natural England copyright. Contains NatureScot information. '
+      'Contains Natural Resources Wales information © Natural Resources Wales and Database Right. '
+      'Contains Ordnance Survey data © Crown copyright and database right $y · Places from Wikipedia (CC BY-SA)';
 }
 
 const _searchCredit = '\nSearch: Photon by komoot, © OpenStreetMap contributors';
@@ -122,13 +125,16 @@ class Walk {
 /// The map, its style and fonts, read once a run (and again after a
 /// failure, so a connection that comes back is used).
 class _Kit {
-  _Kit(this.base, this.labels, this.reserves, this.providers, this.sprites, this.glyphs);
+  _Kit(this.base, this.labels, this.reserves, this.hides, this.providers, this.sprites, this.glyphs);
 
   final vt.Theme base;
   final vt.Theme labels;
 
   /// OpenStreetMap's nature reserves, with the extras.
   final vt.Theme reserves;
+
+  /// Bird hides and viewpoints, with the extras.
+  final vt.Theme hides;
   final vt.TileProviders providers;
   final vt.SpriteAtlas sprites;
   final vt.GlyphSource glyphs;
@@ -158,6 +164,7 @@ class _Kit {
         reader.read(baseStyle('omt'), id: 'birdsong-walk-base-1'),
         reader.read(labelStyle('omt'), id: 'birdsong-walk-labels-1'),
         reader.read(reservesStyle('omt'), id: 'birdsong-walk-reserves-1'),
+        reader.read(hidesStyle('omt'), id: 'birdsong-walk-hides-1'),
         vt.TileProviders({'omt': provider}),
         await mapSprites(),
         vt.GlyphSource.network(_glyphs),
@@ -188,6 +195,8 @@ class WalkMap extends StatefulWidget {
     this.landmarks,
     this.onFullScreen,
     this.fullScreen = false,
+    this.settings,
+    this.species = const [],
   });
 
   final Walk? walk;
@@ -205,6 +214,13 @@ class WalkMap extends StatefulWidget {
   /// This map is the full-screen one: its button closes it.
   final bool fullScreen;
 
+  /// The app's settings, for the layers button (what the map shows).
+  final Settings? settings;
+
+  /// The birds heard, most first, for "Bird records": which one's records
+  /// (GBIF) to show.
+  final List<({String sci, String common})> species;
+
   @override
   State<WalkMap> createState() => _WalkMapState();
 }
@@ -213,6 +229,12 @@ class _WalkMapState extends State<WalkMap> {
   final _map = MapController();
   final _peaks = vt.VectorTileLayerController();
   final _reserves = vt.VectorTileLayerController();
+  final _hides = vt.VectorTileLayerController();
+
+  // the layers panel, and the GBIF number of the bird whose records show
+  bool _layersOpen = false;
+  String _recordsFor = '';
+  int? _recordsKey;
   _Kit? _kit;
   String? _failed;
   bool _ready = false;
@@ -327,9 +349,22 @@ class _WalkMapState extends State<WalkMap> {
       return r is vt.TileResponseData ? r.bytes : null;
     }
 
+    final s = widget.settings;
+    final kinds = s == null
+        ? allLayers
+        : {
+            if (s.mapShowHeritage) 'heritage',
+            if (s.mapShowNature) 'nature',
+            if (s.mapShowWiki) 'wiki',
+          };
     // not while building: the lookup tells its listeners at once
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) l.want(w.key, path, tile: tile);
+      if (!mounted) return;
+      final before = l.layers;
+      l.useLayers(kinds, withReserves: s?.mapShowReserves ?? true);
+      l.want(w.key, path, tile: tile);
+      // layers changed: what is in view is asked for again too
+      if (!identical(before, l.layers)) _lookAround();
     });
   }
 
@@ -531,6 +566,14 @@ class _WalkMapState extends State<WalkMap> {
       }
     }
     if (spot != null) return _say(p, spot.name, spot.about, page: pageOf(spot.name, spot.about, spot.link));
+    if (widget.landmarks != null && (widget.settings?.mapShowHides ?? true)) {
+      final h = _hides.queryRenderedFeatures(p, layerIds: const ['hides', 'viewpoints']);
+      if (h.isNotEmpty) {
+        final hide = h.first.properties['subclass'] == 'bird_hide';
+        final name = '${h.first.properties['name'] ?? ''}';
+        return _say(p, name.isEmpty ? (hide ? 'Bird hide' : 'Viewpoint') : name, hide ? 'Bird hide' : 'Viewpoint');
+      }
+    }
     final peak = _peaks.queryRenderedFeatures(p, layerIds: const ['peaks']);
     if (peak.isNotEmpty) {
       final props = peak.first.properties, ele = props['ele'];
@@ -539,7 +582,7 @@ class _WalkMapState extends State<WalkMap> {
     for (final a in [...?found?.monuments, ...?found?.battlefields, ...?found?.parks]) {
       if (inShape(ll, a.shape)) return _say(p, a.name, a.about, page: pageOf(a.name, a.about, a.link));
     }
-    if (widget.landmarks != null) {
+    if (widget.landmarks != null && (widget.settings?.mapShowReserves ?? true)) {
       for (final f in _reserves.queryRenderedFeatures(p, layerIds: const ['reserve-fill'])) {
         final name = f.properties['name'];
         if (name == null || '$name'.isEmpty) continue;
@@ -947,8 +990,21 @@ class _WalkMapState extends State<WalkMap> {
 
   static const _maxSpots = 150;
 
+  /// The chosen bird's GBIF number, looked up when the choice changes.
+  void _followRecords() {
+    final sci = widget.settings?.mapRecordsSci ?? '';
+    if (sci == _recordsFor) return;
+    _recordsFor = sci;
+    _recordsKey = null;
+    if (sci.isEmpty) return;
+    BirdRecords.keyFor(sci).then((k) {
+      if (mounted && _recordsFor == sci) setState(() => _recordsKey = k);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    _followRecords();
     final kit = _kit, w = widget.walk, note = _note();
     final layers = _layers();
     final pts = _points;
@@ -1014,13 +1070,23 @@ class _WalkMapState extends State<WalkMap> {
                     PolylineLayer(polylines: _contourLines()),
                     MarkerLayer(markers: _contourLabels()),
                     // extras: OpenStreetMap's nature reserves, from the tiles
-                    if (widget.landmarks != null)
+                    if (widget.landmarks != null && (widget.settings?.mapShowReserves ?? true))
                       vt.VectorTileLayer(
                         theme: kit.reserves,
                         tileProviders: kit.providers,
                         sprites: kit.sprites,
                         glyphs: kit.glyphs,
                         controller: _reserves,
+                      ),
+                    // where the chosen bird has been recorded (GBIF), faintly
+                    if (_recordsKey != null)
+                      Opacity(
+                        opacity: .55,
+                        child: TileLayer(
+                          urlTemplate: BirdRecords.tiles(_recordsKey!),
+                          userAgentPackageName: 'uk.co.edstone.birdsongApp',
+                          maxNativeZoom: 14,
+                        ),
                       ),
                     vt.VectorTileLayer(
                       theme: kit.labels,
@@ -1030,6 +1096,14 @@ class _WalkMapState extends State<WalkMap> {
                       controller: _peaks,
                     ),
                     if (layers != null) MarkerLayer(markers: layers.spots),
+                    if (widget.landmarks != null && (widget.settings?.mapShowHides ?? true))
+                      vt.VectorTileLayer(
+                        theme: kit.hides,
+                        tileProviders: kit.providers,
+                        sprites: kit.sprites,
+                        glyphs: kit.glyphs,
+                        controller: _hides,
+                      ),
                     // the walk
                     if (w != null && w.trail.length > 1)
                       PolylineLayer(polylines: [
@@ -1055,6 +1129,17 @@ class _WalkMapState extends State<WalkMap> {
                     homeTip: w?.station != null ? 'Back to the station' : 'Back to the walk',
                     full: widget.onFullScreen,
                     isFull: widget.fullScreen,
+                    layers: widget.settings == null ? null : () => setState(() => _layersOpen = !_layersOpen),
+                  ),
+                ),
+              if (kit != null && _layersOpen && widget.settings != null)
+                Positioned(
+                  left: 46,
+                  top: 10,
+                  child: _LayersPanel(
+                    settings: widget.settings!,
+                    species: widget.species,
+                    onClose: () => setState(() => _layersOpen = false),
                   ),
                 ),
               if (kit != null)
@@ -1071,7 +1156,10 @@ class _WalkMapState extends State<WalkMap> {
                 Positioned(
                     right: 0,
                     bottom: 0,
-                    child: _Credit(_credit + (widget.landmarks != null ? _extrasCredit() : '') + _searchCredit)),
+                    child: _Credit(_credit +
+                        (widget.landmarks != null ? _extrasCredit() : '') +
+                        (_recordsKey != null ? '\nBird records: GBIF.org' : '') +
+                        _searchCredit)),
               if (kDebugMode && widget.landmarks != null)
                 Positioned(
                   left: 44,
@@ -1385,7 +1473,7 @@ class _EndPainter extends CustomPainter {
 
 /// The map's + and − at the top left, on paper.
 class _ZoomButtons extends StatelessWidget {
-  const _ZoomButtons({required this.map, this.home, this.homeTip = '', this.full, this.isFull = false});
+  const _ZoomButtons({required this.map, this.home, this.homeTip = '', this.full, this.isFull = false, this.layers});
 
   final MapController map;
 
@@ -1396,6 +1484,9 @@ class _ZoomButtons extends StatelessWidget {
   /// Full screen, or back from it.
   final VoidCallback? full;
   final bool isFull;
+
+  /// Opens the layers panel.
+  final VoidCallback? layers;
 
   @override
   Widget build(BuildContext context) {
@@ -1455,6 +1546,24 @@ class _ZoomButtons extends StatelessWidget {
             ),
           ),
         ],
+        if (layers != null) ...[
+          Container(width: 29, height: 1, color: paperDeep),
+          Tooltip(
+            message: 'Layers',
+            child: Semantics(
+              button: true,
+              label: 'What the map shows',
+              child: InkWell(
+                onTap: layers,
+                child: const SizedBox(
+                  width: 29,
+                  height: 29,
+                  child: Center(child: Icon(Icons.layers_outlined, size: 17, color: ink)),
+                ),
+              ),
+            ),
+          ),
+        ],
       ]),
     );
   }
@@ -1485,4 +1594,133 @@ class _CreditState extends State<_Credit> {
               style: const TextStyle(fontFamily: serif, fontSize: 10, color: ink, height: 1.3)),
         ),
       );
+}
+
+/// What the map shows: a box of switches beside the map's buttons. Each
+/// kind of extra on or off (off, it isn't looked up either), and the bird
+/// whose records (GBIF) are drawn. Turning any landmark on turns the
+/// landmarks on (Settings > Map), and the last off turns them off.
+class _LayersPanel extends StatelessWidget {
+  const _LayersPanel({required this.settings, required this.species, required this.onClose});
+
+  final Settings settings;
+  final List<({String sci, String common})> species;
+  final VoidCallback onClose;
+
+  void _set(void Function(Settings s) change) => settings.update((s) {
+        change(s);
+        s.mapExtras = s.mapShowHeritage || s.mapShowNature || s.mapShowWiki || s.mapShowReserves || s.mapShowHides;
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final s = settings, on = s.mapExtras;
+    Widget row(String title, String sub, bool value, void Function(Settings s, bool v) put) => InkWell(
+          onTap: () => _set((x) {
+            // with the landmarks off, a switch turns that one on alone
+            if (!on) {
+              x
+                ..mapShowHeritage = false
+                ..mapShowNature = false
+                ..mapShowWiki = false
+                ..mapShowReserves = false
+                ..mapShowHides = false;
+            }
+            put(x, !(on && value));
+          }),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: const TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
+                  Text(sub,
+                      style: const TextStyle(
+                          fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia, height: 1.2)),
+                ]),
+              ),
+              Transform.scale(
+                scale: .75,
+                child: Switch(
+                  value: on && value,
+                  activeTrackColor: madder,
+                  onChanged: (v) => _set((x) {
+                    if (!on) {
+                      x
+                        ..mapShowHeritage = false
+                        ..mapShowNature = false
+                        ..mapShowWiki = false
+                        ..mapShowReserves = false
+                        ..mapShowHides = false;
+                    }
+                    put(x, v);
+                  }),
+                ),
+              ),
+            ]),
+          ),
+        );
+    final chosen = species.any((b) => b.sci == s.mapRecordsSci) ? s.mapRecordsSci : '';
+    return Container(
+      width: 264,
+      decoration: BoxDecoration(color: paper, border: Border.all(color: paperDeep), boxShadow: const [
+        BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 6), blurRadius: 18),
+      ]),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(10, 6, 0, 2),
+            child: Text('On the map',
+                style: TextStyle(fontFamily: serif, fontSize: 13, letterSpacing: 1.2, color: sepia)),
+          ),
+          const Spacer(),
+          IconButton(
+            tooltip: 'Close',
+            visualDensity: VisualDensity.compact,
+            onPressed: onClose,
+            icon: const Icon(Icons.close, size: 16, color: sepia),
+          ),
+        ]),
+        row('Heritage', 'Listed buildings, monuments, parks, battlefields', s.mapShowHeritage,
+            (x, v) => x.mapShowHeritage = v),
+        row('Nature sites', 'SSSIs, bird SPAs, nature reserves, wetlands', s.mapShowNature, (x, v) => x.mapShowNature = v),
+        row('Reserves', 'Nature reserves from OpenStreetMap', s.mapShowReserves, (x, v) => x.mapShowReserves = v),
+        row('Hides & viewpoints', 'Where OpenStreetMap has them', s.mapShowHides, (x, v) => x.mapShowHides = v),
+        row('Wikipedia places', 'With a line about each', s.mapShowWiki, (x, v) => x.mapShowWiki = v),
+        const Divider(height: 1, color: paperDeep),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 2),
+          child: Text('Bird records',
+              style: const TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+          child: species.isEmpty
+              ? const Text('No birds heard here yet',
+                  style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia))
+              : DropdownButton<String>(
+                  isExpanded: true,
+                  value: chosen,
+                  underline: const SizedBox.shrink(),
+                  style: const TextStyle(fontFamily: serif, fontSize: 14, color: ink),
+                  dropdownColor: paper,
+                  items: [
+                    const DropdownMenuItem(
+                        value: '',
+                        child: Text('None', style: TextStyle(fontStyle: FontStyle.italic, color: sepia))),
+                    for (final b in species)
+                      DropdownMenuItem(value: b.sci, child: Text(b.common, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (v) => settings.update((x) => x.mapRecordsSci = v ?? ''),
+                ),
+        ),
+        if (chosen.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(10, 0, 10, 8),
+            child: Text('Where it has been recorded, from GBIF: darker hexagons, more records.',
+                style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia)),
+          ),
+      ]),
+    );
+  }
 }

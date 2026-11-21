@@ -29,16 +29,56 @@ const reserveKinds = {
   'national_park': 'National park',
 };
 
-/// A nature site's kind: its short name, what it stands for, and where it
-/// is looked up.
-typedef NatureKind = ({String kind, String full, String url});
+const _ns = 'https://services1.arcgis.com/LM9GyVFsughzHdbO/arcgis/rest/services';
+
+/// A nature site's kind: its short name, what it stands for, where it is
+/// looked up (an ArcGIS layer, or "wfs:" and a Welsh WFS layer), whose it is
+/// (for "Couldn't reach") and the country it covers.
+typedef NatureKind = ({String kind, String full, String url, String who, String region});
 
 const natureKinds = <NatureKind>[
-  (kind: 'SPA', full: 'Special Protection Area (birds)', url: '$_ne/Special_Protection_Areas_England/FeatureServer/0'),
-  (kind: 'SSSI', full: 'Site of Special Scientific Interest', url: '$_ne/SSSI_England/FeatureServer/0'),
-  (kind: 'NNR', full: 'National Nature Reserve', url: '$_ne/National_Nature_Reserves_England/FeatureServer/0'),
-  (kind: 'LNR', full: 'Local Nature Reserve', url: '$_ne/Local_Nature_Reserves_England/FeatureServer/0'),
+  // England: Natural England
+  (kind: 'SPA', full: 'Special Protection Area (birds)', url: '$_ne/Special_Protection_Areas_England/FeatureServer/0',
+      who: 'Natural England', region: 'england'),
+  (kind: 'SSSI', full: 'Site of Special Scientific Interest', url: '$_ne/SSSI_England/FeatureServer/0',
+      who: 'Natural England', region: 'england'),
+  (kind: 'NNR', full: 'National Nature Reserve', url: '$_ne/National_Nature_Reserves_England/FeatureServer/0',
+      who: 'Natural England', region: 'england'),
+  (kind: 'LNR', full: 'Local Nature Reserve', url: '$_ne/Local_Nature_Reserves_England/FeatureServer/0',
+      who: 'Natural England', region: 'england'),
+  // Scotland: NatureScot
+  (kind: 'SPA', full: 'Special Protection Area (birds)', url: '$_ns/Special_Protection_Areas/FeatureServer/0',
+      who: 'NatureScot', region: 'scotland'),
+  (kind: 'SSSI', full: 'Site of Special Scientific Interest', url: '$_ns/Sites_of_Special_Scientific_Interest/FeatureServer/0',
+      who: 'NatureScot', region: 'scotland'),
+  (kind: 'NNR', full: 'National Nature Reserve', url: '$_ns/National_Nature_Reserves/FeatureServer/0',
+      who: 'NatureScot', region: 'scotland'),
+  (kind: 'LNR', full: 'Local Nature Reserve', url: '$_ns/Local_Nature_Reserves/FeatureServer/0',
+      who: 'NatureScot', region: 'scotland'),
+  (kind: 'Ramsar', full: 'Ramsar wetland of international importance',
+      url: '$_ns/RAMSAR_Wetlands_of_International_Importance/FeatureServer/0', who: 'NatureScot', region: 'scotland'),
+  // Wales: Natural Resources Wales (DataMap Wales WFS)
+  (kind: 'SSSI', full: 'Site of Special Scientific Interest', url: 'wfs:inspire-nrw:NRW_SSSI',
+      who: 'Natural Resources Wales', region: 'wales'),
+  (kind: 'NNR', full: 'National Nature Reserve', url: 'wfs:inspire-nrw:NRW_NNR', who: 'Natural Resources Wales', region: 'wales'),
 ];
+
+/// Roughly each country's box [west, south, east, north], so a view asks
+/// only the services for the countries it touches.
+const regionBoxes = {
+  'england': [-6.5, 49.8, 1.9, 55.9],
+  'scotland': [-8.8, 54.6, -0.6, 61.0],
+  'wales': [-5.5, 51.3, -2.6, 53.5],
+};
+
+/// Whether [frame] touches [region]'s box.
+bool touches(List<double> frame, String region) {
+  final b = regionBoxes[region]!;
+  return frame[0] <= b[2] && frame[2] >= b[0] && frame[1] <= b[3] && frame[3] >= b[1];
+}
+
+/// The kinds of extra that can be looked up.
+const allLayers = {'heritage', 'nature', 'wiki'};
 
 /// Rings of polygons: each polygon is its outline, then its holes.
 typedef Shape = List<List<List<LatLng>>>;
@@ -525,6 +565,19 @@ Future<List<({Map<String, dynamic> props, Map<String, dynamic> geometry})>> _arc
   return featuresOf(await _getJson(Uri.parse('$url/query').replace(queryParameters: {...q, 'f': 'json'})));
 }
 
+/// A Welsh layer from DataMap Wales's WFS, in GeoJSON (WFS 1.0: the box
+/// and the answer are longitude first).
+Future<List<({Map<String, dynamic> props, Map<String, dynamic> geometry})>> _wfs(String typeName, List<double> frame) async =>
+    featuresOf(await _getJson(Uri.https('datamap.gov.wales', '/geoserver/ows', {
+      'service': 'WFS',
+      'version': '1.0.0',
+      'request': 'GetFeature',
+      'typeName': typeName,
+      'outputFormat': 'application/json',
+      'srsName': 'EPSG:4326',
+      'bbox': frame.join(','),
+    })));
+
 Future<List<Spot>> _wikiNear(List<double> f, int limit) async => wikiOf(await _getJson(Uri.https('en.wikipedia.org', '/w/api.php', {
       'action': 'query',
       'format': 'json',
@@ -543,8 +596,17 @@ Future<List<Spot>> _wikiNear(List<double> f, int limit) async => wikiOf(await _g
 ///
 /// [detail] is how simplified areas may be, in degrees (about a pixel at
 /// the zoom they're for); a walk's own lookup keeps the finest.
+///
+/// [layers] says which kinds to ask for (see [allLayers]); Historic
+/// England only for a frame touching England, and each nature service only
+/// for its own country.
 Future<Landmarks> lookUpFrame(List<double> frame,
-    {bool gradeTwo = false, List<LatLng>? path, int wikiLimit = 20, double detail = 0}) async {
+    {bool gradeTwo = false,
+    List<LatLng>? path,
+    int wikiLimit = 20,
+    double detail = 0,
+    Set<String> layers = allLayers}) async {
+  final heritage = layers.contains('heritage') && touches(frame, 'england');
   final unreached = <String>[];
   var listed = <Spot>[], wiki = <Spot>[];
   var monuments = <Area>[], parks = <Area>[], battlefields = <Area>[], worldHeritage = <Area>[], nature = <Area>[];
@@ -558,6 +620,7 @@ Future<Landmarks> lookUpFrame(List<double> frame,
         return <Area>[];
       });
   await Future.wait([
+    if (heritage)
     _arc('$_he/0', frame, where: gradeTwo ? null : "Grade IN ('I','II*')").then((fs) {
       listed = [
         for (final f in fs)
@@ -568,6 +631,7 @@ Future<Landmarks> lookUpFrame(List<double> frame,
     }).catchError((Object _) {
       unreached.add('Historic England (buildings)');
     }),
+    if (heritage)
     _arc('$_he/6', frame, simplify: math.max(.00002, detail)).then((fs) {
       monuments = [
         for (final f in fs) Area(nameOf(f.props), 'Scheduled monument', shapeOf(f.geometry), link: heLink(f.props))
@@ -575,23 +639,28 @@ Future<Landmarks> lookUpFrame(List<double> frame,
     }).catchError((Object _) {
       unreached.add('Historic England (monuments)');
     }),
-    areas('$_he/7', 'Registered park and garden', 'Historic England (parks and gardens)').then((a) => parks = a),
-    areas('$_he/8', 'Registered battlefield', 'Historic England (battlefields)').then((a) => battlefields = a),
-    areas('$_he/10', 'World Heritage Site', 'Historic England (World Heritage Sites)', simplify: .0001)
-        .then((a) => worldHeritage = a),
-    Future.wait([
-      for (final k in natureKinds)
-        _arc(k.url, frame, simplify: math.max(.0001, detail))
-            .then((fs) => [for (final f in fs) Area(nameOf(f.props), k.full, shapeOf(f.geometry), kind: k.kind)])
-            .catchError((Object _) {
-          unreached.add('Natural England (${k.kind})');
-          return <Area>[];
-        }),
-    ]).then((all) => nature = [for (final a in all) ...a]),
-    _wikiNear(frame, wikiLimit).then((w) => wiki = w).catchError((Object _) {
-      unreached.add('Wikipedia');
-      return <Spot>[];
-    }),
+    if (heritage) ...[
+      areas('$_he/7', 'Registered park and garden', 'Historic England (parks and gardens)').then((a) => parks = a),
+      areas('$_he/8', 'Registered battlefield', 'Historic England (battlefields)').then((a) => battlefields = a),
+      areas('$_he/10', 'World Heritage Site', 'Historic England (World Heritage Sites)', simplify: .0001)
+          .then((a) => worldHeritage = a),
+    ],
+    if (layers.contains('nature'))
+      Future.wait([
+        for (final k in natureKinds)
+          if (touches(frame, k.region))
+            (k.url.startsWith('wfs:') ? _wfs(k.url.substring(4), frame) : _arc(k.url, frame, simplify: math.max(.0001, detail)))
+                .then((fs) => [for (final f in fs) Area(nameOf(f.props), k.full, shapeOf(f.geometry), kind: k.kind)])
+                .catchError((Object _) {
+              unreached.add('${k.who} (${k.kind})');
+              return <Area>[];
+            }),
+      ]).then((all) => nature = [for (final a in all) ...a]),
+    if (layers.contains('wiki'))
+      _wikiNear(frame, wikiLimit).then((w) => wiki = w).catchError((Object _) {
+        unreached.add('Wikipedia');
+        return <Spot>[];
+      }),
   ]);
   return Landmarks(
     listed: listed,
@@ -658,8 +727,13 @@ List<(String, String, Shape)> _reserveParts(Uint8List bytes, int z, int x, int y
 /// [lookUpFrame] on a thread of its own, so reading what the services send
 /// (some of it large: a sea's worth of coastline) never stalls the map.
 Future<Landmarks> lookUpAway(List<double> frame,
-        {bool gradeTwo = false, List<LatLng>? path, int wikiLimit = 20, double detail = 0}) =>
-    Isolate.run(() => lookUpFrame(frame, gradeTwo: gradeTwo, path: path, wikiLimit: wikiLimit, detail: detail));
+        {bool gradeTwo = false,
+        List<LatLng>? path,
+        int wikiLimit = 20,
+        double detail = 0,
+        Set<String> layers = allLayers}) =>
+    Isolate.run(() =>
+        lookUpFrame(frame, gradeTwo: gradeTwo, path: path, wikiLimit: wikiLimit, detail: detail, layers: layers));
 
 /// The area a view is looked up for: [bounds] and a quarter again round it,
 /// snapped out to a hundredth of a degree so small moves ask nothing new.
@@ -706,6 +780,27 @@ class LandmarkLookup extends ChangeNotifier {
   static final List<(List<double>, bool, Landmarks)> _views = [];
 
   String? _key;
+
+  /// Which kinds are looked up (Settings: the map's layers), and the
+  /// reserves from the tiles for what the walk passed.
+  Set<String> layers = allLayers;
+  bool reserves = true;
+
+  /// Look up only [kinds] (and [withReserves]) from now on; when that
+  /// changes, forget what was found and say so, so the map asks again.
+  void useLayers(Set<String> kinds, {required bool withReserves}) {
+    if (setEquals(kinds, layers) && withReserves == reserves) return;
+    layers = Set.of(kinds);
+    reserves = withReserves;
+    _kept.clear();
+    _views.clear();
+    _key = null;
+    _viewFrame = null;
+    _viewRun++;
+    walk = null;
+    view = null;
+    notifyListeners();
+  }
 
   /// What is round the walk, with what it passed.
   Landmarks? walk;
@@ -761,8 +856,8 @@ class LandmarkLookup extends ChangeNotifier {
     loading = true;
     notifyListeners();
     final results = await Future.wait([
-      lookUpAway(frameOf(path), path: path),
-      tile == null ? Future.value(const <Area>[]) : reservesAlong(path, tile),
+      lookUpAway(frameOf(path), path: path, layers: layers),
+      tile == null || !reserves ? Future.value(const <Area>[]) : reservesAlong(path, tile),
     ]);
     var found = results[0] as Landmarks;
     final reserves = results[1] as List<Area>;
@@ -813,7 +908,7 @@ class LandmarkLookup extends ChangeNotifier {
     // at town scale (zoom 13): street zoom needs no more detail
     final detail = 360 / (256 * math.pow(2, math.min(13, zoom.floor())));
     final clock = Stopwatch()..start();
-    final found = await lookUpAway(frame, gradeTwo: gradeTwo, wikiLimit: 50, detail: detail);
+    final found = await lookUpAway(frame, gradeTwo: gradeTwo, wikiLimit: 50, detail: detail, layers: layers);
     if (kDebugMode) {
       lastLook = 'look z${zoom.toStringAsFixed(1)} ${clock.elapsedMilliseconds} ms: '
           '${found.listed.length} bldg, ${found.wiki.length} wiki, '

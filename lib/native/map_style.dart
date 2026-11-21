@@ -154,6 +154,35 @@ Map<String, Object?> reservesStyle(String source) {
   };
 }
 
+/// Bird hides and viewpoints, from the tiles' points of interest
+/// (OpenStreetMap's leisure=bird_hide and tourism=viewpoint, where the
+/// tiles carry them): a little hide or a sunburst, named from zoom 14.
+Map<String, Object?> hidesStyle(String source) => {
+      'version': 8,
+      'sources': {source: {'type': 'vector'}},
+      'layers': [
+        {
+          'id': 'hides', 'type': 'symbol', 'source': source, 'source-layer': 'poi', 'minzoom': 11,
+          'filter': ['==', ['get', 'subclass'], 'bird_hide'],
+          'layout': {'icon-image': 'hide', 'icon-allow-overlap': true},
+        },
+        {
+          'id': 'viewpoints', 'type': 'symbol', 'source': source, 'source-layer': 'poi', 'minzoom': 11,
+          'filter': ['==', ['get', 'subclass'], 'viewpoint'],
+          'layout': {'icon-image': 'viewpoint', 'icon-allow-overlap': true},
+        },
+        {
+          'id': 'hides-label', 'type': 'symbol', 'source': source, 'source-layer': 'poi', 'minzoom': 14,
+          'filter': ['all', ['in', ['get', 'subclass'], ['literal', ['bird_hide', 'viewpoint']]], ['has', 'name']],
+          'layout': {
+            'text-field': ['get', 'name'], 'text-font': _fontIt, 'text-size': 10,
+            'text-anchor': 'left', 'text-offset': [0.9, 0], 'text-max-width': 9,
+          },
+          'paint': {'text-color': '#4f6b3a', 'text-halo-color': _hex(paper), 'text-halo-width': 1.5},
+        },
+      ],
+    };
+
 /// The names of places and peaks: above the contours.
 Map<String, Object?> labelStyle(String source) => {
       'version': 8,
@@ -200,7 +229,7 @@ Map<String, Object?> labelStyle(String source) => {
 /// The style's pictures, drawn as map-mode.js draws them (its PICS), at
 /// twice the size they are shown.
 Future<vt.SpriteAtlas> mapSprites() async {
-  final sizes = {'trees': 64, 'reeds': 48, 'peak': 40};
+  final sizes = {'trees': 64, 'reeds': 48, 'peak': 40, 'hide': 32, 'viewpoint': 32};
   final rec = ui.PictureRecorder();
   final c = Canvas(rec);
   final sprites = <String, vt.Sprite>{};
@@ -215,6 +244,10 @@ Future<vt.SpriteAtlas> mapSprites() async {
         _reeds(c);
       case 'peak':
         _peak(c);
+      case 'hide':
+        _hide(c);
+      case 'viewpoint':
+        _viewpoint(c);
     }
     c.restore();
     final s = e.value.toDouble();
@@ -222,7 +255,7 @@ Future<vt.SpriteAtlas> mapSprites() async {
     x += s;
   }
   final image = await rec.endRecording().toImage(x.ceil(), 64);
-  return vt.SpriteAtlas(image: image, sprites: sprites, pixelRatio: 2, cacheKey: 'birdsong-map-sprites-1');
+  return vt.SpriteAtlas(image: image, sprites: sprites, pixelRatio: 2, cacheKey: 'birdsong-map-sprites-2');
 }
 
 Paint _line(Color c, double w) => Paint()
@@ -277,4 +310,31 @@ void _peak(Canvas g) {
     ..drawLine(const Offset(21, 13), const Offset(13, 30), shade)
     ..drawLine(const Offset(24, 19), const Offset(18, 32), shade)
     ..drawLine(const Offset(27, 25), const Offset(23, 33), shade);
+}
+
+/// A bird hide: a low hut in moss with its long viewing slit.
+void _hide(Canvas g) {
+  const moss = Color(0xFF4F6B3A);
+  final hut = Path()
+    ..moveTo(6, 26)
+    ..lineTo(6, 13)
+    ..lineTo(16, 7)
+    ..lineTo(26, 13)
+    ..lineTo(26, 26)
+    ..close();
+  g.drawPath(hut, Paint()..color = paper);
+  g.drawPath(hut, _line(moss, 2));
+  g.drawLine(const Offset(10, 16.5), const Offset(22, 16.5), _line(moss, 2.4));
+}
+
+/// A viewpoint: a small ring with rays, in ink.
+void _viewpoint(Canvas g) {
+  const c = Offset(16, 16);
+  g.drawCircle(c, 5, Paint()..color = paper);
+  g.drawCircle(c, 5, _line(ink, 2));
+  final ray = _line(ink, 1.6);
+  for (var i = 0; i < 8; i++) {
+    final a = i * 3.14159265 / 4;
+    g.drawLine(c + Offset.fromDirection(a, 8), c + Offset.fromDirection(a, 12), ray);
+  }
 }

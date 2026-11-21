@@ -197,6 +197,20 @@ class Settings extends ChangeNotifier {
   /// map's label still says it.
   bool mapPassedAbout = true;
 
+  /// The map's layers (its layers button): what each kind of extra shows,
+  /// and so what is looked up. Heritage: Historic England. Nature sites:
+  /// Natural England, NatureScot, Natural Resources Wales. Wikipedia places.
+  /// Reserves and Hides & viewpoints: from OpenStreetMap, in the map tiles.
+  bool mapShowHeritage = true;
+  bool mapShowNature = true;
+  bool mapShowWiki = true;
+  bool mapShowReserves = true;
+  bool mapShowHides = true;
+
+  /// The bird whose records (GBIF) are shown on the map, by scientific
+  /// name; '' for none.
+  String mapRecordsSci = '';
+
   static Future<Settings> load(Directory dir) async {
     final s = Settings._(File('${dir.path}/settings.json'));
     try {
@@ -274,6 +288,12 @@ class Settings extends ChangeNotifier {
     mapBirds = j['mapBirds'] == 'all' ? 'all' : 'first';
     mapExtras = (j['mapExtras'] as bool?) ?? mapExtras;
     mapPassedAbout = (j['mapPassedAbout'] as bool?) ?? mapPassedAbout;
+    mapShowHeritage = (j['mapShowHeritage'] as bool?) ?? mapShowHeritage;
+    mapShowNature = (j['mapShowNature'] as bool?) ?? mapShowNature;
+    mapShowWiki = (j['mapShowWiki'] as bool?) ?? mapShowWiki;
+    mapShowReserves = (j['mapShowReserves'] as bool?) ?? mapShowReserves;
+    mapShowHides = (j['mapShowHides'] as bool?) ?? mapShowHides;
+    mapRecordsSci = (j['mapRecordsSci'] as String?) ?? mapRecordsSci;
     // Settings saved before defaults v2 still carry the first test build's
     // defaults (3 s, 50 %); move those, and only those, to the new ones.
     if (((j['defaults'] as num?) ?? 1) < 2) {
@@ -335,6 +355,12 @@ class Settings extends ChangeNotifier {
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,
         'mapPassedAbout': mapPassedAbout,
+        'mapShowHeritage': mapShowHeritage,
+        'mapShowNature': mapShowNature,
+        'mapShowWiki': mapShowWiki,
+        'mapShowReserves': mapShowReserves,
+        'mapShowHides': mapShowHides,
+        'mapRecordsSci': mapRecordsSci,
       };
 
   void update(void Function(Settings s) change) {

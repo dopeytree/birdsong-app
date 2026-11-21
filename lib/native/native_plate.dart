@@ -505,6 +505,8 @@ class _NativePlateState extends State<NativePlate> {
                     onBird: (sci, common) => _openFromMap(sci, common, rows),
                     onHold: (_) {},
                     landmarks: app.settings.mapExtras ? _landmarks : null,
+                    settings: app.settings,
+                    species: [for (final r in rows) (sci: r.sci, common: r.common)],
                     fullScreen: true,
                     onFullScreen: () => Navigator.of(context).maybePop(),
                   ),
@@ -850,6 +852,8 @@ class _NativePlateState extends State<NativePlate> {
                                             : Walk.of(store, ses!, app.settings.plateModel),
                                         allBirds: app.settings.mapBirds == 'all',
                                         landmarks: app.settings.mapExtras ? _landmarks : null,
+                                        settings: app.settings,
+                                        species: [for (final r in rows) (sci: r.sci, common: r.common)],
                                         onFullScreen: () => _mapFullScreen(
                                             () => feed != null
                                                 ? Walk.station(feed.station.name, feed.place)
