@@ -175,7 +175,8 @@ class StationFeed extends ChangeNotifier {
   Timer? _timer;
 
   /// The period shown, or [day] when one day is.
-  Span span = Span.week;
+  /// A station opens on today.
+  Span span = Span.today;
   DateTime? day;
 
   List<StationSpecies>? species;

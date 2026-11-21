@@ -1028,11 +1028,13 @@ class _NativePlateState extends State<NativePlate> {
     final weather = feed != null ? feed.weather : ses?.weather;
     final temp = (weather?['temperatureC'] as num?)?.round();
     final sky = weather?['symbol'] as String?;
-    // a station: its name, its place, its period (or day) and dates; on a
-    // narrow screen the period is one word to tap for the next
+    // a station: its name beside the title (as a session's number), then
+    // the dates shown, its place, and on a narrow screen the period as one
+    // word to tap for the next; on a wide one the period's name leads the
+    // dates ("Seven days, Sun 15 Nov – Sat 21 Nov"), as the four sit at the top
     final narrow = MediaQuery.sizeOf(context).width < 900;
     final when = feed != null
-        ? feed.station.name
+        ? (narrow || feed.dates == feed.showing ? feed.dates : '${feed.showing}, ${feed.dates}')
         : ses == null
         ? 'Nothing recorded yet: tap the microphone to start.'
         : ses.live
@@ -1057,6 +1059,7 @@ class _NativePlateState extends State<NativePlate> {
               // the session's number, small, in the lines' own style
               if (feed == null && n > 0 && i >= 0)
                 TextSpan(text: '  #${i + 1}/$n', style: sub.copyWith(height: 1)),
+              if (feed != null) TextSpan(text: '  #${feed.station.name}', style: sub.copyWith(height: 1)),
             ]),
             // a little smaller than the page's h1 (clamp(1.6rem,2.6vw,2.2rem));
             // in small capitals like Index of Species when chosen
@@ -1095,12 +1098,6 @@ class _NativePlateState extends State<NativePlate> {
                         style: sub.copyWith(color: madder, decoration: TextDecoration.underline, decorationColor: rule)),
                   ),
                 ),
-              // then the dates it covers: on a narrow screen under the word,
-              // on a wide one after the period's name ("Seven days, Sun 15
-              // Nov – Sat 21 Nov"), as the four sit at the top
-              if (feed != null && narrow && feed.dates != feed.showing) Text(feed.dates, style: sub),
-              if (feed != null && !narrow)
-                Text(feed.dates == feed.showing ? feed.showing : '${feed.showing}, ${feed.dates}', style: sub),
               if (temp != null || sky != null)
                 Tooltip(
                   message: weatherWords(weather),
