@@ -159,12 +159,26 @@ Map<String, Object?> labelStyle(String source) => {
       'version': 8,
       'sources': {source: {'type': 'vector'}},
       'layers': [
+        // islands first, so the island is named before its towns: wide-spaced
+        // italic capitals in ink, growing as you zoom in, from far out (Mull,
+        // Skye, the Isle of Wight) to zoom 14
         {
-          'id': 'place-label', 'type': 'symbol', 'source': source, 'source-layer': 'place',
-          'filter': ['in', ['get', 'class'], ['literal', ['town', 'village', 'hamlet']]],
+          'id': 'island-label', 'type': 'symbol', 'source': source, 'source-layer': 'place',
+          'filter': ['all', ['==', ['get', 'class'], 'island'], ['has', 'name']],
+          'minzoom': 6, 'maxzoom': 14,
           'layout': {
             'text-field': ['get', 'name'], 'text-font': _fontIt,
-            'text-size': ['match', ['get', 'class'], 'town', 15, 12],
+            'text-size': ['interpolate', ['linear'], ['zoom'], 6, 11, 10, 15, 13, 17],
+            'text-letter-spacing': 0.3, 'text-transform': 'uppercase', 'text-max-width': 8,
+          },
+          'paint': {'text-color': _hex(ink), 'text-halo-color': _hex(paper), 'text-halo-width': 2},
+        },
+        {
+          'id': 'place-label', 'type': 'symbol', 'source': source, 'source-layer': 'place',
+          'filter': ['in', ['get', 'class'], ['literal', ['city', 'town', 'village', 'hamlet']]],
+          'layout': {
+            'text-field': ['get', 'name'], 'text-font': _fontIt,
+            'text-size': ['match', ['get', 'class'], 'city', 17, 'town', 15, 12],
             'text-letter-spacing': 0.14, 'text-transform': 'uppercase',
           },
           'paint': {'text-color': _hex(sepia), 'text-halo-color': _hex(paper), 'text-halo-width': 2},
