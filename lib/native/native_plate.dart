@@ -9,7 +9,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:plate_share/plate_share.dart';
 
 import '../app_state.dart';
-import '../main.dart' show ink, madder, paper, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
@@ -461,7 +461,7 @@ class _NativePlateState extends State<NativePlate> {
         // bottom, between the map and share buttons, and the plate takes
         // the room; opened, the list is where it always was.
         final foldedInline = showIndex && showPlate && !single && app.settings.nativeIndexFolded;
-        if (foldedInline) _bottomRoom += 40;
+        if (foldedInline) _bottomRoom += 40 + 10;
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
               entries: [
                 for (final r in rows)
@@ -708,7 +708,7 @@ class _NativePlateState extends State<NativePlate> {
                   Positioned(
                     left: 8,
                     right: 8,
-                    bottom: 8 + 40,
+                    bottom: 8 + 40 + 10,
                     height: 40,
                     child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
                         inline: true),
@@ -820,16 +820,33 @@ class _NativePlateState extends State<NativePlate> {
           constraints: BoxConstraints(maxWidth: math.max(120, width - row1)),
           child: Text.rich(
             TextSpan(text: 'Birdsong', children: [
+              // the session's number, small, in the lines' own style
               if (n > 0 && i >= 0)
-                TextSpan(text: ' #${i + 1}/$n', style: const TextStyle(color: sepia)),
+                TextSpan(
+                    text: '  #${i + 1}/$n',
+                    style: const TextStyle(
+                        fontFamily: serif,
+                        fontStyle: FontStyle.italic,
+                        fontSize: 15.2,
+                        letterSpacing: 0,
+                        color: sepia)),
             ]),
-            // h1{font-size:clamp(1.6rem,2.6vw,2.2rem);line-height:1.05;letter-spacing:-.005em}
-            style: TextStyle(
-                fontFamily: serif,
-                fontSize: ((width + 16) * .026).clamp(25.6, 35.2),
-                letterSpacing: -.15,
-                color: ink,
-                height: 1.05),
+            // a little smaller than the page's h1 (clamp(1.6rem,2.6vw,2.2rem));
+            // in small capitals like Index of Species when chosen
+            // (Settings > Experimental, nativeTitleCaps)
+            style: app.settings.nativeTitleCaps
+                ? TextStyle(
+                    fontFamily: caps,
+                    fontSize: ((width + 16) * .021).clamp(20.0, 27.0),
+                    letterSpacing: ((width + 16) * .021).clamp(20.0, 27.0) * .06,
+                    color: ink,
+                    height: 1.1)
+                : TextStyle(
+                    fontFamily: serif,
+                    fontSize: ((width + 16) * .022).clamp(22.0, 30.0),
+                    letterSpacing: -.15,
+                    color: ink,
+                    height: 1.05),
           ),
         ),
         const SizedBox(height: 3.2),

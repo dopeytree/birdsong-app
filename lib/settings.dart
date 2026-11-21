@@ -161,6 +161,10 @@ class Settings extends ChangeNotifier {
   /// unless chosen; the index's heading carries the number of species.
   bool nativeTotals = false;
 
+  /// The Flutter plate: the title "Birdsong" in small capitals, as Index of
+  /// Species is set, instead of the page's serif.
+  bool nativeTitleCaps = false;
+
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
 
@@ -235,6 +239,7 @@ class Settings extends ChangeNotifier {
     nativeParts = (j['nativeParts'] as bool?) ?? nativeParts;
     nativeLimit = math.max(0, (j['nativeLimit'] as num?)?.toInt() ?? nativeLimit);
     nativeTotals = (j['nativeTotals'] as bool?) ?? nativeTotals;
+    nativeTitleCaps = (j['nativeTitleCaps'] as bool?) ?? nativeTitleCaps;
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -295,6 +300,7 @@ class Settings extends ChangeNotifier {
         'nativeParts': nativeParts,
         'nativeLimit': nativeLimit,
         'nativeTotals': nativeTotals,
+        'nativeTitleCaps': nativeTitleCaps,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,
