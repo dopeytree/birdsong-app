@@ -162,9 +162,9 @@ class Settings extends ChangeNotifier {
   bool nativeTotals = false;
 
   /// The Flutter plate: the whole heading (title, number, date, place,
-  /// weather) in small capitals, as Index of Species is set, instead of the
-  /// page's serif and italic.
-  bool nativeTitleCaps = false;
+  /// weather) in small capitals, as Index of Species is set (the default),
+  /// or in the page's serif and italic.
+  bool nativeTitleCaps = true;
 
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
