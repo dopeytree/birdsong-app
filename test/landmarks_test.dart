@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:birdsong_app/native/landmarks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
@@ -209,6 +211,22 @@ void main() {
     expect(passed[0].page.host, 'www.google.com'); // no page of its own: a search
     expect(passed[0].page.queryParameters['q'], 'Long Meadow Site of Special Scientific Interest');
     expect(passed[1].page.toString(), 'https://historicengland.org.uk/listing/the-list/list-entry/1');
+  });
+
+  test("an outline is cut to the box near the view: only what's inside, in runs", () {
+    const box = [0.0, 0.0, 10.0, 10.0];
+    // a line in, out and back in: two runs, cut at the box's edge
+    final runs = clipLine(const [LatLng(5, -5), LatLng(5, 5), LatLng(5, 15), LatLng(8, 15), LatLng(8, 5)], box);
+    expect(runs.length, 2);
+    expect(runs[0], const [LatLng(5, 0), LatLng(5, 5), LatLng(5, 10)]);
+    expect(runs[1], const [LatLng(8, 10), LatLng(8, 5)]);
+    // wholly outside: nothing
+    expect(clipLine(const [LatLng(20, 20), LatLng(30, 30)], box), isEmpty);
+    // wholly inside: as it is
+    expect(clipLine(const [LatLng(1, 1), LatLng(2, 2), LatLng(3, 1)], box).single.length, 3);
+    // a huge outline round the box keeps only the bits that cross it
+    final ring = [for (var i = 0; i <= 3600; i++) LatLng(5 + 50 * math.sin(i * math.pi / 1800), 5 + 50 * math.cos(i * math.pi / 1800))];
+    expect(clipLine(ring, box), isEmpty);
   });
 
   test('Wikipedia places, with or without a description', () {

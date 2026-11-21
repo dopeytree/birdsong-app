@@ -263,6 +263,65 @@ String tidyName(String name) {
   });
 }
 
+/// The parts of [line] inside [box] ([west, south, east, north]), as runs
+/// of points (a run ends where the line leaves the box). Each segment is
+/// clipped (Cohen–Sutherland), so a long outline costs only what is near.
+List<List<LatLng>> clipLine(List<LatLng> line, List<double> box) {
+  final w = box[0], s = box[1], e = box[2], n = box[3];
+  int code(double x, double y) => (x < w ? 1 : 0) | (x > e ? 2 : 0) | (y < s ? 4 : 0) | (y > n ? 8 : 0);
+  final out = <List<LatLng>>[];
+  List<LatLng>? run;
+  for (var i = 0; i + 1 < line.length; i++) {
+    var x0 = line[i].longitude, y0 = line[i].latitude, x1 = line[i + 1].longitude, y1 = line[i + 1].latitude;
+    var c0 = code(x0, y0), c1 = code(x1, y1);
+    var keep = false;
+    while (true) {
+      if (c0 | c1 == 0) {
+        keep = true;
+        break;
+      }
+      if (c0 & c1 != 0) break;
+      final c = c0 != 0 ? c0 : c1;
+      double x, y;
+      if (c & 8 != 0) {
+        x = x0 + (x1 - x0) * (n - y0) / (y1 - y0);
+        y = n;
+      } else if (c & 4 != 0) {
+        x = x0 + (x1 - x0) * (s - y0) / (y1 - y0);
+        y = s;
+      } else if (c & 2 != 0) {
+        y = y0 + (y1 - y0) * (e - x0) / (x1 - x0);
+        x = e;
+      } else {
+        y = y0 + (y1 - y0) * (w - x0) / (x1 - x0);
+        x = w;
+      }
+      if (c == c0) {
+        x0 = x;
+        y0 = y;
+        c0 = code(x0, y0);
+      } else {
+        x1 = x;
+        y1 = y;
+        c1 = code(x1, y1);
+      }
+    }
+    if (!keep) {
+      run = null;
+      continue;
+    }
+    final a = LatLng(y0, x0), b = LatLng(y1, x1);
+    if (run == null || run.last != a) {
+      run = [a];
+      out.add(run);
+    }
+    run.add(b);
+    // the segment was cut short: the line leaves the box here
+    if (b != line[i + 1]) run = null;
+  }
+  return out;
+}
+
 /// The box looked in: the walk's, a fifth again on each side, and at least
 /// about 300 m across. [west, south, east, north].
 List<double> frameOf(List<LatLng> path) {

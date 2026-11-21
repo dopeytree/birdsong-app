@@ -406,7 +406,13 @@ class _WalkMapState extends State<WalkMap> {
 
   void _moved(MapCamera camera, bool byHand) {
     if (byHand) _dragged = true;
-    if ((camera.zoom - _zoom).abs() > .05) setState(() => _zoom = camera.zoom);
+    if ((camera.zoom - _zoom).abs() > .05) {
+      setState(() => _zoom = camera.zoom);
+    } else if (_layersBox != null && _layersMemo != null) {
+      // panned past the edges cut for the last view: cut them again
+      final b = camera.visibleBounds;
+      if (!frameHolds(_layersBox!, [b.west, b.south, b.east, b.north])) setState(() {});
+    }
     if (_tip != null) setState(() => _tip = null);
     _contourTimer?.cancel();
     _contourTimer = Timer(const Duration(milliseconds: 150), _traceContours);
@@ -660,25 +666,6 @@ class _WalkMapState extends State<WalkMap> {
         shadows: const [Shadow(color: paper, blurRadius: 1.5), Shadow(color: paper, blurRadius: 1.5)],
       );
 
-  Iterable<Polygon> _polys(Area a, {Color? fill, double edge = 0, Color edgeColor = ink, StrokePattern? pattern, String? label, TextStyle? style}) sync* {
-    for (final rings in a.shape) {
-      if (rings.isEmpty || rings.first.length < 3) continue;
-      yield Polygon(
-        points: rings.first,
-        holePointsList: rings.length > 1 ? rings.sublist(1) : null,
-        color: fill,
-        borderStrokeWidth: edge,
-        borderColor: edgeColor,
-        pattern: pattern ?? const StrokePattern.solid(),
-        label: label,
-        labelStyle: style ?? const TextStyle(),
-        labelPlacementCalculator: label == null
-            ? const PolygonLabelPlacementCalculator.centroid()
-            : _LabelAt(_labelPoint(rings.first)),
-      );
-    }
-  }
-
   // Each outline's label point, worked out once. flutter_map's polylabel has
   // a fixed precision (0.0001°): on a large intricate outline (Falmouth Bay's
   // SPA, a coastal SSSI) it ran for seconds on the screen's thread at every
@@ -710,63 +697,101 @@ class _WalkMapState extends State<WalkMap> {
     return _labelPoints[ring] = at;
   }
 
-  /// Protected nature sites: a faint green wash, a dashed edge, the name.
-  List<Polygon> _nature() => [
-        for (final a in widget.landmarks?.current?.nature ?? const <Area>[])
-          ..._polys(a,
-              fill: _natureWash.withValues(alpha: .07),
-              edge: 1.2,
-              edgeColor: _natureEdge.withValues(alpha: .7),
-              pattern: StrokePattern.dashed(segments: const [3.6, 2.4]),
-              label: a.name,
-              style: _labelStyle(_natureEdge)),
-      ];
-
-  /// Scheduled monuments' dotted edges, named from zoom 13.5.
-  List<Polygon> _monumentEdges() => [
-        for (final a in widget.landmarks?.current?.monuments ?? const <Area>[])
-          ..._polys(a,
-              edge: .9,
-              edgeColor: _monument,
-              pattern: StrokePattern.dashed(segments: const [.9, 1.35]),
-              label: _zoom >= 13.5 ? a.name : null,
-              style: _labelStyle(_monument)),
-      ];
-
   // registered parks and gardens, battlefields, World Heritage Sites
   static const _park = Color(0xFF6F7F45), _battle = Color(0xFF8C3B2A);
 
-  /// Parks and gardens: an olive wash and a fine dotted edge; battlefields:
-  /// a madder dash-and-dot edge; World Heritage Sites: a long ink dash.
-  /// Named from zoom 13.5, 12.5 and always.
-  List<Polygon> _heritageAreas() {
-    final found = widget.landmarks?.current;
-    if (found == null) return const [];
-    return [
-      for (final a in found.worldHeritage)
-        ..._polys(a,
-            edge: 1.6,
-            edgeColor: ink.withValues(alpha: .7),
-            pattern: StrokePattern.dashed(segments: const [9.6, 4.8]),
-            label: a.name,
-            style: _labelStyle(ink)),
-      for (final a in found.parks)
-        ..._polys(a,
-            fill: _park.withValues(alpha: .08),
-            edge: 1,
-            edgeColor: _park.withValues(alpha: .8),
-            pattern: StrokePattern.dotted(spacingFactor: 2),
-            label: _zoom >= 13.5 ? a.name : null,
-            style: _labelStyle(_park)),
-      for (final a in found.battlefields)
-        ..._polys(a,
-            fill: _battle.withValues(alpha: .05),
-            edge: 1.1,
-            edgeColor: _battle.withValues(alpha: .8),
-            pattern: StrokePattern.dashed(segments: const [4.4, 2.2, 1.1, 2.2]),
-            label: _zoom >= 12.5 ? a.name : null,
-            style: _labelStyle(_battle)),
-    ];
+  /// An area's fill and its name, as polygons with no edge: the edge is
+  /// drawn by [_edgeLines], cut to the view, because flutter_map works out
+  /// a dashed edge's every dash along the whole outline on the screen's
+  /// thread. Cornwall's mining World Heritage Site, at street zoom, is
+  /// hundreds of thousands of pixels round: 11 s a frame in Falmouth.
+  Iterable<Polygon> _fills(Area a, {Color? fill, String? label, TextStyle? style}) sync* {
+    if (fill == null && label == null) return;
+    for (final rings in a.shape) {
+      if (rings.isEmpty || rings.first.length < 3) continue;
+      yield Polygon(
+        points: rings.first,
+        holePointsList: rings.length > 1 ? rings.sublist(1) : null,
+        color: fill,
+        label: label,
+        labelStyle: style ?? const TextStyle(),
+        labelPlacementCalculator: label == null
+            ? const PolygonLabelPlacementCalculator.centroid()
+            : _LabelAt(_labelPoint(rings.first)),
+      );
+    }
+  }
+
+  /// An area's edge (every ring, holes too), only what lies in [box].
+  Iterable<Polyline> _edgeLines(Area a, List<double> box,
+      {required Color color, required double width, required StrokePattern pattern}) sync* {
+    for (final rings in a.shape) {
+      for (final r in rings) {
+        for (final run in clipLine(r, box)) {
+          if (run.length > 1) yield Polyline(points: run, color: color, strokeWidth: width, pattern: pattern);
+        }
+      }
+    }
+  }
+
+  /// The areas: fills and names, then edges cut to [box].
+  ({List<Polygon> fills, List<Polyline> lines}) _areas(Landmarks found, List<double> box) {
+    final fills = <Polygon>[], lines = <Polyline>[];
+    void area(Area a,
+        {Color? fill, String? label, TextStyle? style, required Color edge, required double width, required StrokePattern pattern}) {
+      fills.addAll(_fills(a, fill: fill, label: label, style: style));
+      lines.addAll(_edgeLines(a, box, color: edge, width: width, pattern: pattern));
+    }
+
+    // protected nature sites: a faint green wash, a dashed edge, the name
+    for (final a in found.nature) {
+      area(a,
+          fill: _natureWash.withValues(alpha: .07),
+          label: a.name,
+          style: _labelStyle(_natureEdge),
+          edge: _natureEdge.withValues(alpha: .7),
+          width: 1.2,
+          pattern: StrokePattern.dashed(segments: const [3.6, 2.4]));
+    }
+    // World Heritage Sites: a long ink dash, always named
+    for (final a in found.worldHeritage) {
+      area(a,
+          label: a.name,
+          style: _labelStyle(ink),
+          edge: ink.withValues(alpha: .7),
+          width: 1.6,
+          pattern: StrokePattern.dashed(segments: const [9.6, 4.8]));
+    }
+    // scheduled monuments: a fine dotted edge (and hatching), named from 13.5
+    for (final a in found.monuments) {
+      area(a,
+          label: _zoom >= 13.5 ? a.name : null,
+          style: _labelStyle(_monument),
+          edge: _monument,
+          width: .9,
+          pattern: StrokePattern.dashed(segments: const [.9, 1.35]));
+    }
+    // parks and gardens: an olive wash, a dotted edge, named from 13.5
+    for (final a in found.parks) {
+      area(a,
+          fill: _park.withValues(alpha: .08),
+          label: _zoom >= 13.5 ? a.name : null,
+          style: _labelStyle(_park),
+          edge: _park.withValues(alpha: .8),
+          width: 1,
+          pattern: StrokePattern.dotted(spacingFactor: 2));
+    }
+    // battlefields: a madder dash-and-dot, named from 12.5
+    for (final a in found.battlefields) {
+      area(a,
+          fill: _battle.withValues(alpha: .05),
+          label: _zoom >= 12.5 ? a.name : null,
+          style: _labelStyle(_battle),
+          edge: _battle.withValues(alpha: .8),
+          width: 1.1,
+          pattern: StrokePattern.dashed(segments: const [4.4, 2.2, 1.1, 2.2]));
+    }
+    return (fills: fills, lines: lines);
   }
 
   /// A listed building's little church, or a Wikipedia place's ringed dot,
@@ -852,9 +877,19 @@ class _WalkMapState extends State<WalkMap> {
   // The extras as drawn, kept until what was found or a zoom step changes:
   // building them (and placing area labels) for every frame of a zoom made
   // a busy town (Falmouth) crawl.
-  ({List<Polygon> nature, List<Polygon> edges, List<Area> hatched, List<Marker> spots})? _layersMemo;
+  ({List<Polygon> fills, List<Polyline> lines, List<Area> hatched, List<Marker> spots})? _layersMemo;
   Object? _layersFound;
   String _layersStep = '';
+
+  /// The box the edges were cut to: the view and as much again all round.
+  List<double>? _layersBox;
+
+  /// The view now, [west, south, east, north].
+  List<double>? get _viewBox {
+    if (!_ready) return null;
+    final b = _map.camera.visibleBounds;
+    return [b.west, b.south, b.east, b.north];
+  }
 
   /// Which zoom thresholds the extras pass, as a key.
   String get _zoomStep => [11, 12, 12.5, 13, 13.5, 14, 14.5, gradeTwoZoom, 16].map((z) => _zoom >= z ? 1 : 0).join();
@@ -862,11 +897,21 @@ class _WalkMapState extends State<WalkMap> {
   /// The extras for this zoom: none when zoomed right out (below 11);
   /// buildings and Wikipedia places from 12 (Grade II from [gradeTwoZoom]),
   /// no more than [_maxSpots] of them, nearest the middle first.
-  ({List<Polygon> nature, List<Polygon> edges, List<Area> hatched, List<Marker> spots})? _layers() {
+  ({List<Polygon> fills, List<Polyline> lines, List<Area> hatched, List<Marker> spots})? _layers() {
     final found = widget.landmarks?.current;
     if (found == null || _zoom < 11) return null;
-    final step = _zoomStep;
-    if (identical(found, _layersFound) && step == _layersStep && _layersMemo != null) return _layersMemo;
+    final step = _zoomStep, view = _viewBox;
+    final boxOk = view == null || (_layersBox != null && frameHolds(_layersBox!, view));
+    if (identical(found, _layersFound) && step == _layersStep && boxOk && _layersMemo != null) return _layersMemo;
+    final box = view == null
+        ? <double>[-180, -85, 180, 85]
+        : [
+            view[0] - (view[2] - view[0]),
+            view[1] - (view[3] - view[1]),
+            view[2] + (view[2] - view[0]),
+            view[3] + (view[3] - view[1]),
+          ];
+    _layersBox = view == null ? null : box;
     final listed = [
       for (final s in found.listed)
         if (_zoom >= (s.grade == 'II' ? gradeTwoZoom : 12)) s
@@ -881,9 +926,10 @@ class _WalkMapState extends State<WalkMap> {
     _layersFound = found;
     _layersStep = step;
     final clock = Stopwatch()..start();
+    final areas = _areas(found, box);
     _layersMemo = (
-      nature: _nature(),
-      edges: [..._monumentEdges(), ..._heritageAreas()],
+      fills: areas.fills,
+      lines: areas.lines,
       hatched: found.monuments,
       spots: [
         ..._spots([for (final s in spots) if (!wiki.contains(s)) s], wiki: false),
@@ -892,9 +938,9 @@ class _WalkMapState extends State<WalkMap> {
     );
     if (kDebugMode) {
       final m = _layersMemo!;
-      final pts = [...m.nature, ...m.edges].fold(0, (n, p) => n + p.points.length);
-      _layersCost = 'layers built in ${clock.elapsedMilliseconds} ms: ${m.nature.length + m.edges.length} polygons, '
-          '$pts pts, ${m.spots.length} marks; drawing ${countAreas(found)} areas, ${countPoints(found)} pts';
+      final pts = m.lines.fold(0, (n, p) => n + p.points.length);
+      _layersCost = 'layers built in ${clock.elapsedMilliseconds} ms: ${m.fills.length} fills, ${m.lines.length} edges '
+          '($pts pts near view), ${m.spots.length} marks; ${countAreas(found)} areas, ${countPoints(found)} pts';
     }
     return _layersMemo;
   }
@@ -960,9 +1006,9 @@ class _WalkMapState extends State<WalkMap> {
                     ),
                     // extras: protected nature sites, scheduled monuments
                     if (layers != null) ...[
-                      PolygonLayer(polygons: layers.nature, drawLabelsLast: true),
+                      PolygonLayer(polygons: layers.fills, drawLabelsLast: true),
                       if (_zoom >= 13) _Hatch(layers.hatched),
-                      PolygonLayer(polygons: layers.edges, drawLabelsLast: true),
+                      PolylineLayer(polylines: layers.lines),
                     ],
                     // contours, traced here from the elevation tiles
                     PolylineLayer(polylines: _contourLines()),
