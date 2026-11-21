@@ -43,7 +43,23 @@ class Walk {
     required this.start,
     this.end,
     this.place,
+    this.station,
   });
+
+  /// A remote station's spot: no trail and no crosses, a mark where it is
+  /// ([place], when it says) with its name.
+  factory Walk.station(String name, (double, double)? at) => Walk(
+        key: 'station:$name',
+        trail: const [],
+        birds: const [],
+        live: false,
+        start: DateTime.now(),
+        place: at == null ? null : LatLng(at.$1, at.$2),
+        station: name,
+      );
+
+  /// The station's name, for a station's spot.
+  final String? station;
 
   /// The walk's sessions, so a new walk is fitted afresh.
   final String key;
@@ -357,6 +373,7 @@ class _WalkMapState extends State<WalkMap> {
     if (_kit == null) return 'Drawing the map…';
     final w = widget.walk;
     if (w == null) return 'No walk to show: the map draws sessions recorded while listening here.';
+    if (w.station != null) return w.place == null ? "This station doesn't say where it is." : null;
     if (w.trail.isEmpty && w.birds.isEmpty) {
       return w.place != null
           ? 'No trail for this walk: only where it began was noted. Walks recorded from now on show the way you went.'
@@ -427,6 +444,9 @@ class _WalkMapState extends State<WalkMap> {
             ],
           ),
         );
+    if (w.station != null) {
+      return [if (w.place != null) end(w.place!, false, w.station!, 'The station')];
+    }
     return [
       if (a != null) end(a, true, 'Start', time(w.start)),
       if (line.length > 1) end(line.last, false, w.live ? 'Now' : 'End', time(w.live ? DateTime.now() : w.end)),

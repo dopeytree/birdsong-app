@@ -9,7 +9,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:plate_share/plate_share.dart';
 
 import '../app_state.dart';
-import '../main.dart' show caps, ink, madder, paper, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
@@ -21,6 +21,7 @@ import 'collage_view.dart';
 import 'day_picker.dart';
 import 'index_view.dart';
 import 'plate_library.dart';
+import 'station_feed.dart';
 import 'walk_map.dart';
 
 /// The plate drawn by Flutter itself instead of the web page: a first
@@ -137,8 +138,118 @@ class _NativePlateState extends State<NativePlate> {
 
   /// Which collage is on show: a new session, style, or offer of skulls,
   /// wings and eggs is a new one, prepared afresh before it is drawn.
-  String _showingFor(Session? ses) =>
-      '${ses?.id}|${_style.name}|${app.settings.nativeParts ? 'parts' : ''}';
+  String _showingFor(Session? ses) {
+    final f = _feed;
+    final what = f == null
+        ? '${ses?.id}'
+        : 'station:${f.station.id}:${f.day != null ? ymd(f.day!) : f.span.name}';
+    return '$what|${_style.name}|${app.settings.nativeParts ? 'parts' : ''}';
+  }
+
+  // ---- a remote station ---------------------------------------------------
+
+  /// What the station on show heard (station_feed.dart), while a remote
+  /// station is shown; null in Listen here.
+  StationFeed? _feed;
+
+  StationFeed? _syncFeed() {
+    final s = app.settings;
+    final st = s.mode == AppMode.station ? s.station : null;
+    final f = _feed;
+    if (st == null) {
+      f?.dispose();
+      return _feed = null;
+    }
+    if (f != null && f.station.id == st.id && f.station.input == st.input) return f;
+    f?.dispose();
+    return _feed = StationFeed(st);
+  }
+
+  /// The station's period in a word, tapped on a narrow screen: the next
+  /// period, or back to Today from a day.
+  void _nextSpan(StationFeed f) {
+    if (f.day != null) return f.setSpan(Span.today);
+    f.setSpan(Span.values[(f.span.index + 1) % Span.values.length]);
+  }
+
+  /// The four periods, as the web plate's header has them: the one shown
+  /// in madder italic.
+  Widget _spanRow(StationFeed f) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final s in Span.values) ...[
+            if (s != Span.values.first) const SizedBox(width: 25.6),
+            Semantics(
+              button: true,
+              selected: f.day == null && f.span == s,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => f.setSpan(s),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 1.6),
+                  child: Text(s.label,
+                      style: TextStyle(
+                        fontFamily: serif,
+                        fontSize: 16,
+                        fontStyle: f.day == null && f.span == s ? FontStyle.italic : FontStyle.normal,
+                        color: f.day == null && f.span == s ? madder : sepia,
+                      )),
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+
+  /// The stations button, left of the pill on a remote station: with two
+  /// saved stations a tap goes to the other; otherwise it lists them, with
+  /// Add a station (as plate_view.dart's).
+  Future<void> _stationsTap(BuildContext context) async {
+    final s = app.settings;
+    if (s.stations.length == 2) {
+      s.nextStation();
+      _say(s.station!.name, seconds: 2);
+      return;
+    }
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    final at = RelativeRect.fromRect(
+        box.localToGlobal(Offset(0, box.size.height), ancestor: overlay) & box.size, Offset.zero & overlay.size);
+    final current = s.mode == AppMode.station ? s.station?.id : null;
+    final picked = await showMenu<String>(
+      context: context,
+      position: at,
+      color: paper,
+      items: [
+        for (final st in s.stations)
+          PopupMenuItem(
+            value: st.id,
+            child: ListTile(
+              dense: true,
+              leading: Icon(st.id == current ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: Theme.of(context).colorScheme.primary),
+              title: Text(st.name),
+              subtitle: Text(st.kind),
+            ),
+          ),
+        const PopupMenuItem(
+          value: '+',
+          child: ListTile(dense: true, leading: Icon(Icons.add), title: Text('Add a station')),
+        ),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    if (picked == '+') {
+      if (context.mounted) await editStation(context, s);
+      return;
+    }
+    s.update((x) {
+      x.mode = AppMode.station;
+      x.stationId = picked;
+    });
+    _say(s.station!.name, seconds: 2);
+  }
 
   /// Look for the plates of [rows] not asked for yet.
   void _ensure(List<_Row> rows) {
@@ -198,12 +309,22 @@ class _NativePlateState extends State<NativePlate> {
   @override
   void dispose() {
     _noteTimer?.cancel();
+    _feed?.dispose();
     app.engine.removeListener(_watchSession);
     _lib?.close();
     super.dispose();
   }
 
   List<_Row> _rows(Session? ses) {
+    final f = _feed;
+    if (f != null) {
+      return [
+        for (final s in f.species ?? const <StationSpecies>[])
+          _Row(s.sci, s.common)
+            ..count = s.count
+            ..last = s.last
+      ];
+    }
     if (ses == null) return [];
     final by = <String, _Row>{};
     for (final d in app.store.forPlate(app.settings.plateModel, session: ses)) {
@@ -287,6 +408,13 @@ class _NativePlateState extends State<NativePlate> {
   /// have a session, and that day's sessions listed under it to pick from;
   /// OK shows the day's first, and the ‹ › step through the rest.
   Future<void> _pickDay() async {
+    final f = _feed;
+    if (f != null) {
+      // a station: any day since its records began
+      final picked = await StationDayPicker.show(context, StationDayPicker(feed: f));
+      if (picked != null && mounted) f.setDay(picked);
+      return;
+    }
     final store = app.store;
     if (store.sessions.isEmpty) {
       _say('Nothing recorded yet.', seconds: 2);
@@ -404,6 +532,24 @@ class _NativePlateState extends State<NativePlate> {
   void _openCard(_Row r, {List<Detection>? heard}) {
     final lib = _lib;
     if (lib == null) return;
+    final f = _feed;
+    if (f != null) {
+      final s = (f.species ?? const <StationSpecies>[]).where((x) => x.sci == r.sci).firstOrNull;
+      if (s == null) return;
+      BirdCard.show(
+        context,
+        BirdCard(
+          lib: lib,
+          style: _style,
+          source: _StationCard(f, s),
+          art: _art[r.sci],
+          onChosen: (art) {
+            if (mounted) setState(() => _art[r.sci] = art);
+          },
+        ),
+      );
+      return;
+    }
     final store = app.store, model = app.settings.plateModel;
     heard ??= store.forPlate(model, session: store.selected);
     BirdCard.show(
@@ -411,10 +557,12 @@ class _NativePlateState extends State<NativePlate> {
       BirdCard(
         lib: lib,
         style: _style,
-        facts: BirdFacts.of(r.sci, r.common, heard, store.forPlate(model)),
+        source: LocalCard(
+          BirdFacts.of(r.sci, r.common, heard, store.forPlate(model)),
+          clipOf: (d) => d.hasClip ? store.clipFile(d.id) : null,
+          spectrogramOf: (d) => d.hasClip ? store.spectrogramFile(d.id) : null,
+        ),
         art: _art[r.sci],
-        clipOf: (d) => d.hasClip ? store.clipFile(d.id) : null,
-        spectrogramOf: (d) => d.hasClip ? store.spectrogramFile(d.id) : null,
         onChosen: (art) {
           if (mounted) setState(() => _art[r.sci] = art);
         },
@@ -424,11 +572,13 @@ class _NativePlateState extends State<NativePlate> {
 
   @override
   Widget build(BuildContext context) {
+    final feed = _syncFeed();
     return ListenableBuilder(
-      listenable: Listenable.merge([app.settings, app.store, app.engine]),
+      listenable: Listenable.merge([app.settings, app.store, app.engine, if (feed != null) feed]),
       builder: (context, _) {
         final store = app.store, engine = app.engine;
-        final ses = store.selected;
+        // a remote station has no sessions
+        final ses = feed == null ? store.selected : null;
         // Limit species: the most heard only, on the plate and in the index
         final all = _rows(ses), limit = app.settings.nativeLimit;
         final rows = limit > 0 && all.length > limit ? all.sublist(0, limit) : all;
@@ -451,7 +601,7 @@ class _NativePlateState extends State<NativePlate> {
         final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
         // views d and e show one bird, unless the map is on: then the map
         // is drawn as in the other views
-        final mapOn = app.settings.showMap && ses != null;
+        final mapOn = app.settings.showMap && (ses != null || feed != null);
         final single = (mode.key == 'latest' || mode.key == 'top') && !mapOn;
         // the map takes the collage's place, and has one even in view c
         final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
@@ -481,10 +631,11 @@ class _NativePlateState extends State<NativePlate> {
               inline: inline,
               species: all.length,
               newest: marked,
-              steps: n > 1,
-              canPrev: i > 0,
-              canNext: i >= 0 && i < n - 1,
-              onStep: store.step,
+              // on a station the ‹ › step a day at a time
+              steps: feed != null || n > 1,
+              canPrev: feed?.canStepBack ?? i > 0,
+              canNext: feed?.canStepOn ?? (i >= 0 && i < n - 1),
+              onStep: feed?.stepDay ?? store.step,
               onOpen: (e) => _openCard(rows.firstWhere((r) => r.sci == e.sci)),
             );
         return Stack(
@@ -512,7 +663,7 @@ class _NativePlateState extends State<NativePlate> {
                                   Padding(
                                     padding: EdgeInsets.fromLTRB(headSide, _padTop, headSide, 0),
                                     child: _heading(ses, i, n, all.length, calls, outer.maxWidth - headSide,
-                                        totals: mode.key != 'index'),
+                                        totals: mode.key != 'index', feed: feed),
                                   )
                                 else
                                   const SizedBox(height: _buttonsTop),
@@ -553,12 +704,17 @@ class _NativePlateState extends State<NativePlate> {
                         else if (rows.isEmpty && !mapOn)
                           Padding(
                             key: _plateKey,
-                            padding: const EdgeInsets.symmetric(vertical: 80),
+                            padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
                             child: Center(
                               child: Text(
-                                engine.running
-                                    ? 'Listening. Birds appear here as they are heard.'
-                                    : 'Nothing heard yet. Press record to listen.',
+                                feed != null
+                                    ? (feed.error ??
+                                        (feed.loading || feed.species == null
+                                            ? 'Asking the station…'
+                                            : 'Nothing heard ${feed.day != null ? 'that day' : 'in this period'}.'))
+                                    : engine.running
+                                        ? 'Listening. Birds appear here as they are heard.'
+                                        : 'Nothing heard yet. Press record to listen.',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                     fontFamily: serif,
@@ -577,7 +733,9 @@ class _NativePlateState extends State<NativePlate> {
                                 padding: EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
                                 child: mapOn
                                     ? WalkMap(
-                                        walk: Walk.of(store, ses, app.settings.plateModel),
+                                        walk: feed != null
+                                            ? Walk.station(feed.station.name, feed.place)
+                                            : Walk.of(store, ses!, app.settings.plateModel),
                                         allBirds: app.settings.mapBirds == 'all',
                                         size: Size(box.maxWidth - 2 * plateSide,
                                             _plateHeight(box.maxWidth, box.maxHeight) - 12),
@@ -587,7 +745,7 @@ class _NativePlateState extends State<NativePlate> {
                                           if (want != _holdFor && mounted) setState(() => _holdFor = want);
                                         },
                                       )
-                                    : _collage(ses!, onPlate, newest, box.maxWidth - 2 * plateSide,
+                                    : _collage(ses, onPlate, newest, box.maxWidth - 2 * plateSide,
                                         _plateHeight(box.maxWidth, box.maxHeight) - 12),
                               ),
                               // With no index there is no heading to carry the
@@ -679,15 +837,31 @@ class _NativePlateState extends State<NativePlate> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
+                      // record in Listen here, or while a session records
+                      if (feed == null || engine.running || engine.starting)
+                        RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
+                      // on a station: the stations (the other, or a list)
+                      if (feed != null)
+                        Builder(
+                          builder: (bc) => IconButton(
+                            tooltip: app.settings.stations.length == 2
+                                ? 'Next: ${app.settings.nextStationName}'
+                                : 'Stations',
+                            constraints: const BoxConstraints.tightFor(
+                                width: SourcePill.rowHeight, height: SourcePill.rowHeight),
+                            icon: Icon(app.settings.stations.length == 2 ? Icons.swap_horiz : Icons.list),
+                            color: red,
+                            onPressed: () => _stationsTap(bc),
+                          ),
+                        ),
                       SizedBox(
                       // level with the record and menu buttons
                       height: SourcePill.rowHeight,
                       child: Center(
                         child: SourcePill(
-                          listen: true,
+                          listen: feed == null,
                           stationName: app.settings.station?.name,
-                          onListen: () {},
+                          onListen: () => app.settings.update((x) => x.mode = AppMode.listen),
                           onRemote: _toRemote,
                         ),
                       ),
@@ -710,6 +884,16 @@ class _NativePlateState extends State<NativePlate> {
                 ),
                 // The walk on a map in place of the collage, at the bottom
                 // left; not in the views of one bird (d and e).
+                // A station's four periods, centred at the top on a wide
+                // screen, as the web plate's header has them.
+                if (feed != null && showHeading && MediaQuery.sizeOf(context).width >= 900)
+                  Positioned(
+                    top: 8,
+                    left: 0,
+                    right: 0,
+                    height: SourcePill.rowHeight,
+                    child: Center(child: _spanRow(feed)),
+                  ),
                 // Along the bottom at the left, quick things to do: the plate's
                 // view (a to g) in the corner, so it never moves while
                 // stepping through the views, then the map.
@@ -834,7 +1018,8 @@ class _NativePlateState extends State<NativePlate> {
   /// when switched on (Settings > Experimental, nativeTotals), the totals. Every line stops short of the buttons beside it
   /// (record, pill, menu). [width] is the room from the
   /// left padding to the screen's right edge.
-  Widget _heading(Session? ses, int i, int n, int species, int calls, double width, {bool totals = true}) {
+  Widget _heading(Session? ses, int i, int n, int species, int calls, double width,
+      {bool totals = true, StationFeed? feed}) {
     // #sub{font-style:italic;color:sepia;font-size:.95rem}, three block spans;
     // or, when chosen (Settings > Experimental, nativeTitleCaps), the whole
     // heading in small capitals as Index of Species is set
@@ -851,12 +1036,20 @@ class _NativePlateState extends State<NativePlate> {
     final weather = ses?.weather;
     final temp = (weather?['temperatureC'] as num?)?.round();
     final sky = weather?['symbol'] as String?;
-    final when = ses == null
+    // a station: its name, then its period (or day); on a narrow screen
+    // the period is one word to tap for the next (the four sit at the top
+    // on a wide one)
+    final narrow = MediaQuery.sizeOf(context).width < 900;
+    final when = feed != null
+        ? feed.station.name
+        : ses == null
         ? 'Nothing recorded yet: tap the microphone to start.'
         : ses.live
             ? 'Listening now, since ${clock(ses.start)}.'
             : '${span(ses.start, ses.end ?? ses.start)}.';
-    final where = ses == null
+    final where = feed != null
+        ? (narrow ? '' : feed.showing)
+        : ses == null
         ? ''
         : ses.hasPlace
             ? place(ses.lat!, ses.lon!)
@@ -870,7 +1063,7 @@ class _NativePlateState extends State<NativePlate> {
           child: Text.rich(
             TextSpan(text: 'Birdsong', children: [
               // the session's number, small, in the lines' own style
-              if (n > 0 && i >= 0)
+              if (feed == null && n > 0 && i >= 0)
                 TextSpan(text: '  #${i + 1}/$n', style: sub.copyWith(height: 1)),
             ]),
             // a little smaller than the page's h1 (clamp(1.6rem,2.6vw,2.2rem));
@@ -898,6 +1091,18 @@ class _NativePlateState extends State<NativePlate> {
             children: [
               Text(when, style: sub),
               if (where.isNotEmpty) Text(where, style: sub),
+              if (feed != null && narrow)
+                Semantics(
+                  button: true,
+                  label: 'Showing ${feed.showing}; tap for the next period',
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _nextSpan(feed),
+                    child: Text(feed.showing,
+                        style: sub.copyWith(color: madder, decoration: TextDecoration.underline, decorationColor: rule)),
+                  ),
+                ),
               if (temp != null || sky != null)
                 Tooltip(
                   message: weatherWords(weather),
@@ -929,7 +1134,7 @@ class _NativePlateState extends State<NativePlate> {
   /// something asks them to: the sizing button, the window changing size, or
   /// a new bird joining while listening (it appears once its plate is
   /// ready, and the rest make room).
-  Widget _collage(Session ses, List<_Row> rows, String? newest, double width, double height) {
+  Widget _collage(Session? ses, List<_Row> rows, String? newest, double width, double height) {
     final showing = _showingFor(ses);
     final ready = [for (final r in rows) if (_art.containsKey(r.sci)) r];
     // Not before the height is known either (_measure), or they would be
@@ -1113,4 +1318,49 @@ IconData weatherIcon(String symbol) {
   if (s.startsWith('partlycloudy')) return Icons.wb_cloudy_outlined;
   // clear sky, fair
   return night ? Icons.nights_stay_outlined : Icons.wb_sunny_outlined;
+}
+
+/// A bird's card from a remote station: the particulars its list gave,
+/// then what the station says when asked (station_feed.dart).
+class _StationCard implements CardSource {
+  _StationCard(this.feed, this.s);
+
+  final StationFeed feed;
+  final StationSpecies s;
+
+  @override
+  String get sci => s.sci;
+  @override
+  String get common => s.common;
+
+  @override
+  List<(String, String)> get rows => [
+        ('Heard', calls(s.count)),
+        if (s.first != null) ('First heard', whenHeard(s.first!)),
+        if (s.last != null) ('Last heard', whenHeard(s.last!)),
+        if (s.maxConf > 0) ('Surest identification', inHundred(s.maxConf)),
+        if (s.avgConf > 0) ('Usual confidence', inHundred(s.avgConf)),
+        if (s.daysKnown > 0)
+          ('Known at this station', s.daysKnown == 1 ? 'since yesterday' : 'for ${thousands(s.daysKnown)} days'),
+      ];
+
+  @override
+  Future<List<(String, String)>> moreRows() => feed.particulars(s);
+  @override
+  Future<({List<int> hours, String label})?> hours() => feed.hourly(s);
+  @override
+  Future<List<({DateTime day, int count})>?> trend() => feed.trend(s);
+  @override
+  Future<List<CardRecording>> recordings() async => [
+        for (final r in await feed.recordings(s))
+          CardRecording(
+            key: '${r.at.millisecondsSinceEpoch}',
+            at: r.at,
+            confidence: r.confidence,
+            weather: r.weather,
+            url: r.audioUrl,
+            clip: r.clip,
+            spectrogramUrl: r.spectrogramUrl,
+          )
+      ];
 }

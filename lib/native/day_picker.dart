@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../engine/place_names.dart';
+import 'station_feed.dart';
 import '../store/detection_store.dart';
 import '../ui/format.dart';
 
@@ -184,6 +185,89 @@ class _DayPickerState extends State<DayPicker> {
             ),
             Text(n == 1 ? '1 species' : '$n species',
                 style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The calendar button on a remote station: any day from when its records
+/// begin (as far as it says) to today. Returns the day picked, or null.
+class StationDayPicker extends StatefulWidget {
+  const StationDayPicker({super.key, required this.feed});
+
+  final StationFeed feed;
+
+  static Future<DateTime?> show(BuildContext context, StationDayPicker picker) => showDialog<DateTime>(
+        context: context,
+        barrierColor: const Color(0x8C2A241C),
+        builder: (_) => picker,
+      );
+
+  @override
+  State<StationDayPicker> createState() => _StationDayPickerState();
+}
+
+class _StationDayPickerState extends State<StationDayPicker> {
+  late final DateTime _today = _day(DateTime.now());
+  late DateTime _picked = widget.feed.day ?? _today;
+
+  @override
+  Widget build(BuildContext context) {
+    final since = widget.feed.since;
+    final first = since == null ? DateTime(_today.year - 2, _today.month, _today.day) : _day(since);
+    final screen = MediaQuery.sizeOf(context);
+    return Dialog(
+      backgroundColor: paper,
+      surfaceTintColor: Colors.transparent,
+      insetPadding: EdgeInsets.symmetric(horizontal: screen.width * .04, vertical: screen.height * .04),
+      shape: const RoundedRectangleBorder(side: BorderSide(color: sepia)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Stack(
+          children: [
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: Padding(
+                  padding: EdgeInsets.all(6),
+                  child: DecoratedBox(decoration: BoxDecoration(border: Border.fromBorderSide(BorderSide(color: rule)))),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(widget.feed.station.name,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 1.1, color: ink)),
+                  SizedBox(
+                    height: 352,
+                    child: CalendarDatePicker(
+                      initialDate: _picked.isBefore(first) ? first : _picked,
+                      firstDate: first,
+                      lastDate: _today,
+                      currentDate: _today,
+                      onDateChanged: (d) => setState(() => _picked = _day(d)),
+                    ),
+                  ),
+                  Text('The plate for ${day(_picked)}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia)),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+                      TextButton(onPressed: () => Navigator.of(context).pop(_picked), child: const Text('OK')),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

@@ -102,6 +102,86 @@ class BirdFacts {
       ];
 }
 
+/// One recording on a card: on this device ([file]) or at a station
+/// ([url], [clip] the call within a longer recording).
+class CardRecording {
+  const CardRecording({
+    required this.key,
+    required this.at,
+    required this.confidence,
+    this.weather,
+    this.file,
+    this.url,
+    this.clip,
+    this.spectrogramFile,
+    this.spectrogramUrl,
+  });
+
+  final String key;
+  final DateTime at;
+  final double confidence;
+  final String? weather;
+  final File? file;
+  final String? url;
+  final (double, double)? clip;
+  final File? spectrogramFile;
+  final String? spectrogramUrl;
+
+  bool get playable => file != null || url != null;
+}
+
+/// Where a card's particulars come from: this device's sessions
+/// ([LocalCard]) or a remote station (native_plate.dart's station card).
+abstract class CardSource {
+  String get sci;
+  String get common;
+
+  /// The particulars known at once, the count first.
+  List<(String, String)> get rows;
+
+  /// More particulars that take asking for (a station's family, its first
+  /// and last call...), added under the first.
+  Future<List<(String, String)>> moreRows();
+
+  Future<({List<int> hours, String label})?> hours();
+  Future<List<({DateTime day, int count})>?> trend();
+  Future<List<CardRecording>> recordings();
+}
+
+/// A card from the detections on this device.
+class LocalCard implements CardSource {
+  LocalCard(this.facts, {required this.clipOf, required this.spectrogramOf});
+
+  final BirdFacts facts;
+  final File? Function(Detection) clipOf;
+  final File? Function(Detection) spectrogramOf;
+
+  @override
+  String get sci => facts.sci;
+  @override
+  String get common => facts.common;
+  @override
+  List<(String, String)> get rows => facts.rows;
+  @override
+  Future<List<(String, String)>> moreRows() async => const [];
+  @override
+  Future<({List<int> hours, String label})?> hours() async =>
+      (hours: facts.hours, label: 'Calls by hour of the day, over this period');
+  @override
+  Future<List<({DateTime day, int count})>?> trend() async => facts.trend();
+  @override
+  Future<List<CardRecording>> recordings() async => [
+        for (final d in facts.latest)
+          CardRecording(
+            key: '${d.id}',
+            at: d.at,
+            confidence: d.confidence,
+            file: d.hasClip ? clipOf(d) : null,
+            spectrogramFile: d.hasClip ? spectrogramOf(d) : null,
+          )
+      ];
+}
+
 /// The web plate's detail card (#detail), in Flutter: the plate with its
 /// credit, the latest recordings with the spectrogram of the newest and a
 /// Play for each, the names, a few lines from Wikipedia, the particulars,
@@ -115,21 +195,15 @@ class BirdCard extends StatefulWidget {
     super.key,
     required this.lib,
     required this.style,
-    required this.facts,
+    required this.source,
     required this.art,
-    required this.clipOf,
-    required this.spectrogramOf,
     required this.onChosen,
   });
 
   final PlateLibrary lib;
   final PlateStyle style;
-  final BirdFacts facts;
+  final CardSource source;
   final PlateArt? art;
-
-  /// A detection's recording and spectrogram on the device.
-  final File? Function(Detection) clipOf;
-  final File? Function(Detection) spectrogramOf;
   final ValueChanged<PlateArt?> onChosen;
 
   /// Open the card over [context].
@@ -146,14 +220,20 @@ class BirdCard extends StatefulWidget {
 class _BirdCardState extends State<BirdCard> {
   late PlateArt? _art = widget.art;
   late final Future<List<PlateCandidate>> _others =
-      widget.lib.candidates(widget.facts.sci, widget.facts.common);
-  late final Future<({String text, String url})?> _blurb = widget.lib.blurb(widget.facts.sci);
+      widget.lib.candidates(widget.source.sci, widget.source.common);
+  late final Future<({String text, String url})?> _blurb = widget.lib.blurb(widget.source.sci);
+  late final Future<List<(String, String)>> _more = widget.source.moreRows();
+  late final Future<({List<int> hours, String label})?> _hours = widget.source.hours();
+  late final Future<List<({DateTime day, int count})>?> _trend = widget.source.trend();
+  late final Future<List<CardRecording>> _recs = widget.source.recordings();
+  StreamSubscription<Duration>? _at;
+  double? _stopAt;
   String? _choosing;
 
   // One player for the card; the id of the recording playing, if any.
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<void>? _done;
-  int? _playing;
+  String? _playing;
 
   @override
   void initState() {
@@ -173,32 +253,49 @@ class _BirdCardState extends State<BirdCard> {
     _done = _player.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _playing = null);
     });
+    // a station's call within a longer recording stops at its end
+    _at = _player.onPositionChanged.listen((p) {
+      final end = _stopAt;
+      if (end != null && p.inMilliseconds / 1000 >= end) {
+        _player.stop();
+        if (mounted) setState(() => _playing = null);
+      }
+    });
   }
 
   @override
   void dispose() {
     _done?.cancel();
+    _at?.cancel();
     _player.dispose();
     super.dispose();
   }
 
-  Future<void> _play(Detection d) async {
+  Future<void> _play(CardRecording r) async {
     final was = _playing;
     await _player.stop();
     if (!mounted) return;
     setState(() => _playing = null);
-    if (was == d.id) return; // that was Stop
-    final f = widget.clipOf(d);
-    if (f == null) return;
+    if (was == r.key) return; // that was Stop
+    final clip = r.clip;
+    _stopAt = clip?.$2;
     try {
-      await _player.play(DeviceFileSource(f.path));
-      if (mounted) setState(() => _playing = d.id);
+      final f = r.file, u = r.url;
+      if (f != null) {
+        await _player.play(DeviceFileSource(f.path));
+      } else if (u != null) {
+        await _player.play(UrlSource(u),
+            position: clip == null ? null : Duration(milliseconds: (clip.$1 * 1000).round()));
+      } else {
+        return;
+      }
+      if (mounted) setState(() => _playing = r.key);
     } catch (_) {}
   }
 
   Future<void> _choose(PlateCandidate c) async {
     setState(() => _choosing = c.url);
-    final art = await widget.lib.choose(widget.facts.sci, c, widget.style);
+    final art = await widget.lib.choose(widget.source.sci, c, widget.style);
     if (!mounted) return;
     setState(() {
       _choosing = null;
@@ -263,9 +360,8 @@ class _BirdCardState extends State<BirdCard> {
 
   /// The plate, its credit, and the latest recordings.
   Widget _left(TextStyle text, Size screen, bool narrow) {
-    final art = _art, f = widget.facts;
+    final art = _art;
     final caption = TextStyle(fontFamily: serif, fontSize: text.fontSize! * .82, height: 1.35, color: sepia);
-    final spec = f.latest.isEmpty ? null : widget.spectrogramOf(f.latest.first);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -290,21 +386,32 @@ class _BirdCardState extends State<BirdCard> {
                 ]),
           style: caption,
         ),
-        if (f.latest.isNotEmpty) ...[
-          const SizedBox(height: 19.2),
-          _small('Latest recordings', text),
-          if (spec != null) _Spectrogram(spec),
-          const DecoratedBox(decoration: BoxDecoration(border: Border(top: BorderSide(color: rule)))),
-          for (final d in f.latest) _recording(d, text),
-          const SizedBox(height: 17.6),
-        ],
+        FutureBuilder<List<CardRecording>>(
+          future: _recs,
+          builder: (context, snap) {
+            final recs = snap.data ?? const <CardRecording>[];
+            if (recs.isEmpty) return const SizedBox();
+            final newest = recs.first;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 19.2),
+                _small('Latest recordings', text),
+                if (newest.spectrogramFile != null || newest.spectrogramUrl != null)
+                  _Spectrogram(file: newest.spectrogramFile, url: newest.spectrogramUrl),
+                const DecoratedBox(decoration: BoxDecoration(border: Border(top: BorderSide(color: rule)))),
+                for (final r in recs) _recording(r, text),
+                const SizedBox(height: 17.6),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
 
-  Widget _recording(Detection d, TextStyle text) {
+  Widget _recording(CardRecording d, TextStyle text) {
     final size = text.fontSize! * .95;
-    final clip = widget.clipOf(d);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4.8),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: rule))),
@@ -312,13 +419,13 @@ class _BirdCardState extends State<BirdCard> {
         crossAxisAlignment: CrossAxisAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,
         children: [
-          if (clip != null) ...[
+          if (d.playable) ...[
             SizedBox(
               width: size * 2.6,
               child: Semantics(
-                label: '${_playing == d.id ? 'Stop' : 'Play'} the recording from ${dayLabel(d.at)} at ${_two(d.at.hour)}:${_two(d.at.minute)}',
+                label: '${_playing == d.key ? 'Stop' : 'Play'} the recording from ${dayLabel(d.at)} at ${_two(d.at.hour)}:${_two(d.at.minute)}',
                 excludeSemantics: true,
-                child: _Link(_playing == d.id ? 'Stop' : 'Play', onTap: () => _play(d), size: size, color: madder),
+                child: _Link(_playing == d.key ? 'Stop' : 'Play', onTap: () => _play(d), size: size, color: madder),
               ),
             ),
             SizedBox(width: size * .8),
@@ -326,6 +433,13 @@ class _BirdCardState extends State<BirdCard> {
           Text('${dayLabel(d.at)}, ${_two(d.at.hour)}:${_two(d.at.minute)}', style: TextStyle(fontSize: size)),
           SizedBox(width: size * .8),
           Text(inHundred(d.confidence), style: TextStyle(fontSize: size)),
+          if (d.weather != null)
+            Expanded(
+              child: Text(d.weather!,
+                  textAlign: TextAlign.right,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: size, fontStyle: FontStyle.italic, color: sepia)),
+            ),
         ],
       ),
     );
@@ -333,7 +447,7 @@ class _BirdCardState extends State<BirdCard> {
 
   /// Names, Wikipedia, particulars, the two bar charts, other plates.
   Widget _right(TextStyle text) {
-    final f = widget.facts, size = text.fontSize!;
+    final f = widget.source, size = text.fontSize!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -369,25 +483,43 @@ class _BirdCardState extends State<BirdCard> {
             );
           },
         ),
-        _particulars(f, text),
-        SizedBox(height: size * 1.2),
-        _small('Calls by hour of the day, over this period', text),
-        _Bars(
-          values: f.hours,
-          label: (i, n) => '$i:00, ${calls(n)}',
+        FutureBuilder<List<(String, String)>>(
+          future: _more,
+          builder: (context, snap) => _particulars([...f.rows, ...?snap.data], text),
         ),
-        _BarLabels(const ['midnight', '6', 'noon', '18', '24'], size),
-        _small('Calls each day, the last thirty days', text),
-        Builder(builder: (context) {
-          final days = f.trend();
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Bars(values: [for (final d in days) d.count], label: (i, n) => '${dayLabel(days[i].day)}, ${calls(n)}'),
-              _BarLabels([dayLabel(days.first.day), 'today'], size),
-            ],
-          );
-        }),
+        SizedBox(height: size * 1.2),
+        FutureBuilder<({List<int> hours, String label})?>(
+          future: _hours,
+          builder: (context, snap) {
+            final h = snap.data;
+            if (h == null) return const SizedBox();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _small(h.label, text),
+                _Bars(values: h.hours, label: (i, n) => '$i:00, ${calls(n)}'),
+                _BarLabels(const ['midnight', '6', 'noon', '18', '24'], size),
+              ],
+            );
+          },
+        ),
+        FutureBuilder<List<({DateTime day, int count})>?>(
+          future: _trend,
+          builder: (context, snap) {
+            final days = snap.data;
+            if (days == null || days.isEmpty) return const SizedBox();
+            final last = days.last.day, now = DateTime.now();
+            final isToday = last.year == now.year && last.month == now.month && last.day == now.day;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _small('Calls each day, the last thirty days', text),
+                _Bars(values: [for (final d in days) d.count], label: (i, n) => '${dayLabel(days[i].day)}, ${calls(n)}'),
+                _BarLabels([dayLabel(days.first.day), isToday ? 'today' : dayLabel(last)], size),
+              ],
+            );
+          },
+        ),
         _alternatives(text),
       ],
     );
@@ -395,9 +527,8 @@ class _BirdCardState extends State<BirdCard> {
 
   /// The page's dl: name in italic sepia, value beside it; the count large
   /// and in madder; ruled above and below.
-  Widget _particulars(BirdFacts f, TextStyle text) {
+  Widget _particulars(List<(String, String)> rows, TextStyle text) {
     final size = text.fontSize!;
-    final rows = f.rows;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 9.6),
@@ -500,9 +631,10 @@ class _Link extends StatelessWidget {
 /// The newest recording's spectrogram: a band 5.5rem tall, ruled in sepia,
 /// greyed and warmed (the page's grayscale(1) sepia(.7) contrast(1.15)).
 class _Spectrogram extends StatelessWidget {
-  const _Spectrogram(this.file);
+  const _Spectrogram({this.file, this.url});
 
-  final File file;
+  final File? file;
+  final String? url;
 
   // grayscale, then sepia at .7, then contrast 1.15, as one matrix
   static final ColorFilter _filter = () {
@@ -542,7 +674,9 @@ class _Spectrogram extends StatelessWidget {
         decoration: BoxDecoration(border: Border.all(color: sepia)),
         child: ColorFiltered(
           colorFilter: _filter,
-          child: Image.file(file, fit: BoxFit.fill, width: double.infinity, errorBuilder: (_, __, ___) => const SizedBox()),
+          child: file != null
+              ? Image.file(file!, fit: BoxFit.fill, width: double.infinity, errorBuilder: (_, __, ___) => const SizedBox())
+              : Image.network(url!, fit: BoxFit.fill, width: double.infinity, errorBuilder: (_, __, ___) => const SizedBox()),
         ),
       );
 }
