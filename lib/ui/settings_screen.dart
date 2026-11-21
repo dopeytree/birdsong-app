@@ -111,7 +111,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         (v) => s.update((x) => x.nativeSizeBy = v)),
                     _switch('Fit on one screen', s.nativeFit,
                         (v) => s.update((x) => x.nativeFit = v)),
-                    _switch('Title in small capitals', s.nativeTitleCaps,
+                    _switch('Heading in small capitals', s.nativeTitleCaps,
                         (v) => s.update((x) => x.nativeTitleCaps = v)),
                     _switch('Species and calls under the date', s.nativeTotals,
                         (v) => s.update((x) => x.nativeTotals = v)),

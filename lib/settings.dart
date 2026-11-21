@@ -161,8 +161,9 @@ class Settings extends ChangeNotifier {
   /// unless chosen; the index's heading carries the number of species.
   bool nativeTotals = false;
 
-  /// The Flutter plate: the title "Birdsong" in small capitals, as Index of
-  /// Species is set, instead of the page's serif.
+  /// The Flutter plate: the whole heading (title, number, date, place,
+  /// weather) in small capitals, as Index of Species is set, instead of the
+  /// page's serif and italic.
   bool nativeTitleCaps = false;
 
   /// Listen here: show the walk on a map in place of the collage.

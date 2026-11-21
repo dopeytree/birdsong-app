@@ -795,8 +795,13 @@ class _NativePlateState extends State<NativePlate> {
   /// stop short of the menu and view column. [width] is the room from the
   /// left padding to the screen's right edge.
   Widget _heading(Session? ses, int i, int n, int species, int calls, double width, {bool totals = true}) {
-    // #sub{font-style:italic;color:sepia;font-size:.95rem}, three block spans
-    const sub = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: sepia, height: 1.5);
+    // #sub{font-style:italic;color:sepia;font-size:.95rem}, three block spans;
+    // or, when chosen (Settings > Experimental, nativeTitleCaps), the whole
+    // heading in small capitals as Index of Species is set
+    final capsOn = app.settings.nativeTitleCaps;
+    final sub = capsOn
+        ? const TextStyle(fontFamily: caps, fontSize: 14.4, letterSpacing: 14.4 * .06, color: sepia, height: 1.5)
+        : const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: sepia, height: 1.5);
     // record 44, pill 94, menu 48, and 8 from the edge; the column is the last two
     const row1 = 194.0, col = 56.0;
     final weather = ses?.weather;
@@ -822,19 +827,11 @@ class _NativePlateState extends State<NativePlate> {
             TextSpan(text: 'Birdsong', children: [
               // the session's number, small, in the lines' own style
               if (n > 0 && i >= 0)
-                TextSpan(
-                    text: '  #${i + 1}/$n',
-                    style: const TextStyle(
-                        fontFamily: serif,
-                        fontStyle: FontStyle.italic,
-                        fontSize: 15.2,
-                        letterSpacing: 0,
-                        color: sepia)),
+                TextSpan(text: '  #${i + 1}/$n', style: sub.copyWith(height: 1)),
             ]),
             // a little smaller than the page's h1 (clamp(1.6rem,2.6vw,2.2rem));
             // in small capitals like Index of Species when chosen
-            // (Settings > Experimental, nativeTitleCaps)
-            style: app.settings.nativeTitleCaps
+            style: capsOn
                 ? TextStyle(
                     fontFamily: caps,
                     fontSize: ((width + 16) * .021).clamp(20.0, 27.0),
