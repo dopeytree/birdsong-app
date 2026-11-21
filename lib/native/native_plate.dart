@@ -18,6 +18,7 @@ import '../ui/plate_buttons.dart';
 import '../ui/station_editor.dart';
 import 'bird_card.dart';
 import 'collage_view.dart';
+import 'day_picker.dart';
 import 'index_view.dart';
 import 'plate_library.dart';
 import 'walk_map.dart';
@@ -275,33 +276,26 @@ class _NativePlateState extends State<NativePlate> {
     _say(on ? 'The walk, on a map.' : 'The plate.', seconds: 2);
   }
 
-  /// The calendar button: a month calendar with the days that have a
-  /// session; picking one shows that day's first session, and the ‹ ›
-  /// step through the rest.
+  /// The calendar button (day_picker.dart): a month with the days that
+  /// have a session, and that day's sessions listed under it to pick from;
+  /// OK shows the day's first, and the ‹ › step through the rest.
   Future<void> _pickDay() async {
     final store = app.store;
     if (store.sessions.isEmpty) {
       _say('Nothing recorded yet.', seconds: 2);
       return;
     }
-    DateTime day(DateTime t) => DateTime(t.year, t.month, t.day);
-    final days = {for (final x in store.sessions) day(x.start)};
-    final first = days.reduce((a, b) => a.isBefore(b) ? a : b);
-    final last = days.reduce((a, b) => a.isAfter(b) ? a : b);
-    final shown = store.selected;
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: shown == null ? last : day(shown.start),
-      firstDate: first,
-      lastDate: last,
-      selectableDayPredicate: (d) => days.contains(day(d)),
-      helpText: 'Sessions on',
+    final model = app.settings.plateModel;
+    final picked = await DayPicker.show(
+      context,
+      DayPicker(
+        sessions: store.sessions,
+        shown: store.selected,
+        speciesIn: (x) => {for (final d in store.forPlate(model, session: x)) d.sci}.length,
+      ),
     );
     if (picked == null || !mounted) return;
-    final that = [for (final x in store.sessions) if (sameDay(x.start, picked)) x];
-    if (that.isEmpty) return;
-    store.select(that.first);
-    if (that.length > 1) _say('${that.length} sessions that day: ‹ › for the others.', seconds: 3);
+    store.select(picked);
   }
 
   /// A cross on the map: the bird's card, from this session's row when it
