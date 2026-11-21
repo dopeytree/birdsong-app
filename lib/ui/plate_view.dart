@@ -431,14 +431,9 @@ class _PlateViewState extends State<PlateView> {
     }
   }
 
-  // The stations button, under the sensors: with two saved stations a tap
-  // goes to the other; otherwise it lists them, with Add a station.
+  // The stations button, under the sensors: it lists them, to choose one,
+  // with Add a station.
   Future<void> _stationsTap(BuildContext context) async {
-    if (_s.stations.length == 2) {
-      _s.nextStation();
-      _say(_s.station!.name, seconds: 2);
-      return;
-    }
     final box = context.findRenderObject() as RenderBox?;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (box == null || overlay == null) return;
@@ -547,10 +542,10 @@ class _PlateViewState extends State<PlateView> {
                     if (!listen && _s.stations.isNotEmpty)
                       Builder(
                         builder: (bc) => IconButton(
-                          tooltip: _s.stations.length == 2 ? 'Next: ${_s.nextStationName}' : 'Stations',
+                          tooltip: 'Stations',
                           constraints: const BoxConstraints.tightFor(
                               width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                          icon: Icon(_s.stations.length == 2 ? Icons.swap_horiz : Icons.list),
+                          icon: Icon(Icons.list),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: () => _stationsTap(bc),
                         ),

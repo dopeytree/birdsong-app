@@ -201,16 +201,10 @@ class _NativePlateState extends State<NativePlate> {
         ],
       );
 
-  /// The stations button, left of the pill on a remote station: with two
-  /// saved stations a tap goes to the other; otherwise it lists them, with
-  /// Add a station (as plate_view.dart's).
+  /// The stations button, left of the pill on a remote station: it lists
+  /// them, to choose one, with Add a station (as plate_view.dart's).
   Future<void> _stationsTap(BuildContext context) async {
     final s = app.settings;
-    if (s.stations.length == 2) {
-      s.nextStation();
-      _say(s.station!.name, seconds: 2);
-      return;
-    }
     final box = context.findRenderObject() as RenderBox?;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (box == null || overlay == null) return;
@@ -840,16 +834,14 @@ class _NativePlateState extends State<NativePlate> {
                       // record in Listen here, or while a session records
                       if (feed == null || engine.running || engine.starting)
                         RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
-                      // on a station: the stations (the other, or a list)
+                      // on a station: the list of stations, to choose or add one
                       if (feed != null)
                         Builder(
                           builder: (bc) => IconButton(
-                            tooltip: app.settings.stations.length == 2
-                                ? 'Next: ${app.settings.nextStationName}'
-                                : 'Stations',
+                            tooltip: 'Stations',
                             constraints: const BoxConstraints.tightFor(
                                 width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                            icon: Icon(app.settings.stations.length == 2 ? Icons.swap_horiz : Icons.list),
+                            icon: Icon(Icons.list),
                             color: red,
                             onPressed: () => _stationsTap(bc),
                           ),
@@ -1033,12 +1025,11 @@ class _NativePlateState extends State<NativePlate> {
     // record 44, pill 82, menu 48, and 8 from the edge, and a little air:
     // the heading sits beside them, so every line stops short of them
     const row1 = 194.0;
-    final weather = ses?.weather;
+    final weather = feed != null ? feed.weather : ses?.weather;
     final temp = (weather?['temperatureC'] as num?)?.round();
     final sky = weather?['symbol'] as String?;
-    // a station: its name, then its period (or day); on a narrow screen
-    // the period is one word to tap for the next (the four sit at the top
-    // on a wide one)
+    // a station: its name, its place, its period (or day) and dates; on a
+    // narrow screen the period is one word to tap for the next
     final narrow = MediaQuery.sizeOf(context).width < 900;
     final when = feed != null
         ? feed.station.name
@@ -1047,8 +1038,9 @@ class _NativePlateState extends State<NativePlate> {
         : ses.live
             ? 'Listening now, since ${clock(ses.start)}.'
             : '${span(ses.start, ses.end ?? ses.start)}.';
+    // a station: where it is, when it says, as a session's place line
     final where = feed != null
-        ? (narrow ? '' : feed.showing)
+        ? (feed.place == null ? '' : place(feed.place!.$1, feed.place!.$2))
         : ses == null
         ? ''
         : ses.hasPlace
@@ -1103,6 +1095,12 @@ class _NativePlateState extends State<NativePlate> {
                         style: sub.copyWith(color: madder, decoration: TextDecoration.underline, decorationColor: rule)),
                   ),
                 ),
+              // then the dates it covers: on a narrow screen under the word,
+              // on a wide one after the period's name ("Seven days, Sun 15
+              // Nov – Sat 21 Nov"), as the four sit at the top
+              if (feed != null && narrow && feed.dates != feed.showing) Text(feed.dates, style: sub),
+              if (feed != null && !narrow)
+                Text(feed.dates == feed.showing ? feed.showing : '${feed.showing}, ${feed.dates}', style: sub),
               if (temp != null || sky != null)
                 Tooltip(
                   message: weatherWords(weather),

@@ -79,6 +79,46 @@ String _two(int n) => n.toString().padLeft(2, '0');
 String ymd(DateTime d) => '${d.year}-${_two(d.month)}-${_two(d.day)}';
 DateTime _dayOf(DateTime t) => DateTime(t.year, t.month, t.day);
 
+/// "Sat 21 Nov", with the year when it isn't this one.
+String dayWords(DateTime d) {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return '${days[d.weekday - 1]} ${d.day} ${months[d.month - 1]}${d.year == DateTime.now().year ? '' : ' ${d.year}'}';
+}
+
+/// BirdNET-Go's hourly weather for a day ({data: [{time, temperature,
+/// weather_main, weather_desc}]}, OpenWeather's words) as one reading in
+/// a session's shape: the latest for today, else the one nearest midday.
+Map<String, dynamic>? dayWeather(Object? j, {required bool today}) {
+  final rows = (j is Map ? j['data'] : j);
+  if (rows is! List) return null;
+  int mins(Map r) {
+    final p = '${r['time']}'.split(':');
+    return p.length < 2 ? -1 : (int.tryParse(p[0]) ?? 0) * 60 + (int.tryParse(p[1]) ?? 0);
+  }
+  Map? best;
+  for (final r in rows) {
+    if (r is! Map || r['temperature'] is! num || mins(r) < 0) continue;
+    if (best == null ||
+        (today ? mins(r) > mins(best) : (mins(r) - 720).abs() < (mins(best) - 720).abs())) {
+      best = r;
+    }
+  }
+  if (best == null) return null;
+  final main = '${best['weather_main'] ?? ''}'.toLowerCase(), desc = '${best['weather_desc'] ?? ''}'.toLowerCase();
+  final light = desc.contains('light') || main == 'drizzle', heavy = desc.contains('heavy');
+  final symbol = switch (main) {
+    'thunderstorm' => 'rainandthunder',
+    'snow' => light ? 'lightsnow' : (heavy ? 'heavysnow' : 'snow'),
+    'rain' || 'drizzle' => light ? 'lightrain' : (heavy ? 'heavyrain' : 'rain'),
+    'mist' || 'fog' || 'haze' || 'smoke' || 'dust' => 'fog',
+    'clouds' => desc.contains('few') || desc.contains('scattered') ? 'partlycloudy_day' : 'cloudy',
+    'clear' => 'clearsky_day',
+    _ => null,
+  };
+  return {'temperatureC': best['temperature'], if (symbol != null) 'symbol': symbol};
+}
+
 /// A station's time: "2026-11-20 07:42:10", an ISO stamp, or a bare
 /// "07:42:10" on [day].
 DateTime? stationTime(Object? v, DateTime day) {
@@ -150,6 +190,11 @@ class StationFeed extends ChangeNotifier {
   /// Where the station is, when it says.
   (double, double)? place;
 
+  /// The weather on the one day shown (today, or a day picked), as a
+  /// session keeps it ({'temperatureC', 'symbol'} in MET Norway's words),
+  /// from BirdNET-Go's own weather log; none over several days.
+  Map<String, dynamic>? weather;
+
   bool get _bw => station.isBirdWeather;
   String get _bwId => station.birdweather.replaceAll(RegExp(r'\D'), '');
 
@@ -189,9 +234,17 @@ class StationFeed extends ChangeNotifier {
     final today = _dayOf(DateTime.now());
     if (d == today) return 'Today';
     if (d == today.subtract(const Duration(days: 1))) return 'Yesterday';
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${days[d.weekday - 1]} ${d.day} ${months[d.month - 1]}${d.year == today.year ? '' : ' ${d.year}'}';
+    return dayWords(d);
+  }
+
+  /// The dates the plate covers, in words: "Sun 15 Nov – Sat 21 Nov", or
+  /// the one day; since records began, from the day they began.
+  String get dates {
+    final (from, to) = _range;
+    if (from == to) return dayWords(from);
+    // not yet known when they began: nothing more to say
+    if (day == null && span == Span.all && since == null) return showing;
+    return '${dayWords(from)} – ${dayWords(to)}';
   }
 
   /// The dates asked for: from, and to (inclusive for BirdNET-Go).
@@ -272,6 +325,16 @@ class StationFeed extends ChangeNotifier {
       if (known > 0) since = today.subtract(Duration(days: known));
     }
     _placeGo();
+    // one day: its weather, as BirdNET-Go logged it
+    if (from == to) {
+      try {
+        weather = dayWeather(await _get('/api/v2/weather/hourly/${ymd(from)}'), today: from == today);
+      } catch (_) {
+        weather = null;
+      }
+    } else {
+      weather = null;
+    }
     return rows;
   }
 
