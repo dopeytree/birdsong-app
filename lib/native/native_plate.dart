@@ -120,6 +120,9 @@ class _NativePlateState extends State<NativePlate> {
   // one more above it for the folded index's heading.
   // Set in each build.
   double _bottomRoom = 40 + 8 + 6;
+
+  // How far the page fades out above the bottom buttons.
+  static const double _fadeRoom = 20;
   final _shotKey = GlobalKey(), _shareKey = GlobalKey();
 
   /// The most species drawn on the plate; the rest are in the index only
@@ -488,7 +491,19 @@ class _NativePlateState extends State<NativePlate> {
                 child: SafeArea(
                   child: single
                       ? _single(mode, rows, newest)
-                      : LayoutBuilder(builder: (context, box) {
+                      // The page scrolls above the buttons along the bottom, never
+                      // under them, its last lines fading out as they reach them.
+                      : Padding(
+                          padding: EdgeInsets.only(bottom: _bottomRoom),
+                          child: ShaderMask(
+                            blendMode: BlendMode.dstIn,
+                            shaderCallback: (r) => LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: const [Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
+                              stops: [0, r.height <= _fadeRoom ? 0 : 1 - _fadeRoom / r.height, 1],
+                            ).createShader(r),
+                            child: LayoutBuilder(builder: (context, box) {
                   final side = (box.maxWidth * (fit ? .03 : .04)).clamp(16.0, fit ? 32.0 : 48.0);
                   final plateSide = (box.maxWidth * .02).clamp(8.0, 32.0);
                   final headSide = (box.maxWidth * .04).clamp(16.0, 48.0);
@@ -496,7 +511,8 @@ class _NativePlateState extends State<NativePlate> {
                     physics: _holdFor != null && (_holdFor == _showingFor(ses) || _holdFor == 'map')
                         ? const NeverScrollableScrollPhysics()
                         : null,
-                    padding: EdgeInsets.only(top: _padTop, bottom: _bottomRoom),
+                    // room at the end so the last lines can scroll clear of the fade
+                    padding: const EdgeInsets.only(top: _padTop, bottom: _fadeRoom),
                     child: Column(
                       key: _allKey,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -618,6 +634,8 @@ class _NativePlateState extends State<NativePlate> {
                     ),
                   );
                 }),
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -1024,7 +1042,7 @@ class _NativePlateState extends State<NativePlate> {
     final all = _allKey.currentContext?.size?.height, plate = _plateKey.currentContext?.size?.height;
     if (all == null || plate == null) return;
     // and the scroll view's padding above and below
-    final others = all - plate + _padTop + _bottomRoom;
+    final others = all - plate + _padTop + _fadeRoom;
     if (_others == null || (others - _others!).abs() > .5) setState(() => _others = others);
   }
 }
