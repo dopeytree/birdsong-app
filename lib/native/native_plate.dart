@@ -165,9 +165,9 @@ class _NativePlateState extends State<NativePlate> {
     return _feed = StationFeed(st);
   }
 
-  /// The four periods, as the web plate's header has them: the one shown
-  /// in madder italic; [short] on a phone, in the corner under the buttons
-  /// (Today, Week, Month, All).
+  /// The four periods (Today, Week, Month, All), as the web plate's header
+  /// has them: the one shown in madder italic; [short] on a phone, closer
+  /// together in the corner under the buttons.
   Widget _spanRow(StationFeed f, {bool short = false}) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -181,7 +181,7 @@ class _NativePlateState extends State<NativePlate> {
                 onTap: () => f.setSpan(s),
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: short ? 6 : 1.6),
-                  child: Text(short ? s.short : s.label,
+                  child: Text(s.short,
                       style: TextStyle(
                         fontFamily: serif,
                         fontSize: short ? 15 : 16,
@@ -1079,12 +1079,11 @@ class _NativePlateState extends State<NativePlate> {
     final temp = (weather?['temperatureC'] as num?)?.round();
     final sky = weather?['symbol'] as String?;
     // a station: its name beside the title (as a session's number), then
-    // the dates shown, its place, its weather and the sun and moon; on a
-    // wide screen the period's name leads the dates ("Seven days, Sun 15
-    // Nov – Sat 21 Nov"); the periods themselves sit with the buttons
+    // the dates shown, its place, its weather and the sun and moon; the
+    // periods themselves sit with the buttons
     final narrow = MediaQuery.sizeOf(context).width < 900;
     final when = feed != null
-        ? (narrow || feed.dates == feed.showing ? feed.dates : '${feed.showing}, ${feed.dates}')
+        ? feed.dates
         : ses == null
         ? 'Nothing recorded yet: tap the microphone to start.'
         : ses.live
@@ -1109,7 +1108,7 @@ class _NativePlateState extends State<NativePlate> {
               // the session's number, small, in the lines' own style
               if (feed == null && n > 0 && i >= 0)
                 TextSpan(text: '  #${i + 1}/$n', style: sub.copyWith(height: 1)),
-              if (feed != null) TextSpan(text: '  #${feed.station.name}', style: sub.copyWith(height: 1)),
+              if (feed != null) TextSpan(text: '  #${feed.station.name.toLowerCase()}', style: sub.copyWith(height: 1)),
             ]),
             // a little smaller than the page's h1 (clamp(1.6rem,2.6vw,2.2rem));
             // in small capitals like Index of Species when chosen
