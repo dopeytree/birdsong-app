@@ -20,6 +20,8 @@ import 'bird_card.dart';
 import 'collage_view.dart';
 import 'day_picker.dart';
 import 'index_view.dart';
+import 'landmarks.dart';
+import 'passed_view.dart';
 import 'plate_library.dart';
 import 'station_feed.dart';
 import 'walk_map.dart';
@@ -81,6 +83,9 @@ class _Row {
 
 class _NativePlateState extends State<NativePlate> {
   PlateLibrary? _lib;
+
+  // the map's extras, shared by the map and "Passed on the way"
+  final _landmarks = LandmarkLookup();
 
   // Each species' plate once found; null when there is none. A species not
   // in the map yet is still being looked for.
@@ -329,6 +334,7 @@ class _NativePlateState extends State<NativePlate> {
 
   @override
   void dispose() {
+    _landmarks.dispose();
     _noteTimer?.cancel();
     _feed?.dispose();
     app.engine.removeListener(_watchSession);
@@ -773,6 +779,7 @@ class _NativePlateState extends State<NativePlate> {
                                             ? Walk.station(feed.station.name, feed.place)
                                             : Walk.of(store, ses!, app.settings.plateModel),
                                         allBirds: app.settings.mapBirds == 'all',
+                                        landmarks: app.settings.mapExtras ? _landmarks : null,
                                         size: Size(box.maxWidth - 2 * plateSide,
                                             _plateHeight(box.maxWidth, box.maxHeight) - 12),
                                         onBird: (sci, common) => _openFromMap(sci, common, rows),
@@ -848,6 +855,21 @@ class _NativePlateState extends State<NativePlate> {
                             ),
                           ),
                         ),
+                        // the map's extras: what the walk went by, under the index
+                        if (mapOn && app.settings.mapExtras)
+                          Center(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: fit ? double.infinity : 1248),
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(side, showIndex && !foldedInline ? 0 : 24, side, fit ? 12.8 : 40),
+                                child: PassedView(
+                                  lookup: _landmarks,
+                                  fit: fit,
+                                  width: math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side,
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   );

@@ -14,6 +14,7 @@ import 'package:latlong2/latlong.dart' hide Path;
 import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
 import '../store/detection_store.dart';
 import 'contours.dart';
+import 'landmarks.dart';
 import 'map_style.dart';
 
 const _tilesJson = 'https://tiles.openfreemap.org/planet';
@@ -167,6 +168,7 @@ class WalkMap extends StatefulWidget {
     required this.size,
     required this.onBird,
     required this.onHold,
+    this.landmarks,
   });
 
   final Walk? walk;
@@ -174,6 +176,9 @@ class WalkMap extends StatefulWidget {
   final Size size;
   final void Function(String sci, String common) onBird;
   final ValueChanged<bool> onHold;
+
+  /// The extras (Settings.mapExtras), or null when they are off.
+  final LandmarkLookup? landmarks;
 
   @override
   State<WalkMap> createState() => _WalkMapState();
@@ -204,9 +209,14 @@ class _WalkMapState extends State<WalkMap> {
   ({String title, String sub, Offset at})? _tip;
   Timer? _tipTimer;
 
+  int _focusSeen = 0;
+
   @override
   void initState() {
     super.initState();
+    _focusSeen = widget.landmarks?.focusAsked ?? 0;
+    widget.landmarks?.addListener(_landmarksChanged);
+    _askLandmarks();
     _Kit.load().then((k) {
       if (mounted) setState(() => _kit = k);
     }).catchError((Object _) {
@@ -217,6 +227,12 @@ class _WalkMapState extends State<WalkMap> {
   @override
   void didUpdateWidget(WalkMap old) {
     super.didUpdateWidget(old);
+    if (widget.landmarks != old.landmarks) {
+      old.landmarks?.removeListener(_landmarksChanged);
+      widget.landmarks?.addListener(_landmarksChanged);
+      _focusSeen = widget.landmarks?.focusAsked ?? 0;
+    }
+    _askLandmarks();
     if (widget.walk?.key != old.walk?.key) _dragged = false;
     if (_ready && !_dragged && widget.walk?.key != _fittedTo) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _fit());
@@ -225,10 +241,38 @@ class _WalkMapState extends State<WalkMap> {
 
   @override
   void dispose() {
+    widget.landmarks?.removeListener(_landmarksChanged);
     _contourTimer?.cancel();
     _tipTimer?.cancel();
     _map.dispose();
     super.dispose();
+  }
+
+  // ---- the extras ------------------------------------------------------------
+
+  /// The page's loadPlaces() path: the trail and the crosses, or just the
+  /// place when that is all there is.
+  void _askLandmarks() {
+    final l = widget.landmarks, w = widget.walk;
+    if (l == null || w == null) return;
+    final path = [...w.trail, for (final b in w.birds) b.at];
+    if (path.isEmpty && w.place != null) path.add(w.place!);
+    // not while building: the lookup tells its listeners at once
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) l.want(w.key, path);
+    });
+  }
+
+  void _landmarksChanged() {
+    if (!mounted) return;
+    final l = widget.landmarks!;
+    if (l.focusAsked != _focusSeen && l.focus != null && _ready) {
+      _focusSeen = l.focusAsked;
+      // map.flyTo({center, zoom: max(zoom, 15.5)})
+      _map.move(l.focus!, math.max(_map.camera.zoom, 15.5));
+      _dragged = true;
+    }
+    setState(() {});
   }
 
   // ---- the view ----------------------------------------------------------
@@ -344,11 +388,15 @@ class _WalkMapState extends State<WalkMap> {
 
   // ---- taps -----------------------------------------------------------------
 
-  void _tapped(TapPosition at, LatLng _) {
+  void _tapped(TapPosition at, LatLng ll) {
     final p = at.relative;
     if (p == null) return;
     final hit = _peaks.queryRenderedFeatures(p, layerIds: const ['peaks']);
     if (hit.isEmpty) {
+      final found = widget.landmarks?.current;
+      for (final a in [...?found?.monuments, ...?found?.nature]) {
+        if (inShape(ll, a.shape)) return _say(p, a.name, a.about);
+      }
       if (_tip != null) setState(() => _tip = null);
       return;
     }
@@ -453,6 +501,103 @@ class _WalkMapState extends State<WalkMap> {
     ];
   }
 
+  // the extras' colours, as the page's layers
+  static const _natureEdge = Color(0xFF5F7D4C), _natureWash = Color(0xFF7F9A6A);
+  static const _monument = Color(0xFF8A5A3A), _building = Color(0xFF6B4A33), _wiki = Color(0xFF3D5566);
+
+  TextStyle _labelStyle(Color c) => TextStyle(
+        fontFamily: serif,
+        fontStyle: FontStyle.italic,
+        fontSize: 10,
+        color: c,
+        shadows: const [Shadow(color: paper, blurRadius: 1.5), Shadow(color: paper, blurRadius: 1.5)],
+      );
+
+  Iterable<Polygon> _polys(Area a, {Color? fill, double edge = 0, Color edgeColor = ink, StrokePattern? pattern, String? label, TextStyle? style}) sync* {
+    for (final rings in a.shape) {
+      if (rings.isEmpty || rings.first.length < 3) continue;
+      yield Polygon(
+        points: rings.first,
+        holePointsList: rings.length > 1 ? rings.sublist(1) : null,
+        color: fill,
+        borderStrokeWidth: edge,
+        borderColor: edgeColor,
+        pattern: pattern ?? const StrokePattern.solid(),
+        label: label,
+        labelStyle: style ?? const TextStyle(),
+        labelPlacementCalculator: const PolygonLabelPlacementCalculator.polylabel(),
+      );
+    }
+  }
+
+  /// Protected nature sites: a faint green wash, a dashed edge, the name.
+  List<Polygon> _nature() => [
+        for (final a in widget.landmarks?.current?.nature ?? const <Area>[])
+          ..._polys(a,
+              fill: _natureWash.withValues(alpha: .07),
+              edge: 1.2,
+              edgeColor: _natureEdge.withValues(alpha: .7),
+              pattern: const StrokePattern.dashed(segments: [3.6, 2.4]),
+              label: a.name,
+              style: _labelStyle(_natureEdge)),
+      ];
+
+  /// Scheduled monuments' dotted edges, named from zoom 13.5.
+  List<Polygon> _monumentEdges() => [
+        for (final a in widget.landmarks?.current?.monuments ?? const <Area>[])
+          ..._polys(a,
+              edge: .9,
+              edgeColor: _monument,
+              pattern: const StrokePattern.dashed(segments: [.9, 1.35]),
+              label: _zoom >= 13.5 ? a.name : null,
+              style: _labelStyle(_monument)),
+      ];
+
+  /// A listed building's little church, or a Wikipedia place's ringed dot,
+  /// with its name beside it once close enough.
+  List<Marker> _spots(List<Spot> spots, {required bool wiki}) => [
+        for (final s in spots)
+          Marker(
+            point: s.at,
+            width: 220,
+            height: 44,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Center(
+                  child: Semantics(
+                    button: true,
+                    label: '${s.name}, ${s.about}',
+                    child: GestureDetector(
+                      onTapUp: (d) {
+                        final box = context.findRenderObject() as RenderBox?;
+                        _say(box?.globalToLocal(d.globalPosition) ?? Offset.zero, s.name, s.about);
+                      },
+                      child: CustomPaint(
+                        size: const Size.square(24),
+                        painter: wiki ? const _WikiPainter() : _BuildingPainter(s.grade == 'I' ? 1.15 : .9),
+                      ),
+                    ),
+                  ),
+                ),
+                if (_zoom >= (wiki ? 14 : 14.5))
+                  Positioned(
+                    left: 110 + (wiki ? 8 : 9),
+                    top: 0,
+                    bottom: 0,
+                    width: 90,
+                    child: IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _Halo(s.name, 10, wiki ? _wiki : _building, halo: 1.5, align: TextAlign.left),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ];
+
   /// A cross where each species was first heard, or at every call; the
   /// first of each named and on top.
   List<Marker> _birds() {
@@ -541,6 +686,12 @@ class _WalkMapState extends State<WalkMap> {
                       sprites: kit.sprites,
                       glyphs: kit.glyphs,
                     ),
+                    // extras: protected nature sites, scheduled monuments
+                    if (widget.landmarks?.current != null) ...[
+                      PolygonLayer(polygons: _nature(), drawLabelsLast: true),
+                      _Hatch(widget.landmarks!.current!.monuments),
+                      PolygonLayer(polygons: _monumentEdges(), drawLabelsLast: true),
+                    ],
                     // contours, traced here from the elevation tiles
                     PolylineLayer(polylines: _contourLines()),
                     MarkerLayer(markers: _contourLabels()),
@@ -551,6 +702,10 @@ class _WalkMapState extends State<WalkMap> {
                       glyphs: kit.glyphs,
                       controller: _peaks,
                     ),
+                    if (widget.landmarks?.current != null) ...[
+                      MarkerLayer(markers: _spots(widget.landmarks!.current!.listed, wiki: false)),
+                      MarkerLayer(markers: _spots(widget.landmarks!.current!.wiki, wiki: true)),
+                    ],
                     // the walk
                     if (w != null && w.trail.length > 1)
                       PolylineLayer(polylines: [
@@ -626,26 +781,27 @@ class _WalkMapState extends State<WalkMap> {
 
 /// Text in the map's way: italic, with a halo of paper round it.
 class _Halo extends StatelessWidget {
-  const _Halo(this.text, this.size, this.color, {required this.halo});
+  const _Halo(this.text, this.size, this.color, {required this.halo, this.align = TextAlign.center});
 
   final String text;
   final double size;
   final Color color;
   final double halo;
+  final TextAlign align;
 
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(fontSize: size, fontStyle: FontStyle.italic, height: 1.2);
     return Stack(children: [
       Text(text,
-          textAlign: TextAlign.center,
+          textAlign: align,
           style: style.copyWith(
               foreground: Paint()
                 ..style = PaintingStyle.stroke
                 ..strokeWidth = halo * 2
                 ..strokeJoin = StrokeJoin.round
                 ..color = paper)),
-      Text(text, textAlign: TextAlign.center, style: style.copyWith(color: color)),
+      Text(text, textAlign: align, style: style.copyWith(color: color)),
     ]);
   }
 }
@@ -680,6 +836,123 @@ class _CrossPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CrossPainter old) => old.size != size;
+}
+
+/// Scheduled monuments' hatching: fine diagonal lines in brown, clipped to
+/// each monument (the page's "hatch" fill pattern).
+class _Hatch extends StatelessWidget {
+  const _Hatch(this.areas);
+
+  final List<Area> areas;
+
+  @override
+  Widget build(BuildContext context) =>
+      IgnorePointer(child: CustomPaint(size: Size.infinite, painter: _HatchPainter(areas, MapCamera.of(context))));
+}
+
+class _HatchPainter extends CustomPainter {
+  const _HatchPainter(this.areas, this.camera);
+
+  final List<Area> areas;
+  final MapCamera camera;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = const Color(0xFF8A5A3A).withValues(alpha: .55 * .9)
+      ..strokeWidth = .6;
+    for (final a in areas) {
+      for (final rings in a.shape) {
+        if (rings.isEmpty || rings.first.length < 3) continue;
+        final path = ui.Path()..fillType = PathFillType.evenOdd;
+        for (final r in rings) {
+          path.addPolygon([for (final p in r) camera.latLngToScreenOffset(p)], true);
+        }
+        final b = path.getBounds().intersect(Offset.zero & size);
+        if (b.isEmpty) continue;
+        canvas.save();
+        canvas.clipPath(path);
+        // lines x + y = c, every 4 points
+        for (var c = ((b.left + b.top) / 4).floor() * 4.0; c <= b.right + b.bottom; c += 4) {
+          canvas.drawLine(Offset(c - b.top, b.top), Offset(c - b.bottom, b.bottom), line);
+        }
+        canvas.restore();
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_HatchPainter old) => old.camera != camera || old.areas != areas;
+}
+
+/// A listed building: the page's little church with a cross on its gable,
+/// drawn in its 32-unit picture at half size, a little larger for Grade I.
+class _BuildingPainter extends CustomPainter {
+  const _BuildingPainter(this.scale);
+
+  final double scale;
+
+  @override
+  void paint(Canvas canvas, Size box) {
+    final k = .5 * scale;
+    canvas.translate(box.width / 2 - 16 * k, box.height / 2 - 16 * k);
+    canvas.scale(k);
+    final body = ui.Path()
+      ..moveTo(8, 27)
+      ..lineTo(8, 15)
+      ..lineTo(16, 8)
+      ..lineTo(24, 15)
+      ..lineTo(24, 27)
+      ..close();
+    final pen = Paint()
+      ..color = const Color(0xFF6B4A33)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas
+      ..drawPath(body, Paint()..color = paper)
+      ..drawPath(body, pen)
+      ..drawPath(
+          ui.Path()
+            ..moveTo(16, 8)
+            ..lineTo(16, 3)
+            ..moveTo(13.5, 5)
+            ..lineTo(18.5, 5)
+            ..moveTo(14, 27)
+            ..lineTo(14, 20)
+            ..lineTo(18, 20)
+            ..lineTo(18, 27),
+          pen);
+  }
+
+  @override
+  bool shouldRepaint(_BuildingPainter old) => old.scale != scale;
+}
+
+/// A Wikipedia place: a ring round a dot, in slate (the page's 28-unit
+/// picture at half size).
+class _WikiPainter extends CustomPainter {
+  const _WikiPainter();
+
+  @override
+  void paint(Canvas canvas, Size box) {
+    const slate = Color(0xFF3D5566);
+    final c = box.center(Offset.zero);
+    canvas
+      ..drawCircle(c, 4, Paint()..color = paper)
+      ..drawCircle(
+          c,
+          4,
+          Paint()
+            ..color = slate
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1)
+      ..drawCircle(c, 1.3, Paint()..color = slate);
+  }
+
+  @override
+  bool shouldRepaint(_WikiPainter old) => false;
 }
 
 /// Start (a ring) and End or Now (a ring round a dot).
