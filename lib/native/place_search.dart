@@ -25,9 +25,12 @@ class FoundPlace {
 }
 
 /// Photon's answer as places. Its extent is two corners, in no stated
-/// order, so it is read as the smallest and largest of each.
+/// order, so it is read as the smallest and largest of each. One place of
+/// each name and where: Photon gives a town's point, its boundary and its
+/// parish separately, which read the same; the first (its best) is kept.
 List<FoundPlace> placesOf(Map<String, dynamic> j) {
   final out = <FoundPlace>[];
+  final seen = <String>{};
   for (final f in (j['features'] as List?) ?? const []) {
     final m = f as Map<String, dynamic>;
     final p = (m['properties'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -40,6 +43,7 @@ List<FoundPlace> placesOf(Map<String, dynamic> j) {
       final v = p[k];
       if (v is String && v.isNotEmpty && v != name && !parts.contains(v)) parts.add(v);
     }
+    if (!seen.add('${name.toLowerCase()}|${parts.join(', ').toLowerCase()}')) continue;
     final e = (p['extent'] as List?)?.cast<num>();
     out.add(FoundPlace(
       name,
@@ -60,7 +64,7 @@ Future<List<FoundPlace>> searchPlaces(String q, LatLng near) async {
   try {
     final req = await client.getUrl(Uri.https('photon.komoot.io', '/api', {
       'q': q,
-      'limit': '6',
+      'limit': '10',
       'lang': 'en',
       'lat': near.latitude.toStringAsFixed(4),
       'lon': near.longitude.toStringAsFixed(4),
@@ -163,7 +167,10 @@ class _PlaceSearchState extends State<PlaceSearch> {
   @override
   Widget build(BuildContext context) {
     const box = BoxDecoration(color: paper, border: Border.fromBorderSide(BorderSide(color: paperDeep)));
-    return SizedBox(
+    // TextFieldTapRegion: a click on a suggestion counts as inside the field,
+    // so the field keeps its focus (and the list stays) until the tap lands.
+    return TextFieldTapRegion(
+      child: SizedBox(
       width: widget.width,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -229,7 +236,7 @@ class _PlaceSearchState extends State<PlaceSearch> {
                       child: Text(_note!,
                           style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14, color: sepia)),
                     ),
-                  for (final p in _found)
+                  for (final p in _found.take(6))
                     InkWell(
                       onTap: () => _pick(p),
                       child: Padding(
@@ -252,6 +259,7 @@ class _PlaceSearchState extends State<PlaceSearch> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

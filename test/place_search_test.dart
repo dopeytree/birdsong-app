@@ -28,6 +28,15 @@ void main() {
           },
           'properties': {'name': 'Glastonbury Tor', 'city': 'Glastonbury', 'country': 'United Kingdom'},
         },
+        // the same town again (its boundary): folded into the first
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [-2.7150, 51.1470]
+          },
+          'properties': {'name': 'Glastonbury', 'county': 'Somerset', 'state': 'England', 'country': 'United Kingdom'},
+        },
         {
           'type': 'Feature',
           'geometry': {'type': 'Point', 'coordinates': [0, 0]},

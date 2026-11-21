@@ -1163,7 +1163,7 @@ class _ZoomButtons extends StatelessWidget {
                 child: const SizedBox(
                   width: 29,
                   height: 29,
-                  child: Center(child: Icon(Icons.my_location, size: 15, color: ink)),
+                  child: Center(child: Icon(Icons.refresh, size: 17, color: ink)),
                 ),
               ),
             ),
