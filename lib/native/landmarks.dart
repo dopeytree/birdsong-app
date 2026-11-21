@@ -6,11 +6,12 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 
-/// The map's extras, from assets/app/map-mode.js loadPlaces(): Grade I and
-/// II* listed buildings and scheduled monuments (Historic England), protected
-/// nature sites (Natural England) and Wikipedia places round the walk, and
-/// what of them the walk passed. Off unless Settings.mapExtras: these send
-/// the walk's area to those three.
+/// The map's extras, from assets/app/map-mode.js loadPlaces(): listed
+/// buildings, scheduled monuments, registered parks and gardens and
+/// battlefields, and World Heritage Sites (Historic England), protected
+/// nature sites (Natural England) and Wikipedia places, round the walk and
+/// wherever the map is looked at, and what of them the walk passed. Off
+/// unless Settings.mapExtras: these send the area to those three.
 const _he = 'https://services-eu1.arcgis.com/ZOdPfBS3aqqDYPUQ/arcgis/rest/services/'
     'National_Heritage_List_for_England_NHLE_v02_VIEW/FeatureServer';
 const _ne = 'https://services.arcgis.com/JJzESW51TqeY9uat/arcgis/rest/services';
@@ -73,11 +74,14 @@ class Passed {
   final int order;
 }
 
-/// What was found round one walk.
+/// What was found in one area.
 class Landmarks {
   const Landmarks({
     this.listed = const [],
     this.monuments = const [],
+    this.parks = const [],
+    this.battlefields = const [],
+    this.worldHeritage = const [],
     this.nature = const [],
     this.wiki = const [],
     this.passed = const [],
@@ -86,12 +90,46 @@ class Landmarks {
 
   final List<Spot> listed;
   final List<Area> monuments;
+
+  /// Registered parks and gardens.
+  final List<Area> parks;
+  final List<Area> battlefields;
+
+  /// World Heritage Sites.
+  final List<Area> worldHeritage;
   final List<Area> nature;
   final List<Spot> wiki;
+
+  /// What the walk passed; only for a walk's own lookup.
   final List<Passed> passed;
 
   /// The services that could not be reached ("Wikipedia").
   final List<String> unreached;
+
+  /// This and [other] together, each place once (by name, kind and where).
+  Landmarks merge(Landmarks other) {
+    List<T> both<T>(List<T> a, List<T> b, String Function(T) key) {
+      final seen = <String>{};
+      return [
+        for (final x in [...a, ...b])
+          if (seen.add(key(x))) x
+      ];
+    }
+
+    String spot(Spot s) => '${s.name}|${s.at.latitude.toStringAsFixed(5)},${s.at.longitude.toStringAsFixed(5)}';
+    String area(Area a) => '${a.kind}|${a.about}|${a.name}';
+    return Landmarks(
+      listed: both(listed, other.listed, spot),
+      monuments: both(monuments, other.monuments, area),
+      parks: both(parks, other.parks, area),
+      battlefields: both(battlefields, other.battlefields, area),
+      worldHeritage: both(worldHeritage, other.worldHeritage, area),
+      nature: both(nature, other.nature, area),
+      wiki: both(wiki, other.wiki, spot),
+      passed: passed,
+      unreached: unreached,
+    );
+  }
 }
 
 // ---- geometry, as the page's ----------------------------------------------
@@ -140,9 +178,10 @@ List<LatLng> probeOf(List<LatLng> path) {
   return [for (var i = 0; i < path.length; i += every) path[i]];
 }
 
-/// What the walk passed: buildings within 120 m, monuments within 200 m or
-/// walked through, nature sites walked through (each name and kind once),
-/// Wikipedia places within 400 m; nature first, then nearest first.
+/// What the walk passed: buildings within 120 m, monuments (and parks,
+/// battlefields and World Heritage Sites) within 200 m or walked through,
+/// nature sites walked through (each name and kind once), Wikipedia places
+/// within 400 m; nature first, then nearest first.
 List<Passed> passedOnTheWay(List<LatLng> path,
     {List<Spot> listed = const [], List<Area> monuments = const [], List<Area> nature = const [], List<Spot> wiki = const []}) {
   final probe = probeOf(path);
@@ -285,31 +324,130 @@ Future<List<({Map<String, dynamic> props, Map<String, dynamic> geometry})>> _arc
   return featuresOf(await _getJson(Uri.parse('$url/query').replace(queryParameters: {...q, 'f': 'json'})));
 }
 
-Future<List<Spot>> _wikiNear(List<double> f) async => wikiOf(await _getJson(Uri.https('en.wikipedia.org', '/w/api.php', {
+Future<List<Spot>> _wikiNear(List<double> f, int limit) async => wikiOf(await _getJson(Uri.https('en.wikipedia.org', '/w/api.php', {
       'action': 'query',
       'format': 'json',
       'generator': 'geosearch',
       'ggsbbox': '${f[3]}|${f[0]}|${f[1]}|${f[2]}',
-      'ggslimit': '20',
+      'ggslimit': '$limit',
       'prop': 'coordinates|description',
-      'colimit': '20',
+      'colimit': '$limit',
     })));
 
-/// Looks up and keeps what is round each walk (by its key), so a walk
-/// opened again is not asked about twice in a run. The map draws
-/// [current]; "Passed on the way" lists it; [show] asks the map to go to
-/// a place in the list.
+/// Look up [frame] ([west, south, east, north]): all of Historic England's
+/// kinds, Natural England's and Wikipedia's, side by side; one that fails
+/// is named in unreached. Grade II buildings only when [gradeTwo] (they are
+/// most of them, so only for a close view). [path], when given, is a walk:
+/// what it passed is worked out too.
+Future<Landmarks> lookUpFrame(List<double> frame, {bool gradeTwo = false, List<LatLng>? path, int wikiLimit = 20}) async {
+  final unreached = <String>[];
+  var listed = <Spot>[], wiki = <Spot>[];
+  var monuments = <Area>[], parks = <Area>[], battlefields = <Area>[], worldHeritage = <Area>[], nature = <Area>[];
+  Future<List<Area>> areas(String url, String about, String failed, {double simplify = .00002}) =>
+      _arc(url, frame, simplify: simplify).then((fs) => [
+            for (final f in fs)
+              Area(nameOf(f.props), f.props['Grade'] != null ? '$about, Grade ${f.props['Grade']}' : about, shapeOf(f.geometry))
+          ]).catchError((Object _) {
+        unreached.add(failed);
+        return <Area>[];
+      });
+  await Future.wait([
+    _arc('$_he/0', frame, where: gradeTwo ? null : "Grade IN ('I','II*')").then((fs) {
+      listed = [
+        for (final f in fs)
+          if (f.geometry['type'] == 'Point')
+            Spot(nameOf(f.props), 'Listed building, Grade ${f.props['Grade'] ?? ''}', _ll(f.geometry['coordinates']),
+                grade: '${f.props['Grade'] ?? ''}'),
+      ];
+    }).catchError((Object _) {
+      unreached.add('Historic England (buildings)');
+    }),
+    _arc('$_he/6', frame, simplify: .00002).then((fs) {
+      monuments = [for (final f in fs) Area(nameOf(f.props), 'Scheduled monument', shapeOf(f.geometry))];
+    }).catchError((Object _) {
+      unreached.add('Historic England (monuments)');
+    }),
+    areas('$_he/7', 'Registered park and garden', 'Historic England (parks and gardens)').then((a) => parks = a),
+    areas('$_he/8', 'Registered battlefield', 'Historic England (battlefields)').then((a) => battlefields = a),
+    areas('$_he/10', 'World Heritage Site', 'Historic England (World Heritage Sites)', simplify: .0001)
+        .then((a) => worldHeritage = a),
+    Future.wait([
+      for (final k in natureKinds)
+        _arc(k.url, frame, simplify: .0001)
+            .then((fs) => [for (final f in fs) Area(nameOf(f.props), k.full, shapeOf(f.geometry), kind: k.kind)])
+            .catchError((Object _) {
+          unreached.add('Natural England (${k.kind})');
+          return <Area>[];
+        }),
+    ]).then((all) => nature = [for (final a in all) ...a]),
+    _wikiNear(frame, wikiLimit).then((w) => wiki = w).catchError((Object _) {
+      unreached.add('Wikipedia');
+      return <Spot>[];
+    }),
+  ]);
+  return Landmarks(
+    listed: listed,
+    monuments: monuments,
+    parks: parks,
+    battlefields: battlefields,
+    worldHeritage: worldHeritage,
+    nature: nature,
+    wiki: wiki,
+    passed: path == null
+        ? const []
+        : passedOnTheWay(path,
+            listed: listed, monuments: [...monuments, ...parks, ...battlefields, ...worldHeritage], nature: nature, wiki: wiki),
+    unreached: unreached,
+  );
+}
+
+/// The area a view is looked up for: [bounds] and a quarter again round it,
+/// snapped out to a hundredth of a degree so small moves ask nothing new.
+List<double> viewFrame(double west, double south, double east, double north) {
+  final px = (east - west) * .25, py = (north - south) * .25;
+  double down(double v) => (v * 100).floorToDouble() / 100;
+  double up(double v) => (v * 100).ceilToDouble() / 100;
+  return [down(west - px), down(south - py), up(east + px), up(north + py)];
+}
+
+/// Whether [outer] holds all of [inner].
+bool frameHolds(List<double> outer, List<double> inner) =>
+    outer[0] <= inner[0] && outer[1] <= inner[1] && outer[2] >= inner[2] && outer[3] >= inner[3];
+
+/// Looks up and keeps what is round each walk (by its key), and what is in
+/// the map's view as it moves. The map draws [current] (both together);
+/// "Passed on the way" lists [walk]; [show] asks the map to go to a place
+/// in the list.
 class LandmarkLookup extends ChangeNotifier {
   static final Map<String, Landmarks> _kept = {};
 
+  /// The views looked up this run, newest last, so going back asks nothing.
+  static final List<(List<double>, bool, Landmarks)> _views = [];
+
   String? _key;
-  Landmarks? current;
+
+  /// What is round the walk, with what it passed.
+  Landmarks? walk;
+
+  /// What is in the view.
+  Landmarks? view;
+  List<double>? _viewFrame;
+  bool _viewGradeTwo = false;
+  int _viewRun = 0;
   bool loading = false;
 
   /// Where the list asked the map to go, and a count so the same place
   /// asked for twice is gone to twice.
   LatLng? focus;
   int focusAsked = 0;
+
+  /// Everything to draw: the walk's and the view's, each once.
+  Landmarks? get current {
+    final w = walk, v = view;
+    if (w == null) return v;
+    if (v == null) return w;
+    return w.merge(v);
+  }
 
   /// What was found for [key], once looked up.
   static Landmarks? keptFor(String key) => _kept[key];
@@ -320,19 +458,54 @@ class LandmarkLookup extends ChangeNotifier {
     _key = key;
     final had = _kept[key];
     if (had != null) {
-      current = had;
+      walk = had;
       loading = false;
       notifyListeners();
       return;
     }
-    current = null;
+    walk = null;
     loading = true;
     notifyListeners();
-    final found = await lookUp(path);
+    final found = await lookUpFrame(frameOf(path), path: path);
     if (found.unreached.isEmpty) _kept[key] = found;
     if (_key != key) return;
-    current = found;
+    walk = found;
     loading = false;
+    notifyListeners();
+  }
+
+  /// Look up what is in the map's view, from about town scale in (zoom 12);
+  /// Grade II buildings from zoom 14. Nothing is asked again for a view
+  /// already covered.
+  Future<void> look(double west, double south, double east, double north, double zoom) async {
+    if (zoom < 12) return;
+    final gradeTwo = zoom >= 14;
+    final frame = viewFrame(west, south, east, north);
+    // a covered view: no new question
+    final have = _viewFrame;
+    if (have != null && frameHolds(have, frame) && (_viewGradeTwo || !gradeTwo)) return;
+    for (final (f, g2, l) in _views.reversed) {
+      if (frameHolds(f, frame) && (g2 || !gradeTwo)) {
+        _viewFrame = f;
+        _viewGradeTwo = g2;
+        view = l;
+        notifyListeners();
+        return;
+      }
+    }
+    final run = ++_viewRun;
+    _viewFrame = frame;
+    _viewGradeTwo = gradeTwo;
+    final found = await lookUpFrame(frame, gradeTwo: gradeTwo, wikiLimit: 50);
+    if (found.unreached.isEmpty) {
+      _views.add((frame, gradeTwo, found));
+      if (_views.length > 12) _views.removeAt(0);
+    } else if (run == _viewRun) {
+      // ask again next time the map moves
+      _viewFrame = null;
+    }
+    if (run != _viewRun) return;
+    view = found;
     notifyListeners();
   }
 
@@ -340,51 +513,5 @@ class LandmarkLookup extends ChangeNotifier {
     focus = at;
     focusAsked++;
     notifyListeners();
-  }
-
-  /// Ask all four, side by side; one that fails is named in unreached.
-  static Future<Landmarks> lookUp(List<LatLng> path) async {
-    final frame = frameOf(path);
-    final unreached = <String>[];
-    var listed = <Spot>[], wiki = <Spot>[];
-    var monuments = <Area>[], nature = <Area>[];
-    await Future.wait([
-      _arc('$_he/0', frame, where: "Grade IN ('I','II*')").then((fs) {
-        listed = [
-          for (final f in fs)
-            if (f.geometry['type'] == 'Point')
-              Spot(nameOf(f.props), 'Listed building, Grade ${f.props['Grade'] ?? ''}', _ll(f.geometry['coordinates']),
-                  grade: '${f.props['Grade'] ?? ''}'),
-        ];
-      }).catchError((Object _) {
-        unreached.add('Historic England (buildings)');
-      }),
-      _arc('$_he/6', frame, simplify: .00002).then((fs) {
-        monuments = [for (final f in fs) Area(nameOf(f.props), 'Scheduled monument', shapeOf(f.geometry))];
-      }).catchError((Object _) {
-        unreached.add('Historic England (monuments)');
-      }),
-      Future.wait([
-        for (final k in natureKinds)
-          _arc(k.url, frame, simplify: .0001)
-              .then((fs) => [for (final f in fs) Area(nameOf(f.props), k.full, shapeOf(f.geometry), kind: k.kind)])
-              .catchError((Object _) {
-            unreached.add('Natural England (${k.kind})');
-            return <Area>[];
-          }),
-      ]).then((all) => nature = [for (final a in all) ...a]),
-      _wikiNear(frame).then((w) => wiki = w).catchError((Object _) {
-        unreached.add('Wikipedia');
-        return <Spot>[];
-      }),
-    ]);
-    return Landmarks(
-      listed: listed,
-      monuments: monuments,
-      nature: nature,
-      wiki: wiki,
-      passed: passedOnTheWay(path, listed: listed, monuments: monuments, nature: nature, wiki: wiki),
-      unreached: unreached,
-    );
   }
 }

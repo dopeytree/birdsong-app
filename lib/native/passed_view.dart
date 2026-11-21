@@ -22,7 +22,7 @@ class PassedView extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
         listenable: lookup,
         builder: (context, _) {
-          final found = lookup.current;
+          final found = lookup.walk;
           final passed = found?.passed ?? const <Passed>[];
           final status = lookup.loading
               ? 'Looking up what the walk passed…'

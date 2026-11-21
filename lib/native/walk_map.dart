@@ -15,12 +15,23 @@ import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
 import '../store/detection_store.dart';
 import 'contours.dart';
 import 'landmarks.dart';
+import 'place_search.dart';
 import 'map_style.dart';
 
 const _tilesJson = 'https://tiles.openfreemap.org/planet';
 const _glyphs = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
 const _dem = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/';
 const _credit = 'Elevation: Mapzen Terrain Tiles (AWS) · OpenFreeMap © OpenMapTiles © OpenStreetMap';
+
+/// The landmarks' credits, as their licences ask (Open Government Licence
+/// v3; Wikipedia CC BY-SA), shown while they are on.
+String _extrasCredit() {
+  final y = DateTime.now().year;
+  return '\n© Historic England $y. © Natural England copyright. Contains Ordnance Survey data '
+      '© Crown copyright and database right $y · Places from Wikipedia (CC BY-SA)';
+}
+
+const _searchCredit = '\nSearch: Photon by komoot, © OpenStreetMap contributors';
 
 /// A bird on the walk: where and when it was heard.
 class WalkBird {
@@ -208,6 +219,7 @@ class _WalkMapState extends State<WalkMap> {
   // the label for a peak or an end, where it was tapped
   ({String title, String sub, Offset at})? _tip;
   Timer? _tipTimer;
+  Timer? _lookTimer;
 
   int _focusSeen = 0;
 
@@ -242,6 +254,7 @@ class _WalkMapState extends State<WalkMap> {
   @override
   void dispose() {
     widget.landmarks?.removeListener(_landmarksChanged);
+    _lookTimer?.cancel();
     _contourTimer?.cancel();
     _tipTimer?.cancel();
     _map.dispose();
@@ -261,6 +274,34 @@ class _WalkMapState extends State<WalkMap> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) l.want(w.key, path);
     });
+  }
+
+  /// The landmarks in view, as the map comes to rest.
+  void _lookAround() {
+    final l = widget.landmarks;
+    if (l == null || !mounted || !_ready) return;
+    final c = _map.camera, b = c.visibleBounds;
+    l.look(b.west, b.south, b.east, b.north, c.zoom);
+  }
+
+  /// Back to the walk, or the station: the home button.
+  void _home() {
+    _dragged = false;
+    _fit();
+  }
+
+  /// A place from the search: its extent, or close in on its point.
+  void _goTo(FoundPlace p) {
+    _dragged = true;
+    if (p.hasExtent && (p.north! - p.south! > .0005 || p.east! - p.west! > .0005)) {
+      _map.fitCamera(CameraFit.bounds(
+        bounds: LatLngBounds(LatLng(p.south!, p.west!), LatLng(p.north!, p.east!)),
+        padding: const EdgeInsets.all(24),
+        maxZoom: 16,
+      ));
+    } else {
+      _map.move(p.at, 15);
+    }
   }
 
   void _landmarksChanged() {
@@ -307,6 +348,8 @@ class _WalkMapState extends State<WalkMap> {
     if (_tip != null) setState(() => _tip = null);
     _contourTimer?.cancel();
     _contourTimer = Timer(const Duration(milliseconds: 150), _traceContours);
+    _lookTimer?.cancel();
+    _lookTimer = Timer(const Duration(milliseconds: 600), _lookAround);
   }
 
   // ---- contours, traced here from terrarium tiles -------------------------
@@ -394,7 +437,13 @@ class _WalkMapState extends State<WalkMap> {
     final hit = _peaks.queryRenderedFeatures(p, layerIds: const ['peaks']);
     if (hit.isEmpty) {
       final found = widget.landmarks?.current;
-      for (final a in [...?found?.monuments, ...?found?.nature]) {
+      for (final a in [
+        ...?found?.monuments,
+        ...?found?.battlefields,
+        ...?found?.parks,
+        ...?found?.worldHeritage,
+        ...?found?.nature,
+      ]) {
         if (inShape(ll, a.shape)) return _say(p, a.name, a.about);
       }
       if (_tip != null) setState(() => _tip = null);
@@ -553,6 +602,42 @@ class _WalkMapState extends State<WalkMap> {
               style: _labelStyle(_monument)),
       ];
 
+  // registered parks and gardens, battlefields, World Heritage Sites
+  static const _park = Color(0xFF6F7F45), _battle = Color(0xFF8C3B2A);
+
+  /// Parks and gardens: an olive wash and a fine dotted edge; battlefields:
+  /// a madder dash-and-dot edge; World Heritage Sites: a long ink dash.
+  /// Named from zoom 13.5, 12.5 and always.
+  List<Polygon> _heritageAreas() {
+    final found = widget.landmarks?.current;
+    if (found == null) return const [];
+    return [
+      for (final a in found.worldHeritage)
+        ..._polys(a,
+            edge: 1.6,
+            edgeColor: ink.withValues(alpha: .7),
+            pattern: StrokePattern.dashed(segments: const [9.6, 4.8]),
+            label: a.name,
+            style: _labelStyle(ink)),
+      for (final a in found.parks)
+        ..._polys(a,
+            fill: _park.withValues(alpha: .08),
+            edge: 1,
+            edgeColor: _park.withValues(alpha: .8),
+            pattern: StrokePattern.dotted(spacingFactor: 2),
+            label: _zoom >= 13.5 ? a.name : null,
+            style: _labelStyle(_park)),
+      for (final a in found.battlefields)
+        ..._polys(a,
+            fill: _battle.withValues(alpha: .05),
+            edge: 1.1,
+            edgeColor: _battle.withValues(alpha: .8),
+            pattern: StrokePattern.dashed(segments: const [4.4, 2.2, 1.1, 2.2]),
+            label: _zoom >= 12.5 ? a.name : null,
+            style: _labelStyle(_battle)),
+    ];
+  }
+
   /// A listed building's little church, or a Wikipedia place's ringed dot,
   /// with its name beside it once close enough.
   List<Marker> _spots(List<Spot> spots, {required bool wiki}) => [
@@ -575,12 +660,14 @@ class _WalkMapState extends State<WalkMap> {
                       },
                       child: CustomPaint(
                         size: const Size.square(24),
-                        painter: wiki ? const _WikiPainter() : _BuildingPainter(s.grade == 'I' ? 1.15 : .9),
+                        painter: wiki
+                            ? const _WikiPainter()
+                            : _BuildingPainter(switch (s.grade) { 'I' => 1.15, 'II*' => .9, _ => .7 }),
                       ),
                     ),
                   ),
                 ),
-                if (_zoom >= (wiki ? 14 : 14.5))
+                if (_zoom >= (wiki ? 14 : (s.grade == 'II' ? 16 : 14.5)))
                   Positioned(
                     left: 110 + (wiki ? 8 : 9),
                     top: 0,
@@ -675,6 +762,7 @@ class _WalkMapState extends State<WalkMap> {
                       _fittedTo = w?.key;
                       _zoom = _map.camera.zoom;
                       _traceContours();
+                      _lookAround();
                     },
                     onPositionChanged: _moved,
                     onTap: _tapped,
@@ -691,6 +779,7 @@ class _WalkMapState extends State<WalkMap> {
                       PolygonLayer(polygons: _nature(), drawLabelsLast: true),
                       _Hatch(widget.landmarks!.current!.monuments),
                       PolygonLayer(polygons: _monumentEdges(), drawLabelsLast: true),
+                      PolygonLayer(polygons: _heritageAreas(), drawLabelsLast: true),
                     ],
                     // contours, traced here from the elevation tiles
                     PolylineLayer(polylines: _contourLines()),
@@ -703,7 +792,11 @@ class _WalkMapState extends State<WalkMap> {
                       controller: _peaks,
                     ),
                     if (widget.landmarks?.current != null) ...[
-                      MarkerLayer(markers: _spots(widget.landmarks!.current!.listed, wiki: false)),
+                      MarkerLayer(
+                          markers: _spots([
+                        for (final s in widget.landmarks!.current!.listed)
+                          if (s.grade != 'II' || _zoom >= 14) s
+                      ], wiki: false)),
                       MarkerLayer(markers: _spots(widget.landmarks!.current!.wiki, wiki: true)),
                     ],
                     // the walk
@@ -721,8 +814,31 @@ class _WalkMapState extends State<WalkMap> {
                     MarkerLayer(markers: _birds()),
                   ],
                 ),
-              if (kit != null) Positioned(left: 10, top: 10, child: _ZoomButtons(map: _map)),
-              if (kit != null) const Positioned(right: 0, bottom: 0, child: _Credit()),
+              if (kit != null)
+                Positioned(
+                  left: 10,
+                  top: 10,
+                  child: _ZoomButtons(
+                    map: _map,
+                    home: w == null || (w.trail.isEmpty && w.birds.isEmpty && w.place == null) ? null : _home,
+                    homeTip: w?.station != null ? 'Back to the station' : 'Back to the walk',
+                  ),
+                ),
+              if (kit != null)
+                Positioned(
+                  right: 10,
+                  top: 10,
+                  child: PlaceSearch(
+                    width: math.min(280.0, widget.size.width - 70),
+                    near: () => _ready ? _map.camera.center : center,
+                    onPick: _goTo,
+                  ),
+                ),
+              if (kit != null)
+                Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: _Credit(_credit + (widget.landmarks != null ? _extrasCredit() : '') + _searchCredit)),
               if (note != null)
                 Positioned(
                   left: 8,
@@ -983,9 +1099,13 @@ class _EndPainter extends CustomPainter {
 
 /// The map's + and − at the top left, on paper.
 class _ZoomButtons extends StatelessWidget {
-  const _ZoomButtons({required this.map});
+  const _ZoomButtons({required this.map, this.home, this.homeTip = ''});
 
   final MapController map;
+
+  /// Back to the walk or the station; null when there is nowhere to go.
+  final VoidCallback? home;
+  final String homeTip;
 
   @override
   Widget build(BuildContext context) {
@@ -1009,6 +1129,24 @@ class _ZoomButtons extends StatelessWidget {
         button('+', 'Zoom in', 1),
         Container(width: 29, height: 1, color: paperDeep),
         button('−', 'Zoom out', -1),
+        if (home != null) ...[
+          Container(width: 29, height: 1, color: paperDeep),
+          Tooltip(
+            message: homeTip,
+            child: Semantics(
+              button: true,
+              label: homeTip,
+              child: InkWell(
+                onTap: home,
+                child: const SizedBox(
+                  width: 29,
+                  height: 29,
+                  child: Center(child: Icon(Icons.my_location, size: 15, color: ink)),
+                ),
+              ),
+            ),
+          ),
+        ],
       ]),
     );
   }
@@ -1017,7 +1155,9 @@ class _ZoomButtons extends StatelessWidget {
 /// Where the map comes from: a small ⓘ that opens to the credit, as the
 /// web map's compact attribution.
 class _Credit extends StatefulWidget {
-  const _Credit();
+  const _Credit(this.text);
+
+  final String text;
 
   @override
   State<_Credit> createState() => _CreditState();
@@ -1033,7 +1173,7 @@ class _CreditState extends State<_Credit> {
           constraints: const BoxConstraints(maxWidth: 320),
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           color: paper.withValues(alpha: .85),
-          child: Text(_open ? _credit : 'ⓘ',
+          child: Text(_open ? widget.text : 'ⓘ',
               style: const TextStyle(fontFamily: serif, fontSize: 10, color: ink, height: 1.3)),
         ),
       );

@@ -128,6 +128,41 @@ void main() {
     expect(nameOf({'Surname': 'x'}), 'Unnamed'); // must end in _name or be name
   });
 
+  test('a view is looked up with a quarter round it, snapped out to hundredths', () {
+    final f = viewFrame(-2.80, 51.14, -2.76, 51.16);
+    // holds the view and a quarter round it (.01 and .005), no more than a hundredth over
+    expect(f[0], inInclusiveRange(-2.8201, -2.8099));
+    expect(f[1], inInclusiveRange(51.1249, 51.1351));
+    expect(f[2], inInclusiveRange(-2.7501, -2.7399));
+    expect(f[3], inInclusiveRange(51.1649, 51.1751));
+    for (final v in f) {
+      expect((v * 100 - (v * 100).round()).abs(), lessThan(1e-6)); // on a hundredth
+    }
+    // a small move stays inside: nothing new is asked
+    expect(frameHolds(f, viewFrame(-2.799, 51.141, -2.761, 51.159)), isTrue);
+    expect(frameHolds(f, viewFrame(-2.70, 51.14, -2.66, 51.16)), isFalse);
+  });
+
+  test("the walk's and the view's places together, each once", () {
+    final church = Spot('St Mary', 'Listed building, Grade I', const LatLng(51.15, -2.78), grade: 'I');
+    final tor = Area('Glastonbury Tor', 'Scheduled monument', box(51.14, -2.70, 51.15, -2.69));
+    final a = Landmarks(listed: [church], monuments: [tor], passed: [Passed('St Mary', 'x', church.at, 10, 1)]);
+    final b = Landmarks(
+        listed: [church, Spot('Abbey', 'Listed building, Grade I', const LatLng(51.146, -2.716))], monuments: [tor]);
+    final m = a.merge(b);
+    expect(m.listed.map((s) => s.name), ['St Mary', 'Abbey']);
+    expect(m.monuments.length, 1);
+    expect(m.passed.length, 1); // the walk's list stays the walk's
+  });
+
+  test('parks, battlefields and World Heritage Sites count as passed like monuments', () {
+    final p = passedOnTheWay(walk, monuments: [
+      Area('Old Park', 'Registered park and garden, Grade II', box(51.999, -1.49, 52.001, -1.488)),
+      Area('Far Field', 'Registered battlefield', box(52.01, -1.49, 52.02, -1.488)),
+    ]);
+    expect(p.map((x) => x.name), ['Old Park']);
+  });
+
   test('Wikipedia places, with or without a description', () {
     final w = wikiOf({
       'query': {
