@@ -173,6 +173,7 @@ class Session {
     this.weather,
     this.folder,
     this.locationSource,
+    this.placeName,
   })  : uuid = uuid ?? newUuid(),
         utcOffsetMinutes = utcOffsetMinutes ?? start.timeZoneOffset.inMinutes;
 
@@ -204,6 +205,10 @@ class Session {
 
   /// Conditions when the session began; see engine/weather.dart.
   Map<String, dynamic>? weather;
+
+  /// The nearest town or village (engine/place_names.dart), '' when there
+  /// is none; null until looked up.
+  String? placeName;
 
   /// Folder name under sessions/, set when first written.
   String? folder;
@@ -249,6 +254,7 @@ class Session {
         if (settings.isNotEmpty) 'settings': settings,
         if (models.isNotEmpty) 'models': models,
         if (weather != null) 'weather': weather,
+        if (placeName != null) 'placeName': placeName,
         'summary': {
           'detections': inside.length,
           'species': {for (final d in inside) d.sci}.length,
@@ -273,6 +279,7 @@ class Session {
         ],
         weather: j['weather'] == null ? null : Map<String, dynamic>.from(j['weather'] as Map),
         folder: folder,
+        placeName: j['placeName'] as String?,
       );
 
   /// A line from the old sessions.jsonl.
@@ -610,6 +617,19 @@ class DetectionStore extends ChangeNotifier {
       await _write(x);
     }
     notifyListeners();
+  }
+
+  /// Give sessions with a place but no name yet the name of their nearest
+  /// town or village, one at a time, saving each as it comes (for the
+  /// calendar). [lookUp] is engine/place_names.dart nearestPlace.
+  Future<void> namePlaces(Future<String?> Function(double lat, double lon) lookUp) async {
+    for (final x in [...sessions]) {
+      if (!x.hasPlace || x.placeName != null) continue;
+      final name = await lookUp(x.lat!, x.lon!);
+      if (name == null) return; // offline: try again another time
+      x.placeName = name;
+      await saveSession(x);
+    }
   }
 
   /// Record a change to a session (its place or weather found).

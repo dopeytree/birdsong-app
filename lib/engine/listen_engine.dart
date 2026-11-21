@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 
 import '../settings.dart';
 import '../store/detection_store.dart';
+import 'place_names.dart';
 import 'weather.dart';
 import '../store/media.dart';
 import 'classifier.dart';
@@ -374,6 +375,7 @@ class ListenEngine extends ChangeNotifier {
         models: old.models);
     session!
       ..weather = old.weather
+      ..placeName = old.placeName
       ..locationSource = old.locationSource;
     // The walk goes on: start the new session's trail where the last left off.
     final fix = _fix;
@@ -424,6 +426,13 @@ class ListenEngine extends ChangeNotifier {
       }
       _geoScores = null; // the location filter now knows where we are
       await store.saveSession(ses);
+      // the nearest town or village, for the calendar
+      nearestPlace(ses.lat!, ses.lon!).then((name) {
+        if (name != null) {
+          ses.placeName = name;
+          store.saveSession(ses);
+        }
+      });
       if (settings.recordWeather) {
         final w = await fetchWeather(ses.lat!, ses.lon!, at: ses.start);
         if (w != null) {

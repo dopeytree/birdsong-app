@@ -289,7 +289,7 @@ class _NativePlateState extends State<NativePlate> {
     final picked = await DayPicker.show(
       context,
       DayPicker(
-        sessions: store.sessions,
+        store: store,
         shown: store.selected,
         speciesIn: (x) => {for (final d in store.forPlate(model, session: x)) d.sci}.length,
       ),

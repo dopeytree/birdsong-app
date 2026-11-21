@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 
 import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
+import '../engine/place_names.dart';
 import '../store/detection_store.dart';
 import '../ui/format.dart';
 
 /// The calendar button's dialog: a month with only the days that have a
-/// session to pick, and under it that day's sessions, each with its number,
-/// start time, how long it ran and how many species it heard. A tap on a
+/// session to pick, and under it that day's sessions, grouped under the
+/// nearest town or village (named from OpenStreetMap, saved with each
+/// session; sessions not yet named are named while it is open), each with
+/// its number, start time, how long it ran and how many species it heard. A tap on a
 /// session shows it; OK shows the day's first, and the ‹ › step through the
 /// rest. Returns the session to show, or null.
 ///
 /// A simple way in for now; the calendar can say more about each day later.
 class DayPicker extends StatefulWidget {
-  const DayPicker({super.key, required this.sessions, required this.speciesIn, this.shown});
+  const DayPicker({super.key, required this.store, required this.speciesIn, this.shown});
 
-  /// Every session, oldest first.
-  final List<Session> sessions;
+  /// Where the sessions are (oldest first), and where their names are saved.
+  final DetectionStore store;
 
   /// How many species the plate draws for a session.
   final int Function(Session) speciesIn;
@@ -36,10 +39,18 @@ class DayPicker extends StatefulWidget {
 DateTime _day(DateTime t) => DateTime(t.year, t.month, t.day);
 
 class _DayPickerState extends State<DayPicker> {
-  late final Set<DateTime> _days = {for (final x in widget.sessions) _day(x.start)};
-  late DateTime _picked = _day(widget.shown?.start ?? widget.sessions.last.start);
+  List<Session> get _sessions => widget.store.sessions;
+  late final Set<DateTime> _days = {for (final x in _sessions) _day(x.start)};
+  late DateTime _picked = _day(widget.shown?.start ?? _sessions.last.start);
 
-  List<Session> get _that => [for (final x in widget.sessions) if (sameDay(x.start, _picked)) x];
+  List<Session> get _that => [for (final x in _sessions) if (sameDay(x.start, _picked)) x];
+
+  @override
+  void initState() {
+    super.initState();
+    // name the places of sessions that have none yet; the list follows
+    widget.store.namePlaces(nearestPlace);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +105,23 @@ class _DayPickerState extends State<DayPicker> {
                     style: small,
                   ),
                   const SizedBox(height: 4),
-                  for (final x in that) _session(x),
+                  ListenableBuilder(
+                    listenable: widget.store,
+                    builder: (context, _) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final (place, group) in _byPlace(_that)) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(6, 10, 6, 2),
+                            child: Text(place,
+                                style: const TextStyle(
+                                    fontFamily: caps, fontSize: 16, letterSpacing: 16 * .06, color: ink)),
+                          ),
+                          for (final x in group) _session(x),
+                        ],
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -115,9 +142,26 @@ class _DayPickerState extends State<DayPicker> {
     );
   }
 
+  /// The day's sessions under their places, in the order the places were
+  /// first visited that day.
+  List<(String, List<Session>)> _byPlace(List<Session> day) {
+    final groups = <String, List<Session>>{};
+    for (final x in day) {
+      final name = !x.hasPlace
+          ? 'Place unknown'
+          : x.placeName == null
+              ? place(x.lat!, x.lon!) // being named
+              : x.placeName!.isEmpty
+                  ? place(x.lat!, x.lon!)
+                  : x.placeName!;
+      (groups[name] ??= []).add(x);
+    }
+    return [for (final e in groups.entries) (e.key, e.value)];
+  }
+
   /// "#3  07:42 for 38m  ·  12 species", the one on show in madder.
   Widget _session(Session x) {
-    final i = widget.sessions.indexOf(x);
+    final i = _sessions.indexOf(x);
     final on = widget.shown?.id == x.id;
     final when = x.live ? '${clock(x.start)}, listening now' : '${clock(x.start)} for ${lasting(x.end!.difference(x.start))}';
     final n = widget.speciesIn(x);
