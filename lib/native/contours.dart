@@ -7,9 +7,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 /// The heights between lines and between labelled (major) lines, for a zoom.
-(int minor, int major) contourInterval(double zoom) => zoom >= 15
-    ? (5, 25)
-    : zoom >= 12.5
+(int minor, int major) contourInterval(double zoom) => zoom >= 12.5
         ? (10, 50)
         : zoom >= 11
             ? (20, 100)
@@ -34,7 +32,8 @@ import 'dart:typed_data';
 /// The tile zoom for a view: one finer than the map's, but no more than 36
 /// tiles, between 5 and 14.
 int contourTileZoom(double west, double south, double east, double north, double zoom) {
-  var z = math.min(14, math.max(5, zoom.floor() + 1));
+  // no finer than zoom 13's elevation: street zoom needs no more detail
+  var z = math.min(13, math.max(5, zoom.floor() + 1));
   while (z > 5) {
     final r = tileRange(west, south, east, north, z);
     if ((r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1) <= 36) break;

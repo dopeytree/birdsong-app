@@ -45,7 +45,7 @@ void main() {
   test('terrarium heights, intervals and tiles read as the web map reads them', () {
     expect(terrarium(128, 0, 0), 0);
     expect(terrarium(128, 100, 128), 100.5);
-    expect(contourInterval(15.2), (5, 25));
+    expect(contourInterval(15.2), (10, 50)); // no finer when zoomed right in
     expect(contourInterval(12), (20, 100));
     expect(contourInterval(8), (100, 500));
     // Greenwich at zoom 1 is the right-hand column, the top row for the north

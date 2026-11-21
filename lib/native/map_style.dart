@@ -79,13 +79,8 @@ Map<String, Object?> baseStyle(String source) => {
           },
         },
         // people: quiet, in the paper's own browns
-        {
-          'id': 'buildings', 'type': 'fill', 'source': source, 'source-layer': 'building', 'minzoom': 13.5,
-          'paint': {
-            'fill-color': '#e0d3b6', 'fill-outline-color': '#cbbb9b',
-            'fill-opacity': ['interpolate', ['linear'], ['zoom'], 13.5, 0, 15, 0.85],
-          },
-        },
+        // (no building footprints: Ed, 21 Nov: not needed, and the most
+        // detail there is when zoomed in)
         {
           'id': 'rail', 'type': 'line', 'source': source, 'source-layer': 'transportation', 'minzoom': 11,
           'filter': ['==', ['get', 'class'], 'rail'],

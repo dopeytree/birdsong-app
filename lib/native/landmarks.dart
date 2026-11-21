@@ -809,8 +809,9 @@ class LandmarkLookup extends ChangeNotifier {
     final run = ++_viewRun;
     _viewFrame = frame;
     _viewGradeTwo = gradeTwo;
-    // areas simplified to about a pixel at this zoom
-    final detail = 360 / (256 * math.pow(2, zoom.floor()));
+    // areas simplified to about a pixel at this zoom, and never finer than
+    // at town scale (zoom 13): street zoom needs no more detail
+    final detail = 360 / (256 * math.pow(2, math.min(13, zoom.floor())));
     final clock = Stopwatch()..start();
     final found = await lookUpAway(frame, gradeTwo: gradeTwo, wikiLimit: 50, detail: detail);
     if (kDebugMode) {

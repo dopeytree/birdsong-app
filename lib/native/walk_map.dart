@@ -945,7 +945,7 @@ class _WalkMapState extends State<WalkMap> {
     return _layersMemo;
   }
 
-  static const _maxSpots = 400;
+  static const _maxSpots = 150;
 
   @override
   Widget build(BuildContext context) {
@@ -1006,9 +1006,9 @@ class _WalkMapState extends State<WalkMap> {
                     ),
                     // extras: protected nature sites, scheduled monuments
                     if (layers != null) ...[
-                      PolygonLayer(polygons: layers.fills, drawLabelsLast: true),
+                      PolygonLayer(polygons: layers.fills, drawLabelsLast: true, simplificationTolerance: 1.5),
                       if (_zoom >= 13) _Hatch(layers.hatched),
-                      PolylineLayer(polylines: layers.lines),
+                      PolylineLayer(polylines: layers.lines, simplificationTolerance: 1.5),
                     ],
                     // contours, traced here from the elevation tiles
                     PolylineLayer(polylines: _contourLines()),
