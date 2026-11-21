@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -568,17 +569,16 @@ Future<List<Area>> reservesAlong(List<LatLng> path, TileLoader tile, {int z = 14
       continue;
     }
     if (bytes == null) continue;
-    final List<MvtFeature> fs;
+    final b = bytes;
+    final List<(String, String, Shape)> parts;
     try {
-      fs = readMvtLayer(bytes, 'park');
+      // decoded away from the screen's thread
+      parts = await Isolate.run(() => _reserveParts(b, z, x, y));
     } catch (_) {
       continue;
     }
-    for (final f in fs) {
-      final kind = reserveKinds[f.props['class']];
-      final name = f.props['name'] ?? f.props['name:en'] ?? f.props['name:latin'];
-      if (kind == null || name is! String || name.isEmpty || f.type != 3) continue;
-      (shapes[name] ??= []).addAll(mvtPolygons(f, z, x, y));
+    for (final (name, kind, shape) in parts) {
+      (shapes[name] ??= []).addAll(shape);
       kinds[name] = kind;
     }
   }
@@ -587,6 +587,21 @@ Future<List<Area>> reservesAlong(List<LatLng> path, TileLoader tile, {int z = 14
   ];
 }
 
+/// The reserves in one tile's park layer: name, kind and polygons.
+List<(String, String, Shape)> _reserveParts(Uint8List bytes, int z, int x, int y) => [
+      for (final f in readMvtLayer(bytes, 'park'))
+        if (reserveKinds[f.props['class']] case final kind?)
+          if ((f.props['name'] ?? f.props['name:en'] ?? f.props['name:latin']) case final String name
+              when name.isNotEmpty && f.type == 3)
+            (name, kind, mvtPolygons(f, z, x, y)),
+    ];
+
+/// [lookUpFrame] on a thread of its own, so reading what the services send
+/// (some of it large: a sea's worth of coastline) never stalls the map.
+Future<Landmarks> lookUpAway(List<double> frame,
+        {bool gradeTwo = false, List<LatLng>? path, int wikiLimit = 20, double detail = 0}) =>
+    Isolate.run(() => lookUpFrame(frame, gradeTwo: gradeTwo, path: path, wikiLimit: wikiLimit, detail: detail));
+
 /// The area a view is looked up for: [bounds] and a quarter again round it,
 /// snapped out to a hundredth of a degree so small moves ask nothing new.
 List<double> viewFrame(double west, double south, double east, double north) {
@@ -594,6 +609,15 @@ List<double> viewFrame(double west, double south, double east, double north) {
   double down(double v) => (v * 100).floorToDouble() / 100;
   double up(double v) => (v * 100).ceilToDouble() / 100;
   return [down(west - px), down(south - py), up(east + px), up(north + py)];
+}
+
+/// What the walk passed, with the reserves too, worked out on a thread of
+/// its own.
+Future<List<Passed>> _passedAway(List<LatLng> path, Landmarks found, List<Area> reserves) {
+  final listed = found.listed, nature = found.nature, wiki = found.wiki;
+  final monuments = [...found.monuments, ...found.parks, ...found.battlefields, ...found.worldHeritage];
+  return Isolate.run(
+      () => passedOnTheWay(path, listed: listed, monuments: monuments, nature: nature, reserves: reserves, wiki: wiki));
 }
 
 /// Whether [outer] holds all of [inner].
@@ -669,7 +693,7 @@ class LandmarkLookup extends ChangeNotifier {
     loading = true;
     notifyListeners();
     final results = await Future.wait([
-      lookUpFrame(frameOf(path), path: path),
+      lookUpAway(frameOf(path), path: path),
       tile == null ? Future.value(const <Area>[]) : reservesAlong(path, tile),
     ]);
     var found = results[0] as Landmarks;
@@ -684,12 +708,7 @@ class LandmarkLookup extends ChangeNotifier {
         nature: found.nature,
         reserves: reserves,
         wiki: found.wiki,
-        passed: passedOnTheWay(path,
-            listed: found.listed,
-            monuments: [...found.monuments, ...found.parks, ...found.battlefields, ...found.worldHeritage],
-            nature: found.nature,
-            reserves: reserves,
-            wiki: found.wiki),
+        passed: await _passedAway(path, found, reserves),
         unreached: found.unreached,
       );
     }
@@ -724,7 +743,7 @@ class LandmarkLookup extends ChangeNotifier {
     _viewGradeTwo = gradeTwo;
     // areas simplified to about a pixel at this zoom
     final detail = 360 / (256 * math.pow(2, zoom.floor()));
-    final found = await lookUpFrame(frame, gradeTwo: gradeTwo, wikiLimit: 50, detail: detail);
+    final found = await lookUpAway(frame, gradeTwo: gradeTwo, wikiLimit: 50, detail: detail);
     if (found.unreached.isEmpty) {
       _views.add((frame, gradeTwo, found));
       if (_views.length > 12) _views.removeAt(0);

@@ -640,9 +640,42 @@ class _WalkMapState extends State<WalkMap> {
         pattern: pattern ?? const StrokePattern.solid(),
         label: label,
         labelStyle: style ?? const TextStyle(),
-        labelPlacementCalculator: const PolygonLabelPlacementCalculator.polylabel(),
+        labelPlacementCalculator: label == null
+            ? const PolygonLabelPlacementCalculator.centroid()
+            : _LabelAt(_labelPoint(rings.first)),
       );
     }
+  }
+
+  // Each outline's label point, worked out once. flutter_map's polylabel has
+  // a fixed precision (0.0001°): on a large intricate outline (Falmouth Bay's
+  // SPA, a coastal SSSI) it ran for seconds on the screen's thread at every
+  // redraw, freezing the map.
+  static final _labelPoints = Expando<LatLng>('label point');
+
+  /// Where an outline's name goes: polylabel, at a precision of a hundredth
+  /// of its size, for a modest outline; its centroid for a large one.
+  static LatLng _labelPoint(List<LatLng> ring) {
+    final had = _labelPoints[ring];
+    if (had != null) return had;
+    var x0 = 180.0, y0 = 90.0, x1 = -180.0, y1 = -90.0;
+    for (final p in ring) {
+      x0 = math.min(x0, p.longitude);
+      x1 = math.max(x1, p.longitude);
+      y0 = math.min(y0, p.latitude);
+      y1 = math.max(y1, p.latitude);
+    }
+    final size = math.max(x1 - x0, y1 - y0);
+    final calc = ring.length <= 600
+        ? PolygonLabelPlacementCalculator.polylabel(precision: math.max(1e-5, size / 100))
+        : const PolygonLabelPlacementCalculator.centroid();
+    LatLng at;
+    try {
+      at = calc(Polygon(points: ring));
+    } catch (_) {
+      at = LatLng((y0 + y1) / 2, (x0 + x1) / 2);
+    }
+    return _labelPoints[ring] = at;
   }
 
   /// Protected nature sites: a faint green wash, a dashed edge, the name.
@@ -1089,6 +1122,23 @@ class _CrossPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CrossPainter old) => old.size != size;
+}
+
+/// A label point worked out beforehand (see _labelPoint).
+@immutable
+class _LabelAt implements PolygonLabelPlacementCalculator {
+  const _LabelAt(this.at);
+
+  final LatLng at;
+
+  @override
+  LatLng call(Polygon polygon) => at;
+
+  @override
+  bool operator ==(Object other) => other is _LabelAt && other.at == at;
+
+  @override
+  int get hashCode => at.hashCode;
 }
 
 /// Scheduled monuments' hatching: fine diagonal lines in brown, clipped to
