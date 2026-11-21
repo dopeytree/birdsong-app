@@ -115,7 +115,7 @@ class Settings extends ChangeNotifier {
   /// What the plate shows: its place, 1 to 7, in [plateModes], lettered a to
   /// g in the order the view button steps through them. Saved by the mode's [PlateMode.key], so a new order of
   /// the modes keeps the one chosen.
-  int plateMode = 1;
+  int plateMode = defaultPlateMode;
 
   /// Models that listen. Each window goes through every one of them.
   Set<String> activeModels = {'bnl-v3-10k'};
@@ -147,7 +147,7 @@ class Settings extends ChangeNotifier {
 
   /// The Flutter plate: the index folded away under its heading (the web
   /// plate keeps this as birdplate.bsIndexFolded).
-  bool nativeIndexFolded = false;
+  bool nativeIndexFolded = true;
 
   /// The Flutter plate: offer plates of skulls, wings and eggs among a
   /// bird's other plates (never chosen first), as the web plate's option.
@@ -367,15 +367,18 @@ class PlateMode {
 
 const plateModes = <PlateMode>[
   PlateMode('calls', 'Noisiest species', sizeBy: 'calls'),                       // a
-  PlateMode('noindex', 'The collage, no index', query: 'hide=index'),             // b
-  PlateMode('index', 'The index alone', query: 'view=index&show=title,date'),     // c
-  PlateMode('latest', 'The latest bird, and when',                                // d
+  PlateMode('latest', 'The latest bird, and when',                                // b
       query: 'view=latest&show=time,title,date', currentOnly: true),
-  PlateMode('top', 'Most heard this session',                                     // e
+  PlateMode('top', 'Most heard this session',                                     // c
       query: 'view=top&show=title,date', currentOnly: true),
+  PlateMode('index', 'The index alone', query: 'view=index&show=title,date'),     // d
+  PlateMode('noindex', 'The collage, no index', query: 'hide=index'),             // e
   PlateMode('time', 'Recent ramblings', sizeBy: 'time'),                          // f
   PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                        // g
 ];
+
+/// The view the app opens on until another is chosen: recent ramblings.
+final defaultPlateMode = plateModes.indexWhere((m) => m.key == 'time') + 1;
 
 /// Mode [n] (1 to 7) as its letter, a to g: how the modes are named in the code and tests.
 String plateLetter(int n) => String.fromCharCode(0x60 + n);

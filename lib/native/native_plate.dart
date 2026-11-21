@@ -123,6 +123,10 @@ class _NativePlateState extends State<NativePlate> {
 
   // How far the page fades out above the bottom buttons.
   static const double _fadeRoom = 20;
+
+  // Below the top buttons (8 from the top, 48 tall), for a view without
+  // the heading.
+  static const double _buttonsTop = 8 + 48;
   final _shotKey = GlobalKey(), _shareKey = GlobalKey();
 
   /// The most species drawn on the plate; the rest are in the index only
@@ -451,6 +455,7 @@ class _NativePlateState extends State<NativePlate> {
         final single = (mode.key == 'latest' || mode.key == 'top') && !mapOn;
         // the map takes the collage's place, and has one even in view c
         final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
+        final showHeading = mode.key != 'index' && mode.key != 'noindex';
         final fit = app.settings.nativeFit;
         _bottomRoom = 40 + 8 + 6.0;
         // the folded index's heading has a row above the buttons
@@ -501,11 +506,16 @@ class _NativePlateState extends State<NativePlate> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Padding(
-                                  padding: EdgeInsets.fromLTRB(headSide, _padTop, headSide, 0),
-                                  child: _heading(ses, i, n, all.length, calls, outer.maxWidth - headSide,
-                                      totals: mode.key != 'index'),
-                                ),
+                                // the index alone and the collage alone go without
+                                // the heading: just room below the top buttons
+                                if (showHeading)
+                                  Padding(
+                                    padding: EdgeInsets.fromLTRB(headSide, _padTop, headSide, 0),
+                                    child: _heading(ses, i, n, all.length, calls, outer.maxWidth - headSide,
+                                        totals: mode.key != 'index'),
+                                  )
+                                else
+                                  const SizedBox(height: _buttonsTop),
                                 Expanded(
                                   child: ShaderMask(
                             blendMode: BlendMode.dstIn,
@@ -962,7 +972,8 @@ class _NativePlateState extends State<NativePlate> {
   double _indexAloneTop(double screen) {
     // [screen] is the scrolling part, under the heading
     final room = screen - 2 * _fadeRoom;
-    final pad = math.max(0.0, math.min(_headH, room - _indexH));
+    // balanced against the room the top buttons take, as it has no heading
+    final pad = math.max(0.0, math.min(_buttonsTop, room - _indexH));
     return math.max(0.0, (room - pad - _indexH) / 2);
   }
 
