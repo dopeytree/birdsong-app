@@ -115,8 +115,7 @@ class _NativePlateState extends State<NativePlate> {
   // Room at the bottom for the share button, as the web plate makes for it
   // (--bs-ui-bottom), so the index rises clear of it.
   // Room at the bottom for the buttons there, so nothing sits under them:
-  // two on the left (map above view), or one in the views of one bird or
-  // while the map is on screen.
+  // one row: view and map at the left, share at the right.
   // Set in each build.
   double _bottomRoom = 40 + 8 + 6;
   final _shotKey = GlobalKey(), _shareKey = GlobalKey();
@@ -424,7 +423,7 @@ class _NativePlateState extends State<NativePlate> {
         final mapOn = app.settings.showMap && !mode.currentOnly && ses != null;
         final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
         final fit = app.settings.nativeFit;
-        _bottomRoom = (mode.currentOnly || mapOn ? 40 : 40 + 40) + 8 + 6.0;
+        _bottomRoom = 40 + 8 + 6.0;
         // Folded away, the index's heading moves into the row along the
         // bottom, between the map and share buttons, and the plate takes
         // the room; opened, the list is where it always was.
@@ -632,16 +631,27 @@ class _NativePlateState extends State<NativePlate> {
                 ),
                 // The walk on a map in place of the collage, at the bottom
                 // left; not in the views of one bird (d and e).
-                // At the bottom left: the map button, and under it the plate's
-                // view (a to g), which keeps the corner so it never moves
-                // while stepping through the views. The map button is not
-                // there in the views of one bird (d, e). While the map is on
-                // screen the view button goes and the map button takes the
-                // corner, so the map has all the room it can.
+                // Along the bottom at the left: the plate's view (a to g) in the
+                // corner, so it never moves while stepping through the views,
+                // and the map button beside it (not in the views of one bird,
+                // d and e, which have no map).
+                Positioned(
+                  left: 8,
+                  bottom: 8,
+                  child: IconButton(
+                    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                    padding: EdgeInsets.zero,
+                    iconSize: 22,
+                    tooltip: 'Plate: ${mode.name}',
+                    icon: const Icon(Icons.dashboard_outlined),
+                    color: red,
+                    onPressed: _nextMode,
+                  ),
+                ),
                 if (!mode.currentOnly)
                   Positioned(
-                    left: 8,
-                    bottom: mapOn ? 8 : 8 + 40,
+                    left: 8 + 40,
+                    bottom: 8,
                     child: IconButton(
                       constraints: const BoxConstraints.tightFor(width: 40, height: 40),
                       padding: EdgeInsets.zero,
@@ -652,24 +662,12 @@ class _NativePlateState extends State<NativePlate> {
                       onPressed: _toggleMap,
                     ),
                   ),
-                if (!mapOn)
-                  Positioned(
-                    left: 8,
-                    bottom: 8,
-                    child: IconButton(
-                      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                      padding: EdgeInsets.zero,
-                      iconSize: 22,
-                      tooltip: 'Plate: ${mode.name}',
-                      icon: const Icon(Icons.dashboard_outlined),
-                      color: red,
-                      onPressed: _nextMode,
-                    ),
-                  ),
                 // The folded index's heading, level with the two buttons.
                 if (foldedInline)
                   Positioned(
-                    left: 56,
+                    // clear of the view and map buttons on the left, and of
+                    // share on the right
+                    left: mode.currentOnly ? 56 : 96,
                     right: 56,
                     bottom: 8,
                     height: 40,
