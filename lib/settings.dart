@@ -166,6 +166,10 @@ class Settings extends ChangeNotifier {
   /// or in the page's serif and italic.
   bool nativeTitleCaps = true;
 
+  /// The Flutter plate: the lines under the title (session number, date,
+  /// place, weather) in the title's ink rather than sepia.
+  bool nativeHeadingInk = false;
+
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
 
@@ -241,6 +245,7 @@ class Settings extends ChangeNotifier {
     nativeLimit = math.max(0, (j['nativeLimit'] as num?)?.toInt() ?? nativeLimit);
     nativeTotals = (j['nativeTotals'] as bool?) ?? nativeTotals;
     nativeTitleCaps = (j['nativeTitleCaps'] as bool?) ?? nativeTitleCaps;
+    nativeHeadingInk = (j['nativeHeadingInk'] as bool?) ?? nativeHeadingInk;
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -302,6 +307,7 @@ class Settings extends ChangeNotifier {
         'nativeLimit': nativeLimit,
         'nativeTotals': nativeTotals,
         'nativeTitleCaps': nativeTitleCaps,
+        'nativeHeadingInk': nativeHeadingInk,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,

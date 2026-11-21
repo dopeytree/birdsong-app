@@ -461,7 +461,7 @@ class _NativePlateState extends State<NativePlate> {
         // bottom, between the map and share buttons, and the plate takes
         // the room; opened, the list is where it always was.
         final foldedInline = showIndex && showPlate && !single && app.settings.nativeIndexFolded;
-        if (foldedInline) _bottomRoom += 40 + 10;
+        if (foldedInline) _bottomRoom += 40 + 24;
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
               entries: [
                 for (final r in rows)
@@ -708,7 +708,7 @@ class _NativePlateState extends State<NativePlate> {
                   Positioned(
                     left: 8,
                     right: 8,
-                    bottom: 8 + 40 + 10,
+                    bottom: 8 + 40 + 24,
                     height: 40,
                     child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
                         inline: true),
@@ -799,9 +799,12 @@ class _NativePlateState extends State<NativePlate> {
     // or, when chosen (Settings > Experimental, nativeTitleCaps), the whole
     // heading in small capitals as Index of Species is set
     final capsOn = app.settings.nativeTitleCaps;
+    // the lines under the title in sepia, or in the title's ink when chosen
+    // (Settings > Experimental, nativeHeadingInk)
+    final lines = app.settings.nativeHeadingInk ? ink : sepia;
     final sub = capsOn
-        ? const TextStyle(fontFamily: caps, fontSize: 14.4, letterSpacing: 14.4 * .06, color: sepia, height: 1.5)
-        : const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: sepia, height: 1.5);
+        ? TextStyle(fontFamily: caps, fontSize: 14.4, letterSpacing: 14.4 * .06, color: lines, height: 1.5)
+        : TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: lines, height: 1.5);
     // record 44, pill 94, menu 48, and 8 from the edge; the column is the last two
     const row1 = 194.0, col = 56.0;
     final weather = ses?.weather;
@@ -863,7 +866,7 @@ class _NativePlateState extends State<NativePlate> {
                       if (sky != null)
                         Padding(
                           padding: const EdgeInsets.only(right: 5),
-                          child: Icon(weatherIcon(sky), size: 17, color: sepia),
+                          child: Icon(weatherIcon(sky), size: 17, color: lines),
                         ),
                       if (temp != null) Text('$temp°C', style: sub),
                     ],
