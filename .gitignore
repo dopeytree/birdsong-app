@@ -38,3 +38,10 @@ web-log.txt
 github-log.txt
 copy-log.txt
 __pycache__/
+
+# Made by Build on Mac.command (flutter create and its backups), not source
+.bootstrap/
+.metadata
+android/
+ios/
+macos/
