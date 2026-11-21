@@ -537,7 +537,7 @@ class _WalkMapState extends State<WalkMap> {
               fill: _natureWash.withValues(alpha: .07),
               edge: 1.2,
               edgeColor: _natureEdge.withValues(alpha: .7),
-              pattern: const StrokePattern.dashed(segments: [3.6, 2.4]),
+              pattern: StrokePattern.dashed(segments: const [3.6, 2.4]),
               label: a.name,
               style: _labelStyle(_natureEdge)),
       ];
@@ -548,7 +548,7 @@ class _WalkMapState extends State<WalkMap> {
           ..._polys(a,
               edge: .9,
               edgeColor: _monument,
-              pattern: const StrokePattern.dashed(segments: [.9, 1.35]),
+              pattern: StrokePattern.dashed(segments: const [.9, 1.35]),
               label: _zoom >= 13.5 ? a.name : null,
               style: _labelStyle(_monument)),
       ];
