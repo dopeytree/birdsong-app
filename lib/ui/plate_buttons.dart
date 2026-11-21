@@ -52,7 +52,11 @@ class SourcePill extends StatelessWidget {
   });
 
   /// Each half's width.
-  static const half = 46.0;
+  static const half = 40.0;
+
+  /// Its height: a little under the menu icon's 24 plus its own margin,
+  /// so it sits with the round buttons rather than over them.
+  static const height = 30.0;
 
   final bool listen;
   final String? stationName;
@@ -73,9 +77,9 @@ class SourcePill extends StatelessWidget {
               onTap: tap,
               child: Container(
                 width: half,
-                height: 36,
+                height: height,
                 decoration: BoxDecoration(color: on ? red : Colors.transparent, borderRadius: r),
-                child: Icon(icon, size: 21, color: on ? paper : sepia.withValues(alpha: 0.7)),
+                child: Icon(icon, size: 18, color: on ? paper : sepia.withValues(alpha: 0.7)),
               ),
             ),
           ),
@@ -84,16 +88,16 @@ class SourcePill extends StatelessWidget {
       decoration: BoxDecoration(
         color: paper.withValues(alpha: 0.85),
         border: Border.all(color: red.withValues(alpha: 0.55)),
-        borderRadius: BorderRadius.circular(19),
+        borderRadius: BorderRadius.circular(height / 2 + 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           part(listen, Icons.mic_none_outlined, 'Listen here & now', onListen,
-              const BorderRadius.horizontal(left: Radius.circular(18))),
+              const BorderRadius.horizontal(left: Radius.circular(height / 2))),
           part(!listen, Icons.sensors,
               stationName == null ? 'Add a remote station' : 'Remote station: $stationName',
-              onRemote, const BorderRadius.horizontal(right: Radius.circular(18))),
+              onRemote, const BorderRadius.horizontal(right: Radius.circular(height / 2))),
         ],
       ),
     );

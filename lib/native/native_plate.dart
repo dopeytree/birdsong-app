@@ -115,7 +115,7 @@ class _NativePlateState extends State<NativePlate> {
   // Room at the bottom for the share button, as the web plate makes for it
   // (--bs-ui-bottom), so the index rises clear of it.
   // Room at the bottom for the buttons there, so nothing sits under them:
-  // one row (view, map, calendar at the left, share at the right), and
+  // one row (view and map at the left, calendar and share at the right), and
   // one more above it for the folded index's heading.
   // Set in each build.
   double _bottomRoom = 40 + 8 + 6;
@@ -641,7 +641,7 @@ class _NativePlateState extends State<NativePlate> {
                     children: [
                       RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
                       Padding(
-                        padding: const EdgeInsets.only(top: 5), // level with the round buttons
+                        padding: const EdgeInsets.only(top: 9), // centred on the menu icon (48 tall)
                         child: SourcePill(
                           listen: true,
                           stationName: app.settings.station?.name,
@@ -667,7 +667,7 @@ class _NativePlateState extends State<NativePlate> {
                 // left; not in the views of one bird (d and e).
                 // Along the bottom at the left, quick things to do: the plate's
                 // view (a to g) in the corner, so it never moves while
-                // stepping through the views, then the map, then the calendar.
+                // stepping through the views, then the map.
                 Positioned(
                   left: 8,
                   bottom: 8,
@@ -694,15 +694,6 @@ class _NativePlateState extends State<NativePlate> {
                         color: red,
                         onPressed: _toggleMap,
                       ),
-                      IconButton(
-                        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                        padding: EdgeInsets.zero,
-                        iconSize: 22,
-                        tooltip: 'Pick a day',
-                        icon: const Icon(Icons.calendar_today_outlined),
-                        color: red,
-                        onPressed: _pickDay,
-                      ),
                     ],
                   ),
                 ),
@@ -717,6 +708,21 @@ class _NativePlateState extends State<NativePlate> {
                     child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
                         inline: true),
                   ),
+                // The calendar, at the bottom right beside share (in the
+                // corner where there is no share).
+                Positioned(
+                  right: PlateShare.supported ? 8 + 40 : 8,
+                  bottom: 8,
+                  child: IconButton(
+                    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                    padding: EdgeInsets.zero,
+                    iconSize: 22,
+                    tooltip: 'Pick a day',
+                    icon: const Icon(Icons.calendar_today_outlined),
+                    color: red,
+                    onPressed: _pickDay,
+                  ),
+                ),
                 // Share or save, out of the way at the bottom right.
                 if (PlateShare.supported)
                   Positioned(
