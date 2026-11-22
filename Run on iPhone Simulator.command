@@ -30,7 +30,11 @@ print(pick.get('udid',''), pick.get('name',''), sep='|')")
   else
     echo "Using simulator $NAME ($UDID)"
     xcrun simctl boot "$UDID" 2>/dev/null
-    open -a Simulator
+    # The phone's window. Found by its ID, as its name and place in Xcode move.
+    open -b com.apple.iphonesimulator 2>/dev/null \
+      || open "$(xcode-select -p)/Applications/Simulator.app" 2>/dev/null \
+      || open "$(xcode-select -p)/../Applications/DeviceHub.app" 2>/dev/null \
+      || echo "NOTE: could not open the Simulator window (open it from Xcode > Open Developer Tool)"
     if flutter build ios --simulator --debug; then
       echo "STATUS: sim-build-ok"
       APP=build/ios/iphonesimulator/Runner.app
