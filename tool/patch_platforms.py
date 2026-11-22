@@ -89,6 +89,8 @@ def ios():
         # the listening (lib/engine/listen_engine.dart _startTrack).
         "UIBackgroundModes": ["audio", "location"],
         "NSAppTransportSecurity": ATS,
+        # no status bar from the first frame (lib/main.dart keeps it hidden)
+        "UIStatusBarHidden": True,
     })
     podfile = ROOT / "ios/Podfile"
     patch_text(podfile, r"^#?\s*platform :ios, '[\d.]+'", f"platform :ios, '{IOS_MIN}'", re.M)

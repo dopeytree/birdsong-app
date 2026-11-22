@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemChrome, SystemUiMode;
 
 import 'app_state.dart';
 import 'ui/splash.dart';
@@ -20,6 +22,12 @@ const caps = 'IM Fell English SC';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // iPhone and iPad: the plate fills the screen. No status bar (a swipe
+  // down from the top shows it for a moment), and the home bar fades
+  // until the bottom edge is touched.
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
   // The loading screen shows at once; the app starts up behind it.
   runApp(BirdsongApp(boot: AppState.create()));
 }
