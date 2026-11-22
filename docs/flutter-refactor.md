@@ -40,7 +40,9 @@ and look of the old plate carries over, then is improved on with Ed's say-so.
 Ed needs to run `Build on Mac.command` and look at:
 1. The app opening on the Flutter plate; Settings → Display.
 2. Calendar sessions named by where the walk went ("Ashcott – RSPB Ham
-   Wall", "Shapwick – Loxley Wood").
+   Wall", "Shapwick – Loxley Wood"). Ed saw "Street – King's Sedge Moor";
+   now an OS wood or moor must be within 0.5 km, and all walks are named
+   again once.
 3. Ancient woods a shade deeper on the map (layers panel → Ancient woods).
    The shade is a first guess.
 4. Standing stones' slight mark; Stonehenge and Calanais drawn (search

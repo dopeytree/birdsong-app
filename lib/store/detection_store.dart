@@ -262,6 +262,7 @@ class Session {
         if (weather != null) 'weather': weather,
         if (placeName != null) 'placeName': placeName,
         if (placeArea != null) 'placeArea': placeArea,
+        if (placeArea != null) 'placeAreaRule': placeAreaRule,
         'summary': {
           'detections': inside.length,
           'species': {for (final d in inside) d.sci}.length,
@@ -287,8 +288,13 @@ class Session {
         weather: j['weather'] == null ? null : Map<String, dynamic>.from(j['weather'] as Map),
         folder: folder,
         placeName: j['placeName'] as String?,
-        placeArea: j['placeArea'] as String?,
+        // named under an older rule: asked again
+        placeArea: j['placeAreaRule'] == placeAreaRule ? j['placeArea'] as String? : null,
       );
+
+  /// Bumped when the way walks are named changes, so saved names are
+  /// worked out again. 2: OS names only within 0.5 km (22 Nov).
+  static const placeAreaRule = 2;
 
   /// A line from the old sessions.jsonl.
   static Session fromLegacyJson(Map<String, dynamic> j) => Session(

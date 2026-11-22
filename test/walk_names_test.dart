@@ -29,8 +29,22 @@ void main() {
         'Little Copse\tw\t51.04\t-2.96\t51.05\t-2.95\n'
         'Far Heath\tl\t52.0\t-1.0\t52.01\t-0.99\n');
     expect(mostInBox(places, [LatLng(51.045, -2.955)]), 'Little Copse');
-    expect(mostInBox(places, [LatLng(51.045, -2.955), LatLng(51.02, -2.92), LatLng(51.08, -2.92)]), 'Big Forest');
+    expect(mostInBox(places, [LatLng(51.045, -2.955), LatLng(51.049, -2.951), LatLng(51.051, -2.949)]), 'Big Forest');
     expect(mostInBox(places, [LatLng(50.5, -3.5)]), isNull);
+    // in Big Forest's box but over 0.5 km from its middle: nothing
+    expect(mostInBox(places, [LatLng(51.02, -2.92), LatLng(51.08, -2.92)]), isNull);
+  });
+
+  test('Street is not King\'s Sedge Moor, whose box reaches it', () {
+    final text = utf8.decode(gzip.decode(File('assets/places/os_woods.tsv.gz').readAsBytesSync()));
+    expect(mostInBox(OsPlaces.parse(text), [LatLng(51.1250, -2.7400)]), isNull);
+  });
+
+  test('names saved under an older rule are asked again', () {
+    final j = {'id': 1, 'startTime': '2026-11-21T09:00:00Z', 'placeArea': "King's Sedge Moor"};
+    expect(Session.fromJson(j, 'f').placeArea, isNull);
+    final now = {...j, 'placeAreaRule': Session.placeAreaRule};
+    expect(Session.fromJson(now, 'f').placeArea, "King's Sedge Moor");
   });
 
   test('the shipped OS file names Stockhill and Loxley Wood', () {

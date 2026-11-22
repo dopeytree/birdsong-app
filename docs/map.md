@@ -76,9 +76,13 @@ Heavy in dense places (the Weald: 1,430 woods, 1.3 MB a view).
 park layer, tiles fetched directly, kept for the run); else the OS Open
 Names wood or heath, each point of the walk going to the box with the
 nearest middle (boxes overlap: Swayne's Jumps Plantation and King's Sedge
-Moor both cover Loxley Wood). Saved per session as `placeArea` ('' none,
-null not yet; offline leaves it null). Asked when the calendar opens, for
-ended walks only. Not shown when it repeats the town.
+Moor both cover Loxley Wood). A point only counts within 0.5 km of OS's
+point for the name (`osNear`, Ed 22 Nov): King's Sedge Moor's box reaches
+Street, so Street walks were named after it. Saved per session as
+`placeArea` ('' none, null not yet; offline leaves it null) with
+`placeAreaRule` (now 2); a name saved under an older rule is asked again.
+Asked when the calendar opens, for ended walks only. Not shown when it
+repeats the town.
 
 ## Wildlife pictures: switched off
 

@@ -64,15 +64,21 @@ class OsPlace {
   }
 }
 
+/// How near a point must be to OS's point for a name (the box's middle):
+/// 0.5 km, in degrees of latitude. A moor's box can be miles across (King's
+/// Sedge Moor's reaches Street), so being in the box isn't enough (Ed, 22 Nov).
+const osNear = 0.5 / 111.2;
+
 /// The place the most of [pts] belong to, each point belonging to the box
-/// that holds it with the nearest middle (boxes overlap, and a moor's can
-/// be miles across); of two alike, the nearer. Null when no box holds any.
+/// that holds it with the nearest middle, within [osNear] of it (boxes
+/// overlap, and a moor's can be miles across); of two alike, the nearer.
+/// Null when no box holds any near enough.
 @visibleForTesting
 String? mostInBox(OsPlaces places, List<LatLng> pts) {
   final counts = <OsPlace, int>{}, nearest = <OsPlace, double>{};
   for (final p in pts) {
     OsPlace? best;
-    var d = double.infinity;
+    var d = osNear;
     for (final o in places.near(p)) {
       if (!o.holds(p)) continue;
       final e = o.from(p);
