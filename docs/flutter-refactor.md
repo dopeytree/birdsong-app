@@ -120,15 +120,39 @@ exported, so `lib/native/mvt.dart` is ours), latlong2 (exports `Path`: use
 
 ## Next steps
 
-1. Build the latest commit; check the log; confirm the map still behaves
-   (Falmouth smooth, layers panel, NRW layers load, hides appear).
-2. Ed's fill-log timings (Settings → Station history), which size the
-   companion server.
-3. Offered: name calendar sessions by their reserve ("RSPB Ham Wall");
-   later, achievements kept on the phone. Ed is weighing an age question
+1. Done 22 Nov: build clean, map checked by Ed. Since then: the map's
+   debug readout is a setting, off by default; no Passed on the way under
+   the full-screen map.
+2. Calendar sessions named by where the walk went, after the town:
+   "Ashcott – RSPB Ham Wall", "Ashcott – Loxley Wood" (Ed, 22 Nov).
+   Measured 22 Nov: the map's z14 tiles name reserves (park layer: RSPB
+   Ham Wall, Shapwick Heath NNR, Shapwick Moor), lakes and hills, but no
+   woods. Nominatim's reverse with `layer=natural` names the wood
+   (51.134, -2.847 → Loxley Wood, natural=wood) but at Ham Wall gives
+   "South Drain" (a waterway), so: reserve from the tiles first, else
+   Nominatim's natural layer, waterways left out. Loxley Wood's village
+   is Shapwick, not Ashcott.
+3. Later: achievements kept on the phone. Ed is weighing an age question
    and a safe mode for young people (UK Children's Code).
 4. The app as Flutter web.
-5. The Birdsong companion server (Docker, reads `birdnet.db`).
+5. **Parked (Ed, 22 Nov):** the Birdsong companion server (Docker, reads
+   `birdnet.db`). See "Station fill timings" below for what sizes it.
+
+## Station fill timings (Ed's BirdNET-Go station, 21–22 Nov 2026)
+
+From Settings → Station history, 48 days kept.
+- **A past day:** 0–2,253 calls; asked 9–262 ms, weather 12–53 ms, total
+  28–303 ms. The ask grows with the calls, about 0.1 ms a call.
+- **Today, so far** (asked again about every 10 min): grows through the
+  day; ~2,000–3,000 calls asked in 170–740 ms. Weather once slowed to
+  83–225 ms (14:03–14:36), otherwise 9–112 ms.
+- **One stall:** 21:03, asked 34,841 ms for 2,919 calls; the next ask, a
+  minute later, took 504 ms. The station or the network, not the size.
+- **Filling 39 days took 54 s** (12:09:51–12:10:45): the 1.2 s rest
+  between days (`station_archive.dart`), not the station.
+- So the station's own API is fast enough for the app as it is; a
+  companion server isn't needed for speed. A time limit on one ask (the
+  stall) is worth adding.
 
 ## Offered, not yet answered
 
