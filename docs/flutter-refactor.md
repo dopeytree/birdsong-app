@@ -141,8 +141,13 @@ exported, so `lib/native/mvt.dart` is ours), latlong2 (exports `Path`: use
    Subcompartments have no name; Ownership has legal titles ("CHEWTON
    MENDIP WALDEGRAVE"); only Recreation Points' asset names say
    "Stockhill 011" (benches, signs), and at Beechenhurst, Haldon and Wyre
-   they say nothing useful. Not worth building on. The way to name
-   Stockhill is to add the name to OSM.
+   they say nothing useful. Not worth building on.
+   Natural England's Ancient Woodland Inventory (OGL, the NE ArcGIS org
+   the app already uses; Ancient_Woodland_England, field NAME) names
+   ancient woods: LOXLEY WOOD, EARNWOOD COPSE (Wyre), BUDDLES WOOD (by
+   Stockhill); some are blank. Stockhill itself is a plantation, not in it.
+   Still to try: OS Open Names (OGL, "Woodland Or Forest" entries; GB CSV
+   is a 103 MB zip).
 3. Later: achievements kept on the phone. Ed is weighing an age question
    and a safe mode for young people (UK Children's Code).
 4. The app as Flutter web.
