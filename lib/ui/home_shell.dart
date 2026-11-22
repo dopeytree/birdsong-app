@@ -30,8 +30,9 @@ class HomeShell extends StatelessWidget {
           // Edge to edge: the page's own paper runs under the status bar, the
           // Dynamic Island and the home indicator; the page pads its content
           // clear of them instead (PlateView passes it the insets).
-          // Experimental (Settings > Experimental): the plate drawn by
-          // Flutter itself, for Listen here and for remote stations.
+          // The plate drawn by Flutter itself (the default), for Listen here
+          // and for remote stations, or the old web page (Settings >
+          // Experimental > Use the old web plate).
           body: app.settings.nativePlate
               ? NativePlate(
                   app: app,

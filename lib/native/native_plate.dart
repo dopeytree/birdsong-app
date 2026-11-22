@@ -53,7 +53,7 @@ import 'walk_map.dart';
 /// picture of the plate without the buttons, as on the web plate.
 ///
 /// So are the caption, Limit species, and skulls, wings and eggs among a
-/// bird's plates (Settings > Experimental).
+/// bird's plates (Settings > Display).
 ///
 /// The map button shows the walk on a map in the collage's place
 /// (walk_map.dart), as the web plate's map mode.
@@ -1158,17 +1158,17 @@ class _NativePlateState extends State<NativePlate> {
   /// The page's header as the app fills it in Listen here: the title with
   /// the session's number, then, each on its own line, when, where (just
   /// the position), the weather (its picture and the temperature), and,
-  /// when switched on (Settings > Experimental, nativeTotals), the totals. Every line stops short of the buttons beside it
+  /// when switched on (Settings > Display, nativeTotals), the totals. Every line stops short of the buttons beside it
   /// (record, pill, menu). [width] is the room from the
   /// left padding to the screen's right edge.
   Widget _heading(Session? ses, int i, int n, int species, int calls, double width,
       {bool totals = true, StationFeed? feed}) {
     // #sub{font-style:italic;color:sepia;font-size:.95rem}, three block spans;
-    // or, when chosen (Settings > Experimental, nativeTitleCaps), the whole
+    // or, when chosen (Settings > Display, nativeTitleCaps), the whole
     // heading in small capitals as Index of Species is set
     final capsOn = app.settings.nativeTitleCaps;
     // the lines under the title in the title's ink, or in sepia when chosen
-    // (Settings > Experimental, nativeHeadingInk)
+    // (Settings > Display, nativeHeadingInk)
     final lines = app.settings.nativeHeadingInk ? ink : sepia;
     final sub = capsOn
         ? TextStyle(fontFamily: caps, fontSize: 14.4, letterSpacing: 14.4 * .06, color: lines, height: 1.5)
@@ -1201,6 +1201,7 @@ class _NativePlateState extends State<NativePlate> {
       key: _headKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (app.settings.nativeShowTitle) ...[
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: math.max(120, width - row1)),
           child: Text.rich(
@@ -1228,11 +1229,15 @@ class _NativePlateState extends State<NativePlate> {
           ),
         ),
         const SizedBox(height: 3.2),
+        ],
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: math.max(120, width - row1)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // the date and what goes with it, unless switched off
+              // (Settings > Display > Date)
+              if (app.settings.nativeShowDate) ...[
               Text(when, style: sub),
               if (where.isNotEmpty) Text(where, style: sub),
               if (temp != null || sky != null)
@@ -1252,6 +1257,7 @@ class _NativePlateState extends State<NativePlate> {
                 ),
               if (feed != null && feed.lightNote != null && feed.light != Light.all)
                 Text(feed.lightNote!, style: sub.copyWith(color: sepia)),
+              ],
               if (totals && app.settings.nativeTotals && species > 0)
                 Text('$species species from ${thousands(calls)} ${calls == 1 ? 'call' : 'calls'}.',
                     style: sub),

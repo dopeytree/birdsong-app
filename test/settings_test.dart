@@ -87,6 +87,16 @@ void main() {
     expect(s.stations, isEmpty);
   });
 
+  test('the Flutter plate is the plate, even where the old file said otherwise', () async {
+    expect((await loadWith({})).nativePlate, isTrue);
+    // every saved file says nativePlate: false; it is no longer read
+    expect((await loadWith({'nativePlate': false})).nativePlate, isTrue);
+    final web = await loadWith({'webPlate': true});
+    expect((web.nativePlate, web.toJson()['webPlate']), (false, true));
+    final s = await loadWith({'nativeShowTitle': false});
+    expect((s.nativeShowTitle, s.nativeShowDate), (false, true));
+  });
+
   test('the Flutter plate marks the latest below and fits one screen, unless told otherwise', () async {
     final s = await loadWith({});
     expect(s.nativeMarkAt, 'below');

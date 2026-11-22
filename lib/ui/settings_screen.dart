@@ -87,55 +87,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               // the same menu whether listening here or showing a station:
               // the plate, the map and the experiments apply to both
-              _displaySection(context, listen),
+              s.webPlate ? _displaySection(context, listen) : _flutterDisplaySection(context),
               _mapSection(context),
               _section(
                 context,
                 'Experimental',
-                summary: s.nativePlate ? 'Plate drawn by Flutter' : 'Plate drawn by the web page',
+                summary: s.webPlate ? 'The old web plate' : 'Nothing switched on',
                 [
-                  _switch('Draw the plate in Flutter', s.nativePlate,
-                      (v) => s.update((x) => x.nativePlate = v)),
-                  _dropdown(
-                      'Plates on paper',
-                      s.nativePlateStyle,
-                      const {
-                        'cutout': 'Cut out, as the web plate does',
-                        'tint': 'Tinted into the page',
-                        'plain': 'As they come',
-                      },
-                      (v) => s.update((x) => x.nativePlateStyle = v)),
-                  _dropdown(
-                      'Latest marked by',
-                      s.nativeMarkAt,
-                      const {...PageControl.markAt, 'none': 'Nothing'},
-                      (v) => s.update((x) => x.nativeMarkAt = v)),
-                  _dropdown('Size by', s.nativeSizeBy, PageControl.sizeBy,
-                      (v) => s.update((x) => x.nativeSizeBy = v)),
-                  _switch('Fit on one screen', s.nativeFit,
-                      (v) => s.update((x) => x.nativeFit = v)),
-                  _switch('Heading in small capitals', s.nativeTitleCaps,
-                      (v) => s.update((x) => x.nativeTitleCaps = v)),
-                  _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
-                      const {'ink': 'Black, as the title (default)', 'sepia': 'Sepia'},
-                      (v) => s.update((x) => x.nativeHeadingInk = v == 'ink')),
-                  _switch('Species and calls under the date', s.nativeTotals,
-                      (v) => s.update((x) => x.nativeTotals = v)),
-                  _switch('Skulls, wings and eggs', s.nativeParts,
-                      (v) => s.update((x) => x.nativeParts = v)),
-                  _dropdown(
-                      'Limit species',
-                      '${s.nativeLimit}',
-                      {
-                        '0': 'All',
-                        for (final n in const [5, 10, 15, 20, 30, 40]) '$n': 'The $n most heard',
-                        if (!const [0, 5, 10, 15, 20, 30, 40].contains(s.nativeLimit))
-                          '${s.nativeLimit}': 'The ${s.nativeLimit} most heard',
-                      },
-                      (v) => s.update((x) => x.nativeLimit = int.tryParse(v) ?? 0)),
+                  _switch('Use the old web plate', s.webPlate, (v) => s.update((x) => x.webPlate = v)),
                   Text(
-                    'The web plate being moved into Flutter: everything but the map so far. '
-                    'Switch this off for the web plate.',
+                    'The plate as the web page drew it, before it was moved into Flutter. '
+                    'Its own Display options show above while it is on.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -566,6 +528,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
     app.page?.set(key, value);
   }
 
+  /// The Flutter plate's Display options (the web plate's, below, while
+  /// Experimental > Use the old web plate is on).
+  Widget _flutterDisplaySection(BuildContext context) => _section(
+        context,
+        'Display',
+        summary: PageControl.sizeBy[s.nativeSizeBy] ?? '',
+        [
+          _switch('Fit on one screen', s.nativeFit, (v) => s.update((x) => x.nativeFit = v)),
+          _switch('Title', s.nativeShowTitle, (v) => s.update((x) => x.nativeShowTitle = v)),
+          _switch('Date', s.nativeShowDate, (v) => s.update((x) => x.nativeShowDate = v)),
+          _switch('Species and calls under the date', s.nativeTotals, (v) => s.update((x) => x.nativeTotals = v)),
+          _switch('Heading in small capitals', s.nativeTitleCaps, (v) => s.update((x) => x.nativeTitleCaps = v)),
+          _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
+              const {'ink': 'Black, as the title (default)', 'sepia': 'Sepia'},
+              (v) => s.update((x) => x.nativeHeadingInk = v == 'ink')),
+          _dropdown('Latest marked by', s.nativeMarkAt, const {...PageControl.markAt, 'none': 'Nothing'},
+              (v) => s.update((x) => x.nativeMarkAt = v)),
+          _dropdown('Size by', s.nativeSizeBy, PageControl.sizeBy, (v) => s.update((x) => x.nativeSizeBy = v)),
+          _dropdown(
+              'Plates on paper',
+              s.nativePlateStyle,
+              const {
+                'cutout': 'Cut out, as the web plate does',
+                'tint': 'Tinted into the page',
+                'plain': 'As they come',
+              },
+              (v) => s.update((x) => x.nativePlateStyle = v)),
+          _switch('Skulls, wings and eggs', s.nativeParts, (v) => s.update((x) => x.nativeParts = v)),
+          _dropdown(
+              'Limit species',
+              '${s.nativeLimit}',
+              {
+                '0': 'All',
+                for (final n in const [5, 10, 15, 20, 30, 40]) '$n': 'The $n most heard',
+                if (!const [0, 5, 10, 15, 20, 30, 40].contains(s.nativeLimit))
+                  '${s.nativeLimit}': 'The ${s.nativeLimit} most heard',
+              },
+              (v) => s.update((x) => x.nativeLimit = int.tryParse(v) ?? 0)),
+        ],
+      );
+
+  /// The web plate's Display options, read from and set through the page.
   Widget _displaySection(BuildContext context, bool listen) {
     final d = _display;
     if (d == null) {

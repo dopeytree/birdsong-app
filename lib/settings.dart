@@ -132,9 +132,21 @@ class Settings extends ChangeNotifier {
   /// Which model's detections the plate draws, or 'all'.
   String plateModel = 'bnl-v3-10k';
 
-  /// Experimental: in Listen here, the plate drawn by Flutter itself
-  /// (lib/native/native_plate.dart) instead of the web page.
-  bool nativePlate = false;
+  /// The plate as the old web page draws it (assets/web/index.html in a web
+  /// view, lib/ui/plate_view.dart) instead of Flutter's own
+  /// (lib/native/native_plate.dart, the default since 22 Nov 2026). Saved
+  /// as 'webPlate': the old 'nativePlate' key, off in every saved file, is
+  /// no longer read, so every install opens on the Flutter plate once.
+  bool webPlate = false;
+
+  /// Whether the plate is Flutter's own ([webPlate] off).
+  bool get nativePlate => !webPlate;
+
+  /// The Flutter plate's heading: the title line ("Birdsong #3/12") and the
+  /// lines under it (when, where, the weather), as the web plate's Title
+  /// and Date switches.
+  bool nativeShowTitle = true;
+  bool nativeShowDate = true;
 
   /// The Flutter plate's collage: 'calls' (noisiest species), 'time'
   /// (recent ramblings) or 'equal' (no pecking order).
@@ -277,7 +289,9 @@ class Settings extends ChangeNotifier {
     final active = j['activeModels'];
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
-    nativePlate = (j['nativePlate'] as bool?) ?? nativePlate;
+    webPlate = (j['webPlate'] as bool?) ?? webPlate;
+    nativeShowTitle = (j['nativeShowTitle'] as bool?) ?? nativeShowTitle;
+    nativeShowDate = (j['nativeShowDate'] as bool?) ?? nativeShowDate;
     nativePlateStyle = const ['cutout', 'tint', 'plain'].contains(j['nativePlateStyle'])
         ? j['nativePlateStyle'] as String
         : nativePlateStyle;
@@ -353,7 +367,9 @@ class Settings extends ChangeNotifier {
         'plateView': plateModes[plateMode - 1].key,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
-        'nativePlate': nativePlate,
+        'webPlate': webPlate,
+        'nativeShowTitle': nativeShowTitle,
+        'nativeShowDate': nativeShowDate,
         'nativeSizeBy': nativeSizeBy,
         'nativePlateStyle': nativePlateStyle,
         'nativeMarkAt': nativeMarkAt,

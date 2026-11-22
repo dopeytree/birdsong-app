@@ -1,7 +1,8 @@
 # The Flutter refactor: where it stands
 
 Read this first in any new session about the refactor (Claude Code or chat).
-Branch: `flutter-plate-lab`. Updated 21 Nov 2026, late evening.
+Branch: `flutter-plate-default` (from `flutter-plate-lab`, which holds the
+map work). Updated 22 Nov 2026.
 The full plan and its Progress table: [Birdsong Flutter plate plan](https://claude.ai/artifact/XfdX9oyxDrxf5y6g9TDnxr)
 (claude.ai artifact; may not be reachable from Claude Code).
 
@@ -16,8 +17,14 @@ so the app (and later Flutter web) no longer needs the page.
 doesn't mean you are removing functions or design choices." Every behaviour
 and look of the old plate carries over, then is improved on with Ed's say-so.
 
-The Flutter plate is behind Settings → Experimental → Flutter plate
-(`nativePlate`, off by default). It shows both Listen here and remote stations.
+**The Flutter plate is the default** (22 Nov, branch `flutter-plate-default`)
+for Listen here and remote stations. The old web page stays as a fallback:
+Settings → Experimental → Use the old web plate (`webPlate`; the old
+`nativePlate` key, false in every saved file, is no longer read, so every
+install switched once). Settings → Display shows the Flutter plate's options
+(moved from Experimental), plus Title and Date switches (`nativeShowTitle`,
+`nativeShowDate`) carried over from the web plate's Display; with the web
+plate on, Display shows the page's own options as before.
 
 ## How we work (Ed's rules)
 
@@ -203,8 +210,7 @@ From Settings → Station history, 48 days kept.
 
 ## Offered, not yet answered
 
-- Make the Flutter plate the default.
-- Restyle the calendar grid; move Experimental options into Display.
+- Restyle the calendar grid.
 - Write to RSPB about their data.
 - Quick fixes: commit `pubspec.lock`; ignore `android/`, `ios/`, `macos/`,
   `.bootstrap/`; a pull request for `flutter-plate-lab`; prune merged
