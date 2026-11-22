@@ -1,7 +1,6 @@
 # Other coding tools on Ed's Mac (researched 22 Nov 2026)
 
-For cutting cost by mixing Claude, Grok and local models. Nothing here is
-set up for this repo yet: it is what was found, and a proposed setup.
+For cutting cost by mixing Claude, Grok and local models. opencode is set up for this repo; OMO is not.
 
 ## What is installed (M3, 18 GB)
 
@@ -19,8 +18,9 @@ set up for this repo yet: it is what was found, and a proposed setup.
 - opencode's default model is **Inkling 2 Mini**, but Locals is serving
   **Qwen3.5-2B**. Inkling 2 Mini is a 16 GB build needing a 24 GB Mac, so it
   can't run here.
-- opencode's agents (orchestrator, coder, researcher, tester, reviewer) all
-  inherit that one model: no cheap/dear split yet.
+- The global opencode agents (orchestrator, coder, researcher, tester,
+  reviewer) all inherit that one model. This repo's own agents (below)
+  don't.
 
 ## What works across tools already
 
@@ -33,18 +33,35 @@ set up for this repo yet: it is what was found, and a proposed setup.
   opencode can't see them. Skill files would need to be in
   `~/.config/opencode/skills/`.
 
-## Proposed setup (not built)
+## The opencode setup for this repo (built 22 Nov)
 
-One tool, opencode, with three tiers in `.opencode/agents/`:
-- **orchestrator:** Claude (`claude-agent/opus` or a Sonnet): talks to Ed,
-  plans, writes briefs, judges.
-- **coder, tester-writer:** Grok (`xai/grok-4.7` or the cheapest that
-  copes).
-- **scout, checker, doc-keeper:** local (`locals/…`), free.
+Run `opencode` in the repo folder. It opens on the **orchestrator**.
 
-All-local trial: switch Locals to Qwen3.5-4B (2.8 GB, its default for Macs
-over 12 GB). A 2B or 4B model suits finding code, running checks and small
-edits; expect it to struggle with changes inside the 2,000-line files.
+| Tier | Model | Agents |
+|---|---|---|
+| Orchestrator | `claude-agent/opus` | `orchestrator`: talks to Ed, plans, briefs, judges |
+| Coding | `xai/grok-4.7` | `implementer`, `test-writer`, `reviewer` |
+| Free, local | `locals/locals/qwen3.5-2b` | `scout`, `build-log`, `checker`, `doc-keeper`, `data-prober` |
+
+- `.opencode/opencode.json`: this project's default model and agent, and
+  the local model's entry. It overrides the global config (whose default,
+  Inkling 2 Mini, can't run here) for this folder only.
+- `.opencode/agents/*.md`: made by `python3 tool/sync_agents.py` from
+  `.claude/agents/` (edit those, then run it). The tier-to-model table is at
+  the top of that script: change a model there. `orchestrator.md` is
+  opencode's own and is edited directly.
+- Locals must be running for the free tier (`locals code` starts it).
+- **Tested:** opencode loads all nine on the right models; the local
+  `scout` found `antiquityOf` at the right file and line. **Not tested:** a
+  run through Claude or Grok (they spend money), and the local model on
+  anything harder than a search.
+- To try a tier by hand: `opencode run --agent implementer "…"`.
+
+All-local trial: change `claude-agent/opus` and `xai/grok-4.7` to the local
+model in `orchestrator.md` and the script, and switch Locals to Qwen3.5-4B
+(2.8 GB, its default for Macs over 12 GB). A 2B or 4B model suits finding
+code, running checks and small edits; expect it to struggle with changes
+inside the 2,000-line files.
 
 ## Not verified
 
