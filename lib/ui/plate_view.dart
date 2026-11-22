@@ -13,6 +13,7 @@ import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
 import 'plate_buttons.dart';
+import 'settings_button.dart';
 import 'station_editor.dart';
 
 /// Birdsong's own page, served by the app's local server. In Listen here it
@@ -569,14 +570,8 @@ class _PlateViewState extends State<PlateView> {
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
-                          tooltip: 'Settings',
-                          constraints: const BoxConstraints.tightFor(
-                              width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                          icon: const Icon(Icons.menu),
-                          color: Theme.of(context).colorScheme.primary,
-                          onPressed: widget.openSettings,
-                        ),
+                        SettingsButton(
+                            app: widget.app, color: Theme.of(context).colorScheme.primary),
                         IconButton(
                           tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
                           icon: const Icon(Icons.dashboard_outlined),

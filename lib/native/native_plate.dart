@@ -15,6 +15,7 @@ import '../store/detection_store.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
 import '../ui/format.dart';
 import '../ui/plate_buttons.dart';
+import '../ui/settings_button.dart';
 import '../ui/station_editor.dart';
 import 'bird_card.dart';
 import 'collage_view.dart';
@@ -984,14 +985,7 @@ class _NativePlateState extends State<NativePlate> {
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          IconButton(
-                            tooltip: 'Settings',
-                          constraints: const BoxConstraints.tightFor(
-                              width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                            icon: const Icon(Icons.menu),
-                            color: red,
-                            onPressed: widget.openSettings,
-                          ),
+                          SettingsButton(app: app, color: red),
                         ],
                       ),
                     ],

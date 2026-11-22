@@ -39,6 +39,7 @@ dependencies:
 
   # Where each listening session happened.
   geolocator: ^14.1.1
+  animations: ^3.0.0
 
 dev_dependencies:
   flutter_test:
