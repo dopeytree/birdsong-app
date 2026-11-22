@@ -148,10 +148,15 @@ void main() {
   test("the walk's and the view's places together, each once", () {
     final church = Spot('St Mary', 'Listed building, Grade I', const LatLng(51.15, -2.78), grade: 'I');
     final tor = Area('Glastonbury Tor', 'Scheduled monument', box(51.14, -2.70, 51.15, -2.69));
-    final a = Landmarks(listed: [church], monuments: [tor], passed: [Passed('St Mary', 'x', church.at, 10, 1)]);
+    final wood = Area('Loxley Wood', 'Ancient & Semi-Natural Woodland', box(51.131, -2.853, 51.136, -2.842), kind: 'AW');
+    final a = Landmarks(
+        listed: [church], monuments: [tor], ancient: [wood], passed: [Passed('St Mary', 'x', church.at, 10, 1)]);
     final b = Landmarks(
-        listed: [church, Spot('Abbey', 'Listed building, Grade I', const LatLng(51.146, -2.716))], monuments: [tor]);
+        listed: [church, Spot('Abbey', 'Listed building, Grade I', const LatLng(51.146, -2.716))],
+        monuments: [tor],
+        ancient: [wood]);
     final m = a.merge(b);
+    expect(m.ancient.map((w) => w.name), ['Loxley Wood']);
     expect(m.listed.map((s) => s.name), ['St Mary', 'Abbey']);
     expect(m.monuments.length, 1);
     expect(m.passed.length, 1); // the walk's list stays the walk's

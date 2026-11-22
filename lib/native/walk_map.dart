@@ -367,6 +367,7 @@ class _WalkMapState extends State<WalkMap> {
         : {
             if (s.mapShowHeritage) 'heritage',
             if (s.mapShowNature) 'nature',
+            if (s.mapShowAncient) 'ancient',
             if (s.mapShowWiki) 'wiki',
           };
     // not while building: the lookup tells its listeners at once
@@ -765,6 +766,9 @@ class _WalkMapState extends State<WalkMap> {
 
   // the extras' colours, as the page's layers
   static const _natureEdge = Color(0xFF5F7D4C), _natureWash = Color(0xFF7F9A6A);
+
+  /// Over the wood's #c2cc9f and its trees: a little deeper and older.
+  static const _ancient = Color(0x2E4F6B35);
   static const _monument = Color(0xFF8A5A3A), _building = Color(0xFF6B4A33), _wiki = Color(0xFF3D5566);
 
   TextStyle _labelStyle(Color c) => TextStyle(
@@ -852,6 +856,10 @@ class _WalkMapState extends State<WalkMap> {
       lines.addAll(_edgeLines(a, box, color: edge, width: width, pattern: pattern));
     }
 
+    // ancient woods: the map's wood a shade deeper, no edge, no name
+    for (final a in found.ancient) {
+      fills.addAll(_fills(a, fill: _ancient));
+    }
     // protected nature sites: a faint green wash, a dashed edge, the name
     for (final a in found.nature) {
       area(a,
@@ -1700,7 +1708,12 @@ class _LayersPanel extends StatelessWidget {
 
   void _set(void Function(Settings s) change) => settings.update((s) {
         change(s);
-        s.mapExtras = s.mapShowHeritage || s.mapShowNature || s.mapShowWiki || s.mapShowReserves || s.mapShowHides;
+        s.mapExtras = s.mapShowHeritage ||
+            s.mapShowNature ||
+            s.mapShowAncient ||
+            s.mapShowWiki ||
+            s.mapShowReserves ||
+            s.mapShowHides;
       });
 
   @override
@@ -1713,6 +1726,7 @@ class _LayersPanel extends StatelessWidget {
               x
                 ..mapShowHeritage = false
                 ..mapShowNature = false
+                ..mapShowAncient = false
                 ..mapShowWiki = false
                 ..mapShowReserves = false
                 ..mapShowHides = false;
@@ -1740,6 +1754,7 @@ class _LayersPanel extends StatelessWidget {
                       x
                         ..mapShowHeritage = false
                         ..mapShowNature = false
+                        ..mapShowAncient = false
                         ..mapShowWiki = false
                         ..mapShowReserves = false
                         ..mapShowHides = false;
@@ -1775,6 +1790,8 @@ class _LayersPanel extends StatelessWidget {
         row('Heritage', 'Listed buildings, monuments, parks, battlefields', s.mapShowHeritage,
             (x, v) => x.mapShowHeritage = v),
         row('Nature sites', 'SSSIs, bird SPAs, nature reserves, wetlands', s.mapShowNature, (x, v) => x.mapShowNature = v),
+        row('Ancient woods', 'A shade deeper: woods since 1600 (England)', s.mapShowAncient,
+            (x, v) => x.mapShowAncient = v),
         row('Reserves', 'Nature reserves from OpenStreetMap', s.mapShowReserves, (x, v) => x.mapShowReserves = v),
         row('Hides & viewpoints', 'Where OpenStreetMap has them', s.mapShowHides, (x, v) => x.mapShowHides = v),
         row('Wikipedia places', 'With a line about each', s.mapShowWiki, (x, v) => x.mapShowWiki = v),

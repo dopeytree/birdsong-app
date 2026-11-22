@@ -78,7 +78,7 @@ bool touches(List<double> frame, String region) {
 }
 
 /// The kinds of extra that can be looked up.
-const allLayers = {'heritage', 'nature', 'wiki'};
+const allLayers = {'heritage', 'nature', 'ancient', 'wiki'};
 
 /// Rings of polygons: each polygon is its outline, then its holes.
 typedef Shape = List<List<List<LatLng>>>;
@@ -175,6 +175,7 @@ class Landmarks {
     this.battlefields = const [],
     this.worldHeritage = const [],
     this.nature = const [],
+    this.ancient = const [],
     this.reserves = const [],
     this.wiki = const [],
     this.passed = const [],
@@ -191,6 +192,10 @@ class Landmarks {
   /// World Heritage Sites.
   final List<Area> worldHeritage;
   final List<Area> nature;
+
+  /// Natural England's ancient woods (the Ancient Woodland Inventory),
+  /// drawn as a deeper shade over the map's woods.
+  final List<Area> ancient;
 
   /// OpenStreetMap's reserves round a walk, read from the map tiles (the
   /// map draws them itself; these are for what the walk passed).
@@ -222,6 +227,7 @@ class Landmarks {
       battlefields: both(battlefields, other.battlefields, area),
       worldHeritage: both(worldHeritage, other.worldHeritage, area),
       nature: both(nature, other.nature, area),
+      ancient: both(ancient, other.ancient, area),
       reserves: both(reserves, other.reserves, area),
       wiki: both(wiki, other.wiki, spot),
       passed: passed,
@@ -609,7 +615,8 @@ Future<Landmarks> lookUpFrame(List<double> frame,
   final heritage = layers.contains('heritage') && touches(frame, 'england');
   final unreached = <String>[];
   var listed = <Spot>[], wiki = <Spot>[];
-  var monuments = <Area>[], parks = <Area>[], battlefields = <Area>[], worldHeritage = <Area>[], nature = <Area>[];
+  var monuments = <Area>[], parks = <Area>[], battlefields = <Area>[], worldHeritage = <Area>[], nature = <Area>[],
+      ancient = <Area>[];
   Future<List<Area>> areas(String url, String about, String failed, {double simplify = .00002}) =>
       _arc(url, frame, simplify: math.max(simplify, detail)).then((fs) => [
             for (final f in fs)
@@ -656,6 +663,15 @@ Future<Landmarks> lookUpFrame(List<double> frame,
               return <Area>[];
             }),
       ]).then((all) => nature = [for (final a in all) ...a]),
+    if (layers.contains('ancient') && touches(frame, 'england'))
+      _arc('$_ne/Ancient_Woodland_England/FeatureServer/0', frame, simplify: math.max(.00005, detail)).then((fs) {
+        ancient = [
+          for (final f in fs)
+            Area(nameOf(f.props), '${f.props['THEMNAME'] ?? 'Ancient woodland'}', shapeOf(f.geometry), kind: 'AW')
+        ];
+      }).catchError((Object _) {
+        unreached.add('Natural England (ancient woods)');
+      }),
     if (layers.contains('wiki'))
       _wikiNear(frame, wikiLimit).then((w) => wiki = w).catchError((Object _) {
         unreached.add('Wikipedia');
@@ -669,6 +685,7 @@ Future<Landmarks> lookUpFrame(List<double> frame,
     battlefields: battlefields,
     worldHeritage: worldHeritage,
     nature: nature,
+    ancient: ancient,
     wiki: wiki,
     passed: path == null
         ? const []
@@ -869,6 +886,7 @@ class LandmarkLookup extends ChangeNotifier {
         battlefields: found.battlefields,
         worldHeritage: found.worldHeritage,
         nature: found.nature,
+        ancient: found.ancient,
         reserves: reserves,
         wiki: found.wiki,
         passed: await _passedAway(path, found, reserves),

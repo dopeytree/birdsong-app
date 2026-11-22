@@ -164,6 +164,13 @@ exported, so `lib/native/mvt.dart` is ours), latlong2 (exports `Path`: use
    it would ship with the app (a few MB, ~1 MB gzipped): offline, nothing
    sent. Attribution: "Contains OS data © Crown copyright and database
    right 2026". Not Northern Ireland.
+   **Ancient woods (built 22 Nov, not yet seen):** Natural England's
+   Ancient Woodland Inventory (`Ancient_Woodland_England`, OGL) drawn as a
+   fill a shade deeper over the map's woods (`_ancient`, #4F6B35 at 18%,
+   no edge, no name); layers panel "Ancient woods", `mapShowAncient`, on.
+   England only (Scotland and Wales keep their own inventories). Measured:
+   Mendip 62 woods / 60 KB a frame; the Weald 1,430 / 1.3 MB: check the
+   debug readout there. Ed may want the shade tuned.
 3. Later: achievements kept on the phone. Ed is weighing an age question
    and a safe mode for young people (UK Children's Code).
 4. The app as Flutter web.

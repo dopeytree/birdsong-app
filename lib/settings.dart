@@ -206,6 +206,9 @@ class Settings extends ChangeNotifier {
   /// Reserves and Hides & viewpoints: from OpenStreetMap, in the map tiles.
   bool mapShowHeritage = true;
   bool mapShowNature = true;
+
+  /// Ancient woods (Natural England) a shade deeper than other woods.
+  bool mapShowAncient = true;
   bool mapShowWiki = true;
   bool mapShowReserves = true;
   bool mapShowHides = true;
@@ -298,6 +301,7 @@ class Settings extends ChangeNotifier {
     mapDebugReadout = (j['mapDebugReadout'] as bool?) ?? mapDebugReadout;
     mapShowHeritage = (j['mapShowHeritage'] as bool?) ?? mapShowHeritage;
     mapShowNature = (j['mapShowNature'] as bool?) ?? mapShowNature;
+    mapShowAncient = (j['mapShowAncient'] as bool?) ?? mapShowAncient;
     mapShowWiki = (j['mapShowWiki'] as bool?) ?? mapShowWiki;
     mapShowReserves = (j['mapShowReserves'] as bool?) ?? mapShowReserves;
     mapShowHides = (j['mapShowHides'] as bool?) ?? mapShowHides;
@@ -367,6 +371,7 @@ class Settings extends ChangeNotifier {
         'mapDebugReadout': mapDebugReadout,
         'mapShowHeritage': mapShowHeritage,
         'mapShowNature': mapShowNature,
+        'mapShowAncient': mapShowAncient,
         'mapShowWiki': mapShowWiki,
         'mapShowReserves': mapShowReserves,
         'mapShowHides': mapShowHides,
