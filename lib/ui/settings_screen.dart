@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:url_launcher/url_launcher.dart';
@@ -636,6 +637,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (s.mapExtras)
           _switch('Descriptions in Passed on the way', s.mapPassedAbout,
               (v) => s.update((x) => x.mapPassedAbout = v)),
+        if (kDebugMode)
+          _switch('Timing readout on the map (debug)', s.mapDebugReadout,
+              (v) => s.update((x) => x.mapDebugReadout = v)),
         Text(
           'The map is drawn from OpenFreeMap and open elevation data, so the area of each walk '
           'is sent to them. Landmarks also send it to Historic England, Natural England and '

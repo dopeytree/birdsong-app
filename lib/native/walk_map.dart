@@ -1251,7 +1251,7 @@ class _WalkMapState extends State<WalkMap> {
                             ? '\nEngravings: Thomas Bewick, Wellcome Collection'
                             : '') +
                         _searchCredit)),
-              if (kDebugMode && widget.landmarks != null)
+              if (kDebugMode && widget.landmarks != null && (widget.settings?.mapDebugReadout ?? true))
                 Positioned(
                   left: 44,
                   right: 8,

@@ -197,6 +197,9 @@ class Settings extends ChangeNotifier {
   /// map's label still says it.
   bool mapPassedAbout = true;
 
+  /// Whether the map shows its timing readout (debug builds only).
+  bool mapDebugReadout = true;
+
   /// The map's layers (its layers button): what each kind of extra shows,
   /// and so what is looked up. Heritage: Historic England. Nature sites:
   /// Natural England, NatureScot, Natural Resources Wales. Wikipedia places.
@@ -292,6 +295,7 @@ class Settings extends ChangeNotifier {
     mapBirds = j['mapBirds'] == 'all' ? 'all' : 'first';
     mapExtras = (j['mapExtras'] as bool?) ?? mapExtras;
     mapPassedAbout = (j['mapPassedAbout'] as bool?) ?? mapPassedAbout;
+    mapDebugReadout = (j['mapDebugReadout'] as bool?) ?? mapDebugReadout;
     mapShowHeritage = (j['mapShowHeritage'] as bool?) ?? mapShowHeritage;
     mapShowNature = (j['mapShowNature'] as bool?) ?? mapShowNature;
     mapShowWiki = (j['mapShowWiki'] as bool?) ?? mapShowWiki;
@@ -360,6 +364,7 @@ class Settings extends ChangeNotifier {
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,
         'mapPassedAbout': mapPassedAbout,
+        'mapDebugReadout': mapDebugReadout,
         'mapShowHeritage': mapShowHeritage,
         'mapShowNature': mapShowNature,
         'mapShowWiki': mapShowWiki,
