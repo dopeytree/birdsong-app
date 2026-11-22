@@ -45,3 +45,6 @@ __pycache__/
 android/
 ios/
 macos/
+
+# Claude Code: personal settings stay local
+.claude/settings.local.json
