@@ -146,8 +146,14 @@ exported, so `lib/native/mvt.dart` is ours), latlong2 (exports `Path`: use
    the app already uses; Ancient_Woodland_England, field NAME) names
    ancient woods: LOXLEY WOOD, EARNWOOD COPSE (Wyre), BUDDLES WOOD (by
    Stockhill); some are blank. Stockhill itself is a plantation, not in it.
-   Still to try: OS Open Names (OGL, "Woodland Or Forest" entries; GB CSV
-   is a 103 MB zip).
+   **OS Open Names has it** (OGL; downloaded 22 Nov, GB CSV zip 103 MB):
+   98,551 "Woodland Or Forest" names across Great Britain, as points
+   (British National Grid) with a box. Round Priddy: Stockhill (355447,
+   151271), Mendip Forest, Buddle's Wood, Eaker Hill Wood and two dozen
+   more; also Loxley Wood (340879, 137501). Pulled out to name + lat/lon
+   it would ship with the app (a few MB, ~1 MB gzipped): offline, nothing
+   sent. Attribution: "Contains OS data © Crown copyright and database
+   right 2026". Not Northern Ireland.
 3. Later: achievements kept on the phone. Ed is weighing an age question
    and a safe mode for young people (UK Children's Code).
 4. The app as Flutter web.
