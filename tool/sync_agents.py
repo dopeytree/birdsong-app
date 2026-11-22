@@ -14,7 +14,7 @@ import os
 import re
 
 TIER = {
-    'haiku': 'locals/locals/qwen3.5-2b',  # free: finding, checking, notes
+    'haiku': 'locals/locals/qwen3.5-4b',  # free: finding, checking, notes
     'sonnet': 'xai/grok-4.7',             # coding, tests, review
 }
 READ_ONLY = {'Edit', 'Write'}
