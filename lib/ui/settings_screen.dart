@@ -623,6 +623,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'all': 'Every call',
   };
 
+  static const antiquityLetters = {
+    'blackletter': 'Blackletter, as old OS maps',
+    'italic': 'Italic, as the plate',
+  };
+
   Widget _mapSection(BuildContext context) {
     final theme = Theme.of(context);
     return _section(
@@ -637,6 +642,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (s.mapExtras)
           _switch('Descriptions in Passed on the way', s.mapPassedAbout,
               (v) => s.update((x) => x.mapPassedAbout = v)),
+        if (s.mapExtras)
+          _dropdown('Ancient sites', s.mapAntiquityLetters, antiquityLetters,
+              (v) => s.update((x) => x.mapAntiquityLetters = v)),
         if (kDebugMode)
           _switch('Timing readout on the map (debug)', s.mapDebugReadout,
               (v) => s.update((x) => x.mapDebugReadout = v)),
@@ -673,7 +681,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Arne Giacomo, after Gould, the von Wright brothers, Audubon and others, used under '
           'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Weather from MET Norway, CC BY 4.0. '
           'Maps from OpenFreeMap and OpenStreetMap contributors (ODbL), drawn with MapLibre; '
-          'heights from the Mapzen Terrain Tiles. Names of woods and heaths from OS Open Names: '
+          'heights from the Mapzen Terrain Tiles. Ancient sites lettered in UnifrakturMaguntia by j. \'mach\' wust (OFL). '
+          'Names of woods and heaths from OS Open Names: '
           'contains OS data \u00a9 Crown copyright and database right 2026 (OGL). Further plates from '
           'Nederlandsche Vogelen (Nozeman & Sepp, Amsterdam, 1770\u20131829), digitised by the '
           'Koninklijke Bibliotheek, with others from public-domain works held on Wikimedia Commons.',

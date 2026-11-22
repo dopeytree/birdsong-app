@@ -171,6 +171,18 @@ exported, so `lib/native/mvt.dart` is ours), latlong2 (exports `Path`: use
    England only (Scotland and Wales keep their own inventories). Measured:
    Mendip 62 woods / 60 KB a frame; the Weald 1,430 / 1.3 MB: check the
    debug readout there. Ed may want the shade tuned.
+   **Ancient sites (built 22 Nov, not yet seen; Ed to try Stonehenge):**
+   prehistoric sites among Historic England's scheduled monuments, sorted
+   by the first kind word in the name (`antiquities.dart`; "Stonehenge,
+   the Avenue, and three barrows…" is a stone circle called Stonehenge),
+   marked as old OS maps did: an engraved symbol (`_AntiquityPainter`:
+   stone ring, upright, row, henge, mound, long mound, ramparts, cursus)
+   and the name: its own when short ("Bush Barrow", "The Cursus"), else
+   the OS word ("Tumulus", "Tumuli", "Long Barrow", "Henge", "Camp").
+   Settings → Map → Ancient sites: blackletter (UnifrakturMaguntia, OFL,
+   `assets/fonts/`) or italic IM Fell, `mapAntiquityLetters`, for Ed to
+   compare. Marks from z12, named from 12.5 (barrows, cairns from 14),
+   ≤ 200 nearest the middle. England only; HES and Cadw could follow.
 3. Later: achievements kept on the phone. Ed is weighing an age question
    and a safe mode for young people (UK Children's Code).
 4. The app as Flutter web.

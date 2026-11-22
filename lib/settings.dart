@@ -207,6 +207,10 @@ class Settings extends ChangeNotifier {
   bool mapShowHeritage = true;
   bool mapShowNature = true;
 
+  /// How ancient sites (stone circles, barrows, hillforts) are lettered on
+  /// the map: 'blackletter', as old OS maps, or 'italic' IM Fell.
+  String mapAntiquityLetters = 'blackletter';
+
   /// Ancient woods (Natural England) a shade deeper than other woods.
   bool mapShowAncient = true;
   bool mapShowWiki = true;
@@ -302,6 +306,7 @@ class Settings extends ChangeNotifier {
     mapShowHeritage = (j['mapShowHeritage'] as bool?) ?? mapShowHeritage;
     mapShowNature = (j['mapShowNature'] as bool?) ?? mapShowNature;
     mapShowAncient = (j['mapShowAncient'] as bool?) ?? mapShowAncient;
+    mapAntiquityLetters = j['mapAntiquityLetters'] == 'italic' ? 'italic' : 'blackletter';
     mapShowWiki = (j['mapShowWiki'] as bool?) ?? mapShowWiki;
     mapShowReserves = (j['mapShowReserves'] as bool?) ?? mapShowReserves;
     mapShowHides = (j['mapShowHides'] as bool?) ?? mapShowHides;
@@ -372,6 +377,7 @@ class Settings extends ChangeNotifier {
         'mapShowHeritage': mapShowHeritage,
         'mapShowNature': mapShowNature,
         'mapShowAncient': mapShowAncient,
+        'mapAntiquityLetters': mapAntiquityLetters,
         'mapShowWiki': mapShowWiki,
         'mapShowReserves': mapShowReserves,
         'mapShowHides': mapShowHides,

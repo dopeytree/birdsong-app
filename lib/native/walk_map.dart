@@ -20,6 +20,7 @@ import 'engravings.dart';
 import 'wildlife.dart';
 import '../store/detection_store.dart';
 import 'contours.dart';
+import 'antiquities.dart';
 import 'landmarks.dart';
 import 'place_search.dart';
 import 'map_style.dart';
@@ -879,10 +880,11 @@ class _WalkMapState extends State<WalkMap> {
           width: 1.6,
           pattern: StrokePattern.dashed(segments: const [9.6, 4.8]));
     }
-    // scheduled monuments: a fine dotted edge (and hatching), named from 13.5
+    // scheduled monuments: a fine dotted edge (and hatching), named from 13.5;
+    // ancient sites are named by their own marks ([_antiquities])
     for (final a in found.monuments) {
       area(a,
-          label: _zoom >= 13.5 ? a.name : null,
+          label: _zoom >= 13.5 && _antiquity(a.name) == null ? a.name : null,
           style: _labelStyle(_monument),
           edge: _monument,
           width: .9,
@@ -910,6 +912,66 @@ class _WalkMapState extends State<WalkMap> {
     }
     return (fills: fills, lines: lines);
   }
+
+  static final _antiquityOf = <String, Antiquity?>{};
+
+  /// What prehistoric site a monument is, if any (antiquities.dart), kept.
+  static Antiquity? _antiquity(String name) => _antiquityOf.putIfAbsent(name, () => antiquityOf(name));
+
+  /// The ancient sites among the monuments, as old OS maps marked them: a
+  /// small engraved symbol at each, and its name in blackletter (or italic,
+  /// Settings.mapAntiquityLetters) beside it; barrows and cairns, which come
+  /// in hundreds, named only from 14.
+  List<Marker> _antiquities(List<Area> monuments) {
+    if (_zoom < 12) return const [];
+    final black = (widget.settings?.mapAntiquityLetters ?? 'blackletter') == 'blackletter';
+    final marks = <Marker>[];
+    for (final a in monuments) {
+      final q = _antiquity(a.name);
+      if (q == null || a.shape.isEmpty || a.shape.first.isEmpty || a.shape.first.first.length < 3) continue;
+      final small = q.kind == AntiquityKind.barrow || q.kind == AntiquityKind.cairn;
+      final named = _zoom >= (small ? 14 : 12.5);
+      marks.add(Marker(
+        point: _labelPoint(a.shape.first.first),
+        width: 260,
+        height: 44,
+        child: Stack(clipBehavior: Clip.none, children: [
+          Center(
+            child: Semantics(
+              label: '${q.label}, ${a.name}',
+              child: IgnorePointer(
+                child: CustomPaint(size: const Size(28, 22), painter: _AntiquityPainter(q.kind)),
+              ),
+            ),
+          ),
+          if (named)
+            Positioned(
+              left: 130 + 15,
+              top: 0,
+              bottom: 0,
+              width: 115,
+              child: IgnorePointer(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: black
+                      ? _Halo(q.label, 13, ink, halo: 1.6, align: TextAlign.left, family: 'UnifrakturMaguntia', italic: false)
+                      : _Halo(q.label, 12, sepia, halo: 1.6, align: TextAlign.left),
+                ),
+              ),
+            ),
+        ]),
+      ));
+    }
+    // Salisbury Plain has hundreds of barrows: the nearest the middle
+    if (marks.length > _maxAntiquities && _ready) {
+      final c = _map.camera.center;
+      marks.sort((a, b) => metresBetween(a.point, c).compareTo(metresBetween(b.point, c)));
+      return marks.take(_maxAntiquities).toList();
+    }
+    return marks;
+  }
+
+  static const _maxAntiquities = 200;
 
   /// A listed building's little church, or a Wikipedia place's ringed dot,
   /// with its name beside it once close enough.
@@ -1009,7 +1071,9 @@ class _WalkMapState extends State<WalkMap> {
   }
 
   /// Which zoom thresholds the extras pass, as a key.
-  String get _zoomStep => [11, 12, 12.5, 13, 13.5, 14, 14.5, gradeTwoZoom, 16].map((z) => _zoom >= z ? 1 : 0).join();
+  String get _zoomStep =>
+      [11, 12, 12.5, 13, 13.5, 14, 14.5, gradeTwoZoom, 16].map((z) => _zoom >= z ? 1 : 0).join() +
+      (widget.settings?.mapAntiquityLetters ?? '');
 
   /// The extras for this zoom: none when zoomed right out (below 11);
   /// buildings and Wikipedia places from 12 (Grade II from [gradeTwoZoom]),
@@ -1049,6 +1113,7 @@ class _WalkMapState extends State<WalkMap> {
       lines: areas.lines,
       hatched: found.monuments,
       spots: [
+        ..._antiquities(found.monuments),
         ..._spots([for (final s in spots) if (!wiki.contains(s)) s], wiki: false),
         ..._spots([for (final s in spots) if (wiki.contains(s)) s], wiki: true),
       ],
@@ -1353,7 +1418,8 @@ class _WalkMapState extends State<WalkMap> {
 
 /// Text in the map's way: italic, with a halo of paper round it.
 class _Halo extends StatelessWidget {
-  const _Halo(this.text, this.size, this.color, {required this.halo, this.align = TextAlign.center});
+  const _Halo(this.text, this.size, this.color,
+      {required this.halo, this.align = TextAlign.center, this.family, this.italic = true});
 
   final String text;
   final double size;
@@ -1361,9 +1427,14 @@ class _Halo extends StatelessWidget {
   final double halo;
   final TextAlign align;
 
+  /// Another typeface (the antiquities' blackletter); the app's otherwise.
+  final String? family;
+  final bool italic;
+
   @override
   Widget build(BuildContext context) {
-    final style = TextStyle(fontSize: size, fontStyle: FontStyle.italic, height: 1.2);
+    final style = TextStyle(
+        fontSize: size, fontFamily: family, fontStyle: italic ? FontStyle.italic : FontStyle.normal, height: 1.2);
     return Stack(children: [
       Text(text,
           textAlign: align,
@@ -1855,4 +1926,104 @@ class _LayersPanel extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// An ancient site's engraved symbol, in ink over a little paper, as old
+/// Ordnance Survey maps drew them: a ring of stones, an upright stone, a
+/// row of stones, a henge's bank and ditch, a hachured mound (long for a
+/// long barrow), a hillfort's two ramparts.
+class _AntiquityPainter extends CustomPainter {
+  const _AntiquityPainter(this.kind);
+
+  final AntiquityKind kind;
+
+  @override
+  void paint(Canvas canvas, Size box) {
+    final c = box.center(Offset.zero);
+    final dot = Paint()..color = ink;
+    final pen = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
+    final under = Paint()..color = paper.withValues(alpha: .75);
+    void mound(Offset at, double w) {
+      final h = w * .55;
+      canvas.drawPath(
+          ui.Path()
+            ..moveTo(at.dx - w, at.dy + h * .45)
+            ..quadraticBezierTo(at.dx, at.dy - h * 1.2, at.dx + w, at.dy + h * .45),
+          pen);
+      final thin = Paint()
+        ..color = ink
+        ..strokeWidth = .6;
+      for (final f in const [-.6, -.2, .2, .6]) {
+        final x = at.dx + f * w;
+        canvas.drawLine(Offset(x, at.dy + h * (.05 - .25 * (1 - f.abs()))), Offset(x + f * 2.2, at.dy + h * .5), thin);
+      }
+    }
+
+    switch (kind) {
+      case AntiquityKind.circle:
+        canvas.drawCircle(c, 9, under);
+        for (var i = 0; i < 9; i++) {
+          final a = i * 2 * math.pi / 9;
+          canvas.drawCircle(c + Offset(math.cos(a), math.sin(a)) * 7.5, 1.45, dot);
+        }
+      case AntiquityKind.stone:
+        canvas.drawPath(
+            ui.Path()
+              ..moveTo(c.dx - 1.7, c.dy + 5)
+              ..lineTo(c.dx - 1.3, c.dy - 5.5)
+              ..lineTo(c.dx + 1.4, c.dy - 6.2)
+              ..lineTo(c.dx + 1.9, c.dy + 5)
+              ..close(),
+            dot);
+        canvas.drawLine(c + const Offset(-4.5, 5.6), c + const Offset(4.5, 5.6), pen..strokeWidth = .8);
+      case AntiquityKind.row:
+        for (var i = -2; i <= 2; i++) {
+          canvas.drawCircle(c + Offset(i * 4.2, i * 1.0), 1.4, dot);
+        }
+      case AntiquityKind.henge:
+        canvas.drawCircle(c, 9, under);
+        canvas.drawCircle(c, 8, pen..strokeWidth = 1.4);
+        canvas.drawCircle(c, 5, pen..strokeWidth = .6);
+      case AntiquityKind.barrow:
+      case AntiquityKind.cairn:
+        mound(c, 7);
+        if (kind == AntiquityKind.cairn) {
+          for (final o in const [Offset(-2, 1.5), Offset(1.5, 1), Offset(0, -.5)]) {
+            canvas.drawCircle(c + o, .8, dot);
+          }
+        }
+      case AntiquityKind.longBarrow:
+        mound(c, 11);
+      case AntiquityKind.fort:
+      case AntiquityKind.enclosure:
+        final outer = Rect.fromCenter(center: c, width: 24, height: 17);
+        final inner = Rect.fromCenter(center: c, width: 16, height: 10.5);
+        canvas.drawOval(outer, under);
+        final p = Paint()
+          ..color = ink
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = kind == AntiquityKind.fort ? 1 : .8;
+        canvas.drawOval(outer, p);
+        canvas.drawOval(inner, p..strokeWidth = .7);
+        // hachures between the ramparts
+        final thin = Paint()
+          ..color = ink
+          ..strokeWidth = .5;
+        for (var i = 0; i < 16; i++) {
+          final a = i * 2 * math.pi / 16;
+          final u = Offset(math.cos(a), math.sin(a));
+          canvas.drawLine(c + Offset(u.dx * 11.5, u.dy * 8), c + Offset(u.dx * 8.6, u.dy * 5.8), thin);
+        }
+      case AntiquityKind.cursus:
+        final r = Rect.fromCenter(center: c, width: 24, height: 6);
+        canvas.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(3)), pen..strokeWidth = .9);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AntiquityPainter old) => old.kind != kind;
 }
