@@ -87,7 +87,8 @@ exported, so `lib/native/mvt.dart` is ours), latlong2 (exports `Path`: use
 - **Map, part four:**
   - Full-screen map (⛶); a bird card opens over it; Escape closes.
   - "Passed on the way" above the map, only when something was passed;
-    3 + "and N more" on phones; a strip under the full-screen map; choose a
+    3 + "and N more" on phones; not on the full-screen map (Ed, 22 Nov;
+    `PassedStrip` kept, unused); choose a
     line to see it on the map, then its label links to Wikipedia, Historic
     England or a web search. Setting: "Descriptions in Passed on the way".
   - **Speed (Falmouth):** the real cause was flutter_map computing dashed

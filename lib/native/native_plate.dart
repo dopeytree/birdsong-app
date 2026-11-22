@@ -512,13 +512,6 @@ class _NativePlateState extends State<NativePlate> {
                   ),
                     ),
                   ),
-                  // what the walk passed, under the map
-                  if (app.settings.mapExtras)
-                    PassedStrip(
-                      lookup: _landmarks,
-                      about: app.settings.mapPassedAbout,
-                      maxHeight: MediaQuery.sizeOf(context).height * .25,
-                    ),
                 ]),
               ),
             ),
