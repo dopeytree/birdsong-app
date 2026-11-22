@@ -135,8 +135,14 @@ exported, so `lib/native/mvt.dart` is ours), latlong2 (exports `Path`: use
    Stockhill (Mendip, near Priddy): no name in OpenStreetMap at all (its
    woods are unnamed natural=wood), so neither source has it; the tiles
    give the Priddy Mineries reserve beside it, Nominatim's natural layer
-   only nearby peaks (Niver Hill). Would need Forestry England's National
-   Forest Estate data (OGL) or a name added to OSM.
+   only nearby peaks (Niver Hill).
+   Forestry England's open data (OGL, ArcGIS services2.arcgis.com/
+   mHXjwgl3OARRqqD4) tried 22 Nov: no layer names its woods.
+   Subcompartments have no name; Ownership has legal titles ("CHEWTON
+   MENDIP WALDEGRAVE"); only Recreation Points' asset names say
+   "Stockhill 011" (benches, signs), and at Beechenhurst, Haldon and Wyre
+   they say nothing useful. Not worth building on. The way to name
+   Stockhill is to add the name to OSM.
 3. Later: achievements kept on the phone. Ed is weighing an age question
    and a safe mode for young people (UK Children's Code).
 4. The app as Flutter web.
