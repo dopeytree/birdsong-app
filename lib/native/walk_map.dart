@@ -880,11 +880,11 @@ class _WalkMapState extends State<WalkMap> {
           width: 1.6,
           pattern: StrokePattern.dashed(segments: const [9.6, 4.8]));
     }
-    // scheduled monuments: a fine dotted edge (and hatching), named from 13.5;
-    // ancient sites are named by their own marks ([_antiquities])
+    // scheduled monuments: a fine dotted edge (and hatching), named from 13.5
+    // (Stonehenge by its drawing instead, [_drawnSites])
     for (final a in found.monuments) {
       area(a,
-          label: _zoom >= 13.5 && _antiquity(a.name) == null ? a.name : null,
+          label: _zoom >= 13.5 && !_drawnSites.any((d) => d.record(a.name)) ? a.name : null,
           style: _labelStyle(_monument),
           edge: _monument,
           width: .9,
@@ -918,60 +918,44 @@ class _WalkMapState extends State<WalkMap> {
   /// What prehistoric site a monument is, if any (antiquities.dart), kept.
   static Antiquity? _antiquity(String name) => _antiquityOf.putIfAbsent(name, () => antiquityOf(name));
 
-  /// The ancient sites among the monuments, as old OS maps marked them: a
-  /// small engraved symbol at each, and its name in blackletter (or italic,
-  /// Settings.mapAntiquityLetters) beside it; barrows and cairns, which come
-  /// in hundreds, named only from 14.
-  List<Marker> _antiquities(List<Area> monuments) {
+  /// A standing stone's slight mark: a small upright in sepia where each
+  /// of Historic England's standing stones is (from 12); its name as any
+  /// monument's.
+  List<Marker> _standingStones(List<Area> monuments) {
     if (_zoom < 12) return const [];
-    final black = (widget.settings?.mapAntiquityLetters ?? 'blackletter') == 'blackletter';
-    final marks = <Marker>[];
-    for (final a in monuments) {
-      final q = _antiquity(a.name);
-      if (q == null || a.shape.isEmpty || a.shape.first.isEmpty || a.shape.first.first.length < 3) continue;
-      final small = q.kind == AntiquityKind.barrow || q.kind == AntiquityKind.cairn;
-      final named = _zoom >= (small ? 14 : 12.5);
-      marks.add(Marker(
-        point: _labelPoint(a.shape.first.first),
-        width: 260,
-        height: 44,
-        child: Stack(clipBehavior: Clip.none, children: [
-          Center(
-            child: Semantics(
-              label: '${q.label}, ${a.name}',
-              child: IgnorePointer(
-                child: CustomPaint(size: const Size(28, 22), painter: _AntiquityPainter(q.kind)),
-              ),
-            ),
+    return [
+      for (final a in monuments)
+        if (_antiquity(a.name)?.kind == AntiquityKind.stone &&
+            a.shape.isNotEmpty &&
+            a.shape.first.isNotEmpty &&
+            a.shape.first.first.length >= 3)
+          Marker(
+            point: _labelPoint(a.shape.first.first),
+            width: 10,
+            height: 14,
+            child: IgnorePointer(child: CustomPaint(size: const Size(10, 14), painter: const _StonePainter())),
           ),
-          if (named)
-            Positioned(
-              left: 130 + 15,
-              top: 0,
-              bottom: 0,
-              width: 115,
-              child: IgnorePointer(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: black
-                      ? _Halo(q.label, 13, ink, halo: 1.6, align: TextAlign.left, family: 'UnifrakturMaguntia', italic: false)
-                      : _Halo(q.label, 12, sepia, halo: 1.6, align: TextAlign.left),
-                ),
-              ),
-            ),
-        ]),
-      ));
-    }
-    // Salisbury Plain has hundreds of barrows: the nearest the middle
-    if (marks.length > _maxAntiquities && _ready) {
-      final c = _map.camera.center;
-      marks.sort((a, b) => metresBetween(a.point, c).compareTo(metresBetween(b.point, c)));
-      return marks.take(_maxAntiquities).toList();
-    }
-    return marks;
+    ];
   }
 
-  static const _maxAntiquities = 200;
+  /// The two great stone circles, each drawn as a small engraving where it
+  /// stands, named beneath; from zoom 9, with the landmarks on.
+  List<Marker> _drawings() => [
+        if (_zoom >= 9)
+          for (final d in _drawnSites)
+            Marker(
+              point: d.at,
+              width: 160,
+              height: 64,
+              child: IgnorePointer(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  CustomPaint(size: const Size(56, 34), painter: _SitePainter(d.name)),
+                  _Halo(d.name, 12, ink, halo: 1.6),
+                ]),
+              ),
+            ),
+      ];
+
 
   /// A listed building's little church, or a Wikipedia place's ringed dot,
   /// with its name beside it once close enough.
@@ -1071,9 +1055,7 @@ class _WalkMapState extends State<WalkMap> {
   }
 
   /// Which zoom thresholds the extras pass, as a key.
-  String get _zoomStep =>
-      [11, 12, 12.5, 13, 13.5, 14, 14.5, gradeTwoZoom, 16].map((z) => _zoom >= z ? 1 : 0).join() +
-      (widget.settings?.mapAntiquityLetters ?? '');
+  String get _zoomStep => [11, 12, 12.5, 13, 13.5, 14, 14.5, gradeTwoZoom, 16].map((z) => _zoom >= z ? 1 : 0).join();
 
   /// The extras for this zoom: none when zoomed right out (below 11);
   /// buildings and Wikipedia places from 12 (Grade II from [gradeTwoZoom]),
@@ -1113,7 +1095,7 @@ class _WalkMapState extends State<WalkMap> {
       lines: areas.lines,
       hatched: found.monuments,
       spots: [
-        ..._antiquities(found.monuments),
+        ..._standingStones(found.monuments),
         ..._spots([for (final s in spots) if (!wiki.contains(s)) s], wiki: false),
         ..._spots([for (final s in spots) if (wiki.contains(s)) s], wiki: true),
       ],
@@ -1236,6 +1218,9 @@ class _WalkMapState extends State<WalkMap> {
                       controller: _peaks,
                     ),
                     if (layers != null) MarkerLayer(markers: layers.spots),
+                    // Stonehenge and Calanais, drawn
+                    if (widget.landmarks != null && (widget.settings?.mapShowHeritage ?? true))
+                      MarkerLayer(markers: _drawings()),
                     if (widget.landmarks != null && (widget.settings?.mapShowHides ?? true))
                       vt.VectorTileLayer(
                         theme: kit.hides,
@@ -1418,8 +1403,7 @@ class _WalkMapState extends State<WalkMap> {
 
 /// Text in the map's way: italic, with a halo of paper round it.
 class _Halo extends StatelessWidget {
-  const _Halo(this.text, this.size, this.color,
-      {required this.halo, this.align = TextAlign.center, this.family, this.italic = true});
+  const _Halo(this.text, this.size, this.color, {required this.halo, this.align = TextAlign.center});
 
   final String text;
   final double size;
@@ -1427,14 +1411,9 @@ class _Halo extends StatelessWidget {
   final double halo;
   final TextAlign align;
 
-  /// Another typeface (the antiquities' blackletter); the app's otherwise.
-  final String? family;
-  final bool italic;
-
   @override
   Widget build(BuildContext context) {
-    final style = TextStyle(
-        fontSize: size, fontFamily: family, fontStyle: italic ? FontStyle.italic : FontStyle.normal, height: 1.2);
+    final style = TextStyle(fontSize: size, fontStyle: FontStyle.italic, height: 1.2);
     return Stack(children: [
       Text(text,
           textAlign: align,
@@ -1928,102 +1907,170 @@ class _LayersPanel extends StatelessWidget {
   }
 }
 
-/// An ancient site's engraved symbol, in ink over a little paper, as old
-/// Ordnance Survey maps drew them: a ring of stones, an upright stone, a
-/// row of stones, a henge's bank and ditch, a hachured mound (long for a
-/// long barrow), a hillfort's two ramparts.
-class _AntiquityPainter extends CustomPainter {
-  const _AntiquityPainter(this.kind);
+/// Stonehenge and Calanais, the stone circles drawn on the map: where each
+/// stands, and how Historic England names its record (Stonehenge's,
+/// "Stonehenge, the Avenue, and three barrows…", is too long a label;
+/// Calanais is in Scotland, outside Historic England's list).
+typedef _DrawnSite = ({String name, LatLng at, bool Function(String record) record});
 
-  final AntiquityKind kind;
+final _drawnSites = <_DrawnSite>[
+  (name: 'Stonehenge', at: const LatLng(51.17886, -1.82623), record: (r) => r.startsWith('Stonehenge,')),
+  (name: 'Calanais', at: const LatLng(58.19740, -6.74535), record: (_) => false),
+];
+
+/// A standing stone: a small leaning upright on a short ground line, in
+/// sepia, light enough to sit under the names.
+class _StonePainter extends CustomPainter {
+  const _StonePainter();
 
   @override
   void paint(Canvas canvas, Size box) {
     final c = box.center(Offset.zero);
-    final dot = Paint()..color = ink;
+    final ink = Paint()..color = sepia.withValues(alpha: .85);
+    canvas
+      ..drawPath(
+          ui.Path()
+            ..moveTo(c.dx - 1.6, c.dy + 4.5)
+            ..lineTo(c.dx - 1.1, c.dy - 4.6)
+            ..quadraticBezierTo(c.dx + .2, c.dy - 5.8, c.dx + 1.3, c.dy - 4.9)
+            ..lineTo(c.dx + 1.8, c.dy + 4.5)
+            ..close(),
+          ink)
+      ..drawLine(c + const Offset(-3.6, 5), c + const Offset(3.6, 5),
+          Paint()
+            ..color = sepia.withValues(alpha: .7)
+            ..strokeWidth = .7);
+  }
+
+  @override
+  bool shouldRepaint(_StonePainter old) => false;
+}
+
+/// A little engraving of a great stone circle, seen from a little above:
+/// Stonehenge's sarsen ring, gapped, with lintels along it, the tall
+/// trilithons inside and a fallen stone before it; Calanais's ring of thin
+/// stones round its tall central one, the avenue running off behind. Each
+/// stone outlined in ink on paper and shaded with a few strokes.
+class _SitePainter extends CustomPainter {
+  const _SitePainter(this.name);
+
+  final String name;
+
+  @override
+  void paint(Canvas canvas, Size box) {
+    final w = box.width, h = box.height;
+    final c = Offset(w / 2, h * .66);
+    final face = Paint()..color = paper;
     final pen = Paint()
       ..color = ink
+      ..strokeWidth = .65
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..strokeCap = StrokeCap.round;
-    final under = Paint()..color = paper.withValues(alpha: .75);
-    void mound(Offset at, double w) {
-      final h = w * .55;
-      canvas.drawPath(
-          ui.Path()
-            ..moveTo(at.dx - w, at.dy + h * .45)
-            ..quadraticBezierTo(at.dx, at.dy - h * 1.2, at.dx + w, at.dy + h * .45),
-          pen);
-      final thin = Paint()
-        ..color = ink
-        ..strokeWidth = .6;
-      for (final f in const [-.6, -.2, .2, .6]) {
-        final x = at.dx + f * w;
-        canvas.drawLine(Offset(x, at.dy + h * (.05 - .25 * (1 - f.abs()))), Offset(x + f * 2.2, at.dy + h * .5), thin);
+      ..strokeJoin = StrokeJoin.round;
+    final hatch = Paint()
+      ..color = ink
+      ..strokeWidth = .4;
+    // the ground: a few hatched strokes under the ring
+    for (var i = -5; i <= 5; i++) {
+      final x = c.dx + i * w * .075;
+      canvas.drawLine(Offset(x - 1.6, c.dy + h * .3), Offset(x + 1.6, c.dy + h * .23), hatch);
+    }
+    // a stone: a tapering upright, outlined, shaded down its right side
+    void stone(Offset foot, double tall, double wide) {
+      final s = ui.Path()
+        ..moveTo(foot.dx - wide / 2, foot.dy)
+        ..lineTo(foot.dx - wide * .42, foot.dy - tall)
+        ..quadraticBezierTo(foot.dx, foot.dy - tall * 1.06, foot.dx + wide * .4, foot.dy - tall * .98)
+        ..lineTo(foot.dx + wide / 2, foot.dy)
+        ..close();
+      canvas
+        ..drawPath(s, face)
+        ..drawPath(s, pen);
+      if (wide >= 2) {
+        final x = foot.dx + wide * .18;
+        canvas.drawLine(Offset(x, foot.dy - tall * .85), Offset(x, foot.dy - .4), hatch);
       }
     }
 
-    switch (kind) {
-      case AntiquityKind.circle:
-        canvas.drawCircle(c, 9, under);
-        for (var i = 0; i < 9; i++) {
-          final a = i * 2 * math.pi / 9;
-          canvas.drawCircle(c + Offset(math.cos(a), math.sin(a)) * 7.5, 1.45, dot);
-        }
-      case AntiquityKind.stone:
-        canvas.drawPath(
-            ui.Path()
-              ..moveTo(c.dx - 1.7, c.dy + 5)
-              ..lineTo(c.dx - 1.3, c.dy - 5.5)
-              ..lineTo(c.dx + 1.4, c.dy - 6.2)
-              ..lineTo(c.dx + 1.9, c.dy + 5)
-              ..close(),
-            dot);
-        canvas.drawLine(c + const Offset(-4.5, 5.6), c + const Offset(4.5, 5.6), pen..strokeWidth = .8);
-      case AntiquityKind.row:
-        for (var i = -2; i <= 2; i++) {
-          canvas.drawCircle(c + Offset(i * 4.2, i * 1.0), 1.4, dot);
-        }
-      case AntiquityKind.henge:
-        canvas.drawCircle(c, 9, under);
-        canvas.drawCircle(c, 8, pen..strokeWidth = 1.4);
-        canvas.drawCircle(c, 5, pen..strokeWidth = .6);
-      case AntiquityKind.barrow:
-      case AntiquityKind.cairn:
-        mound(c, 7);
-        if (kind == AntiquityKind.cairn) {
-          for (final o in const [Offset(-2, 1.5), Offset(1.5, 1), Offset(0, -.5)]) {
-            canvas.drawCircle(c + o, .8, dot);
-          }
-        }
-      case AntiquityKind.longBarrow:
-        mound(c, 11);
-      case AntiquityKind.fort:
-      case AntiquityKind.enclosure:
-        final outer = Rect.fromCenter(center: c, width: 24, height: 17);
-        final inner = Rect.fromCenter(center: c, width: 16, height: 10.5);
-        canvas.drawOval(outer, under);
-        final p = Paint()
-          ..color = ink
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = kind == AntiquityKind.fort ? 1 : .8;
-        canvas.drawOval(outer, p);
-        canvas.drawOval(inner, p..strokeWidth = .7);
-        // hachures between the ramparts
-        final thin = Paint()
-          ..color = ink
-          ..strokeWidth = .5;
-        for (var i = 0; i < 16; i++) {
-          final a = i * 2 * math.pi / 16;
-          final u = Offset(math.cos(a), math.sin(a));
-          canvas.drawLine(c + Offset(u.dx * 11.5, u.dy * 8), c + Offset(u.dx * 8.6, u.dy * 5.8), thin);
-        }
-      case AntiquityKind.cursus:
-        final r = Rect.fromCenter(center: c, width: 24, height: 6);
-        canvas.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(3)), pen..strokeWidth = .9);
+    // a lintel across two tops
+    void lintel(Offset a, Offset b, double tall) {
+      final r = ui.Path()
+        ..moveTo(a.dx - 1.4, a.dy - tall - .2)
+        ..lineTo(b.dx + 1.4, b.dy - tall - .2)
+        ..lineTo(b.dx + 1.4, b.dy - tall - 2)
+        ..lineTo(a.dx - 1.4, a.dy - tall - 2)
+        ..close();
+      canvas
+        ..drawPath(r, face)
+        ..drawPath(r, pen);
+    }
+
+    Offset on(int i, int n, double rx, double ry) =>
+        c + Offset(math.cos(i * 2 * math.pi / n) * rx, math.sin(i * 2 * math.pi / n) * ry);
+    bool back(int i, int n) => math.sin(i * 2 * math.pi / n) < 0;
+
+    if (name == 'Stonehenge') {
+      const n = 18, rx = 21.0, ry = 7.0, tall = 7.5;
+      const gone = {3, 8, 11};
+      // the far side of the ring, and its lintels
+      for (var i = 0; i < n; i++) {
+        if (back(i, n) && !gone.contains(i)) stone(on(i, n, rx, ry), tall, 2.4);
+      }
+      for (final (a, b) in const [(12, 13), (13, 14), (14, 15), (15, 16)]) {
+        lintel(on(a, n, rx, ry), on(b, n, rx, ry), tall);
+      }
+      // the trilithons inside, taller
+      for (final (x, y) in const [(-9.0, -1.5), (0.0, -3.0), (9.0, -1.5)]) {
+        final f = c + Offset(x, y);
+        stone(f + const Offset(-2, 0), 11.5, 2.6);
+        stone(f + const Offset(2, 0), 11.5, 2.6);
+        lintel(f + const Offset(-2, 0), f + const Offset(2, 0), 11.5);
+      }
+      // the near side
+      for (var i = 0; i < n; i++) {
+        if (!back(i, n) && !gone.contains(i)) stone(on(i, n, rx, ry), tall, 2.4);
+      }
+      for (final (a, b) in const [(0, 1), (5, 6), (6, 7)]) {
+        lintel(on(a, n, rx, ry), on(b, n, rx, ry), tall);
+      }
+      // a fallen stone lying before the ring
+      final f = ui.Path()
+        ..moveTo(c.dx + 6, c.dy + 9)
+        ..lineTo(c.dx + 13, c.dy + 8.2)
+        ..lineTo(c.dx + 13.6, c.dy + 9.9)
+        ..lineTo(c.dx + 6.4, c.dy + 10.8)
+        ..close();
+      canvas
+        ..drawPath(f, face)
+        ..drawPath(f, pen);
+    } else {
+      const n = 13, rx = 9.0, ry = 3.8;
+      const heights = <double>[7, 9, 6, 8, 10, 7, 9, 6.5, 8, 7, 9.5, 8, 6];
+      // its cross: the avenue off behind (north, going away, a little to
+      // the right), and short rows east and west, drawn back to front
+      for (var k = 5; k >= 1; k--) {
+        final f = Offset(c.dx + k * 1.5, c.dy - ry - k * 1.5);
+        final half = 3.2 - k * .25;
+        stone(f + Offset(-half, 0), 5.5 - k * .45, 1.3);
+        stone(f + Offset(half, 0), 5.5 - k * .45, 1.3);
+      }
+      for (var k = 1; k <= 3; k++) {
+        stone(Offset(c.dx - rx - k * 3.6, c.dy - .3 * k), 5 - k * .5, 1.4);
+        stone(Offset(c.dx + rx + k * 3.6, c.dy - .3 * k), 5 - k * .5, 1.4);
+      }
+      for (var i = 0; i < n; i++) {
+        if (back(i, n)) stone(on(i, n, rx, ry), heights[i], 1.8);
+      }
+      stone(c + const Offset(0, -.5), 17, 3); // the great central stone
+      for (var i = 0; i < n; i++) {
+        if (!back(i, n)) stone(on(i, n, rx, ry), heights[i], 1.9);
+      }
+      // and the short row to the south, coming towards us
+      for (var k = 1; k <= 2; k++) {
+        stone(Offset(c.dx - k * 1.2, c.dy + ry + k * 2.6), 5.5 - k * .4, 1.6);
+      }
     }
   }
 
   @override
-  bool shouldRepaint(_AntiquityPainter old) => old.kind != kind;
+  bool shouldRepaint(_SitePainter old) => old.name != name;
 }

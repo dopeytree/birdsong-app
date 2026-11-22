@@ -64,9 +64,3 @@ flutter:
     - family: IM Fell English SC
       fonts:
         - asset: assets/web/fonts/IMFeENsc28P.ttf
-    # Ancient sites on the map, as old OS maps lettered them.
-    # UnifrakturMaguntia by j. 'mach' wust, SIL Open Font Licence
-    # (assets/fonts/UnifrakturMaguntia-OFL.txt).
-    - family: UnifrakturMaguntia
-      fonts:
-        - asset: assets/fonts/UnifrakturMaguntia-Book.ttf
