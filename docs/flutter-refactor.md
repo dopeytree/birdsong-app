@@ -132,6 +132,11 @@ exported, so `lib/native/mvt.dart` is ours), latlong2 (exports `Path`: use
    "South Drain" (a waterway), so: reserve from the tiles first, else
    Nominatim's natural layer, waterways left out. Loxley Wood's village
    is Shapwick, not Ashcott.
+   Stockhill (Mendip, near Priddy): no name in OpenStreetMap at all (its
+   woods are unnamed natural=wood), so neither source has it; the tiles
+   give the Priddy Mineries reserve beside it, Nominatim's natural layer
+   only nearby peaks (Niver Hill). Would need Forestry England's National
+   Forest Estate data (OGL) or a name added to OSM.
 3. Later: achievements kept on the phone. Ed is weighing an age question
    and a safe mode for young people (UK Children's Code).
 4. The app as Flutter web.
