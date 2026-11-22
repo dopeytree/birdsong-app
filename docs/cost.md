@@ -67,7 +67,29 @@ skill) costs little; Ed's verdict then goes in `decisions.md`.
 
 ## 6. Fewer plugins
 
-Every enabled plugin adds its skills and tools to every session's opening
-context. This project uses the Flutter and Dart packs, `superpowers` and
-Ed's own skills. The data, engineering, design and document packs are not
-used here and can be switched off for this project.
+Every enabled plugin adds its skills, agents and connectors to every
+session's opening context. They are enabled on Ed's claude.ai account (for
+every project, not per repo), so only Ed can switch them off, in the Claude
+app's plugin settings. Checked 22 Nov 2026: eleven are on.
+
+Keep (used here):
+- Flutter engineering skills (`flutter:*`)
+- The official Dart and Flutter plugin (`dart-flutter:*`, Dart MCP server)
+- `zizi-skills` (git-sync, handoff)
+- Ed's own `birdsong-web-sync`
+
+Switch off (not used by this app):
+- Engineering workflows (`engineering:*`): also brings seven connectors
+  that wait for sign-in (Asana, Atlassian, Datadog, GitHub, Linear,
+  Notion, PagerDuty, Slack)
+- Data (`data:*`): Amplitude, BigQuery, Definite, Hex connectors
+- Design workflows (`design:*`): Figma, Intercom connectors
+- Claude Security (`claude-security`): seven agents
+- Frontend design, Skill creator
+- The second Flutter pack (`flutter-skills:*`): Riverpod, Freezed,
+  go_router, Flame, none of which this app uses
+
+Ed's call: `superpowers`. We use one skill from it
+(`systematic-debugging`), but its start-of-session rule tells Claude to
+load a skill whenever one might apply, which is how `claude-api` got
+loaded. Off is cheaper; on keeps that debugging skill.
