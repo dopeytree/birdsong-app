@@ -12,6 +12,7 @@ needs: every file read costs tokens.
 | `map.md` | Everything built on the map and how it works | Map work |
 | `data-sources.md` | Every outside source: endpoint, licence, what was measured, dead ends | Adding or checking data |
 | `decisions.md` | What Ed approved and rejected, in his words | Any visual or design choice |
+| `dev-tools.md` | opencode, Grok, Locals, OMO on Ed's Mac: what's installed, a proposed mixed setup | Setting up other coding tools |
 | `upstream-whole-plate-blend.md` | A patch offered to the web page upstream | Web-page sync only |
 
 Agents are in `.claude/agents/`, project skills in `.claude/skills/`
