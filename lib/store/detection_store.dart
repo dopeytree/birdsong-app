@@ -174,6 +174,7 @@ class Session {
     this.folder,
     this.locationSource,
     this.placeName,
+    this.placeArea,
   })  : uuid = uuid ?? newUuid(),
         utcOffsetMinutes = utcOffsetMinutes ?? start.timeZoneOffset.inMinutes;
 
@@ -209,6 +210,11 @@ class Session {
   /// The nearest town or village (engine/place_names.dart), '' when there
   /// is none; null until looked up.
   String? placeName;
+
+  /// Where the walk went, after [placeName] in the calendar: the reserve,
+  /// wood or heath it was most in (native/walk_names.dart), '' when none;
+  /// null until looked up, once the session has ended.
+  String? placeArea;
 
   /// Folder name under sessions/, set when first written.
   String? folder;
@@ -255,6 +261,7 @@ class Session {
         if (models.isNotEmpty) 'models': models,
         if (weather != null) 'weather': weather,
         if (placeName != null) 'placeName': placeName,
+        if (placeArea != null) 'placeArea': placeArea,
         'summary': {
           'detections': inside.length,
           'species': {for (final d in inside) d.sci}.length,
@@ -280,6 +287,7 @@ class Session {
         weather: j['weather'] == null ? null : Map<String, dynamic>.from(j['weather'] as Map),
         folder: folder,
         placeName: j['placeName'] as String?,
+        placeArea: j['placeArea'] as String?,
       );
 
   /// A line from the old sessions.jsonl.
@@ -629,6 +637,33 @@ class DetectionStore extends ChangeNotifier {
       if (name == null) return; // offline: try again another time
       x.placeName = name;
       await saveSession(x);
+    }
+  }
+
+  /// Give ended sessions with a place but no [Session.placeArea] yet the
+  /// reserve, wood or heath their walk was most in, one walk at a time,
+  /// saving each as it comes (for the calendar). [lookUp] is
+  /// native/walk_names.dart areaOfWalk: '' for none, null when offline
+  /// (stops; tried again another time).
+  Future<void> nameAreas(Future<String?> Function(List<(double, double)> path) lookUp) async {
+    for (final x in [...sessions]) {
+      if (x.live || !x.hasPlace || x.placeArea != null) continue;
+      final walk = walkOf(x);
+      if (walk.any((s) => s.live)) continue;
+      final path = <(double, double)>[
+        for (final s in walk) ...[
+          for (final p in s.track) (p.lat, p.lon),
+          for (final d in inSession(s))
+            if (d.hasPlace) (d.lat!, d.lon!),
+        ],
+      ];
+      if (path.isEmpty) path.add((x.lat!, x.lon!));
+      final area = await lookUp(path);
+      if (area == null) return;
+      for (final s in walk) {
+        s.placeArea = area;
+        await saveSession(s);
+      }
     }
   }
 

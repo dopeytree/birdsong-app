@@ -5,13 +5,15 @@ import '../engine/place_names.dart';
 import 'index_view.dart' show thousands;
 import 'station_archive.dart';
 import 'station_feed.dart';
+import 'walk_names.dart';
 import '../store/detection_store.dart';
 import '../ui/format.dart';
 
 /// The calendar button's dialog: a month with only the days that have a
 /// session to pick, and under it that day's sessions, grouped under the
 /// nearest town or village (named from OpenStreetMap, saved with each
-/// session; sessions not yet named are named while it is open), each with
+/// session; sessions not yet named are named while it is open) and where
+/// the walk went ("Ashcott – RSPB Ham Wall", walk_names.dart), each with
 /// its number, start time, how long it ran and how many species it heard. A tap on a
 /// session shows it; OK shows the day's first, and the ‹ › step through the
 /// rest. Returns the session to show, or null.
@@ -53,6 +55,8 @@ class _DayPickerState extends State<DayPicker> {
     super.initState();
     // name the places of sessions that have none yet; the list follows
     widget.store.namePlaces(nearestPlace);
+    // and where each walk went (a reserve, wood or heath)
+    widget.store.nameAreas(areaOfWalk);
   }
 
   @override
@@ -150,13 +154,16 @@ class _DayPickerState extends State<DayPicker> {
   List<(String, List<Session>)> _byPlace(List<Session> day) {
     final groups = <String, List<Session>>{};
     for (final x in day) {
-      final name = !x.hasPlace
+      final town = !x.hasPlace
           ? 'Place unknown'
           : x.placeName == null
               ? place(x.lat!, x.lon!) // being named
               : x.placeName!.isEmpty
                   ? place(x.lat!, x.lon!)
                   : x.placeName!;
+      final area = x.placeArea ?? '';
+      // "Ashcott – RSPB Ham Wall"; not "Shapwick – Shapwick"
+      final name = area.isEmpty || area == town ? town : '$town – $area';
       (groups[name] ??= []).add(x);
     }
     return [for (final e in groups.entries) (e.key, e.value)];

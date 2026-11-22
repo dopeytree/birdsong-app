@@ -51,6 +51,7 @@ flutter:
     - assets/web/
     - assets/web/fonts/
     - assets/app/
+    - assets/places/
 
   # The plate's typeface, so the app's own screens match it.
   # IM Fell English by Igino Marini, SIL Open Font Licence.

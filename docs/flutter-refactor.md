@@ -123,8 +123,18 @@ exported, so `lib/native/mvt.dart` is ours), latlong2 (exports `Path`: use
 1. Done 22 Nov: build clean, map checked by Ed. Since then: the map's
    debug readout is a setting, off by default; no Passed on the way under
    the full-screen map.
-2. Calendar sessions named by where the walk went, after the town:
-   "Ashcott – RSPB Ham Wall", "Ashcott – Loxley Wood" (Ed, 22 Nov).
+2. **Built 22 Nov, not yet seen in the app:** calendar sessions named by
+   where the walk went, after the town: "Ashcott – RSPB Ham Wall",
+   "Shapwick – Loxley Wood" (Ed's ask). `walk_names.dart` (`areaOfWalk`):
+   the OSM reserve the walk was most inside (z14 park layer, tiles fetched
+   directly, kept for the run), else the OS Open Names wood or heath, each
+   point of the walk going to the box with the nearest middle (boxes
+   overlap: Swayne's Jumps Plantation and King's Sedge Moor both cover
+   Loxley Wood). Saved per session as `placeArea` ('' none, null not yet;
+   offline leaves it null). Asked when the calendar opens, for ended walks
+   only. Data: `assets/places/os_woods.tsv.gz` (116,244 woods and other
+   landcover, 1.9 MB), made by `tool/os_woods.py` from the OS download;
+   credited in Settings. Findings that led here:
    Measured 22 Nov: the map's z14 tiles name reserves (park layer: RSPB
    Ham Wall, Shapwick Heath NNR, Shapwick Moor), lakes and hills, but no
    woods. Nominatim's reverse with `layer=natural` names the wood

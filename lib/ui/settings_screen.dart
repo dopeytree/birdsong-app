@@ -673,7 +673,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Arne Giacomo, after Gould, the von Wright brothers, Audubon and others, used under '
           'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Weather from MET Norway, CC BY 4.0. '
           'Maps from OpenFreeMap and OpenStreetMap contributors (ODbL), drawn with MapLibre; '
-          'heights from the Mapzen Terrain Tiles. Further plates from '
+          'heights from the Mapzen Terrain Tiles. Names of woods and heaths from OS Open Names: '
+          'contains OS data \u00a9 Crown copyright and database right 2026 (OGL). Further plates from '
           'Nederlandsche Vogelen (Nozeman & Sepp, Amsterdam, 1770\u20131829), digitised by the '
           'Koninklijke Bibliotheek, with others from public-domain works held on Wikimedia Commons.',
           style: theme.textTheme.bodyMedium,
