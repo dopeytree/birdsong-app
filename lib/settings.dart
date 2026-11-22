@@ -198,7 +198,7 @@ class Settings extends ChangeNotifier {
   bool mapPassedAbout = true;
 
   /// Whether the map shows its timing readout (debug builds only).
-  bool mapDebugReadout = true;
+  bool mapDebugReadout = false;
 
   /// The map's layers (its layers button): what each kind of extra shows,
   /// and so what is looked up. Heritage: Historic England. Nature sites:
