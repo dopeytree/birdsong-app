@@ -1,7 +1,7 @@
 ---
 description: Updates the docs after a piece of work (status, map notes, data sources, Ed's decisions). Use at the end of a task, given a short list of what changed.
 mode: all
-model: locals/locals/qwen3.5-2b
+model: locals/locals/qwen3.5-4b
 permission:
   task: deny
   question: deny

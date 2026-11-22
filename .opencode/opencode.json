@@ -1,14 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "claude-agent/opus",
-  "small_model": "locals/locals/qwen3.5-2b",
+  "small_model": "locals/locals/qwen3.5-4b",
   "default_agent": "orchestrator",
   "subagent_depth": 1,
   "provider": {
     "locals": {
       "models": {
-        "locals/qwen3.5-2b": {
-          "name": "qwen3.5-2b (local)",
+        "locals/qwen3.5-4b": {
+          "name": "qwen3.5-4b (local)",
           "tool_call": true,
           "reasoning": false,
           "temperature": true,

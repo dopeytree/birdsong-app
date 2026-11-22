@@ -1,7 +1,7 @@
 ---
 description: Measures what an open data source really holds before anything is built on it (ArcGIS layers, map tiles, Nominatim, Overpass, a downloaded file). Use for "does X have Y?" and "how much data is that?" questions.
 mode: all
-model: locals/locals/qwen3.5-2b
+model: locals/locals/qwen3.5-4b
 permission:
   task: deny
   question: deny

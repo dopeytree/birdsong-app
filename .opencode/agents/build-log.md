@@ -1,7 +1,7 @@
 ---
 description: Reads build-log.txt after Ed runs "Build on Mac.command" and says whether the build worked and which commit it built. Use whenever Ed says he has built, or reports something odd in the app.
 mode: all
-model: locals/locals/qwen3.5-2b
+model: locals/locals/qwen3.5-4b
 permission:
   task: deny
   question: deny

@@ -1,7 +1,7 @@
 ---
 description: Finds where something is in this repo (a function, a setting, a widget, a test). Use before reading large files such as walk_map.dart or native_plate.dart, so the main session reads only the lines it needs.
 mode: all
-model: locals/locals/qwen3.5-2b
+model: locals/locals/qwen3.5-4b
 permission:
   task: deny
   question: deny

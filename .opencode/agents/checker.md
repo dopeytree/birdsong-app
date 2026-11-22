@@ -1,7 +1,7 @@
 ---
 description: Runs flutter analyze and flutter test and reports only what failed. Use after any code change, before saying it is done.
 mode: all
-model: locals/locals/qwen3.5-2b
+model: locals/locals/qwen3.5-4b
 permission:
   task: deny
   question: deny
