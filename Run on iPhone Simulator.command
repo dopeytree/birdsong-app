@@ -13,23 +13,23 @@ LOG="sim-log.txt"
   flutter pub get >/dev/null
   python3 tool/patch_platforms.py
 
-  # A simulator already running, else the newest available iPhone.
-  SIM=$(xcrun simctl list devices available -j 2>/dev/null | python3 -c "
+  # Every simulator already running (open an iPad or another phone first
+  # to include it), else the newest iPhone Pro.
+  SIMS=$(xcrun simctl list devices available -j 2>/dev/null | python3 -c "
 import json,sys
 ds=[d for rt,l in json.load(sys.stdin)['devices'].items() if 'iOS' in rt for d in l]
 on=[d for d in ds if d['state']=='Booted']
 ph=[d for d in ds if d['name'].startswith('iPhone')]
 pro=[d for d in ph if d['name'].endswith(' Pro')]
-pick=(on or pro[::-1] or ph[::-1] or [{}])[0]
-print(pick.get('udid',''), pick.get('name',''), sep='|')")
-  UDID=${SIM%%|*}
-  NAME=${SIM#*|}
+for d in (on or (pro[::-1] or ph[::-1])[:1]): print(d['udid']+'|'+d['name'])")
 
-  if [ -z "$UDID" ]; then
+  if [ -z "$SIMS" ]; then
     echo "STATUS: no-simulator  (Xcode > Settings > Components: get the iOS simulator)"
   else
-    echo "Using simulator $NAME ($UDID)"
-    xcrun simctl boot "$UDID" 2>/dev/null
+    for S in ${(f)SIMS}; do
+      echo "Using simulator ${S#*|} (${S%%|*})"
+      xcrun simctl boot "${S%%|*}" 2>/dev/null
+    done
     # The phone's window. Found by its ID, as its name and place in Xcode move.
     open -b com.apple.iphonesimulator 2>/dev/null \
       || open "$(xcode-select -p)/Applications/Simulator.app" 2>/dev/null \
@@ -39,8 +39,11 @@ print(pick.get('udid',''), pick.get('name',''), sep='|')")
       echo "STATUS: sim-build-ok"
       APP=build/ios/iphonesimulator/Runner.app
       BUNDLE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
-      xcrun simctl install "$UDID" "$APP" && echo "STATUS: sim-install-ok"
-      xcrun simctl launch "$UDID" "$BUNDLE" >/dev/null && echo "STATUS: launched $BUNDLE"
+      for S in ${(f)SIMS}; do
+        U=${S%%|*}
+        xcrun simctl install "$U" "$APP" && echo "STATUS: sim-install-ok ${S#*|}"
+        xcrun simctl launch "$U" "$BUNDLE" >/dev/null && echo "STATUS: launched on ${S#*|}"
+      done
     else
       echo "STATUS: sim-build-failed"
     fi
