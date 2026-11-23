@@ -4,7 +4,8 @@
 //
 // To add screenshots or a video later, add entries to `shots` below and put
 // the files in public/shots/. type is 'image' or 'video'; add landscape: true
-// for a sideways shot: it opens full size in a popup, not in the page.
+// for a sideways shot and the device turns to suit it. The iPad pill button
+// opens the iPad's sideways shot full size in a popup.
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const shots = {
   iphone: [
@@ -107,9 +108,10 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   </dialog>
 
   <script is:inline define:vars={{ roman }}>
-    // Every shot is a stop in one loop: iPhone shots, then iPad shots.
-    // Upright shots show in the device on the page; a sideways shot opens
-    // full size in the popup instead, and closing it moves on to the next stop.
+    // Every shot is a stop in one loop: iPhone shots, then iPad shots. A tap
+    // on the screen steps through them in the page, sideways ones included.
+    // The iPad pill button also opens the sideways shot full size in a popup;
+    // closing it leaves the sideways iPad showing in the page.
     const devices = [...document.querySelectorAll('.devices .device')];
     const segs = [...document.querySelectorAll('.seg')];
     const hint = document.querySelector('.hint em');
@@ -120,7 +122,6 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
       ({ d, i, s, sideways: s.dataset.landscape === 'true' })));
     const other = d => d.dataset.device === 'iphone' ? 'iPad' : 'iPhone';
     let k = 0;            // the stop showing on the page
-    let afterBox = null;  // where to go when the popup closes
 
     function show(n) {
       k = n;
@@ -135,40 +136,36 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
         s.dataset.active = j === i ? 'true' : 'false';
         if (s.tagName === 'VIDEO') j === i ? s.play() : s.pause();
       });
+      d.dataset.landscape = stops[k].sideways ? 'true' : 'false';
       segs.forEach(s => s.setAttribute('aria-selected', s.dataset.device === d.dataset.device ? 'true' : 'false'));
       const next = stops[(k + 1) % stops.length];
-      hint.textContent = next.sideways ? 'Tap the screen to see it full size, sideways.'
+      hint.textContent = next.sideways ? 'Tap the screen to turn it sideways.'
         : next.d !== d ? `Tap the screen to see it on ${other(d)}.`
         : 'Tap the screen for the next plate.';
-      const upright = stops.filter(t => t.d === d && !t.sideways);
-      nav.hidden = upright.length < 2;
-      nav.querySelector('.num').textContent = roman[upright.indexOf(stops[k])] || '';
-      nav.querySelector('.count').textContent = roman[upright.length - 1] || '';
+      const own = stops.filter(t => t.d === d);
+      nav.hidden = own.length < 2;
+      nav.querySelector('.num').textContent = roman[own.indexOf(stops[k])] || '';
+      nav.querySelector('.count').textContent = roman[own.length - 1] || '';
     }
 
     // One step forward (1) or back (-1).
-    function step(dir) {
-      const n = (k + dir + stops.length) % stops.length;
-      if (!stops[n].sideways) return show(n);
-      boxImg.src = stops[n].s.src;
-      boxImg.alt = stops[n].s.alt;
-      afterBox = { n, dir };
-      box.showModal();
-    }
+    function step(dir) { show((k + dir + stops.length) % stops.length); }
     box.addEventListener('click', () => box.close());
-    box.addEventListener('close', () => {
-      if (!afterBox) return;
-      let n = afterBox.n;
-      do n = (n + afterBox.dir + stops.length) % stops.length; while (stops[n].sideways);
-      afterBox = null;
-      show(n);
-    });
 
     devices.forEach(d => d.querySelector('.frame').addEventListener('click', () => step(1)));
     nav.querySelector('.prev').addEventListener('click', () => step(-1));
     nav.querySelector('.next').addEventListener('click', () => step(1));
     const firstOn = id => stops.findIndex(t => t.d.dataset.device === id && !t.sideways);
-    segs.forEach(s => s.addEventListener('click', () => show(firstOn(s.dataset.device))));
+    // iPhone pill: the iPhone. iPad pill: the sideways shot, full size in the popup.
+    segs.forEach(s => s.addEventListener('click', () => {
+      const id = s.dataset.device;
+      const side = stops.findIndex(t => t.d.dataset.device === id && t.sideways);
+      if (id !== 'ipad' || side < 0 || stops[side].s.tagName !== 'IMG') return show(firstOn(id));
+      show(side);
+      boxImg.src = stops[side].s.src;
+      boxImg.alt = stops[side].s.alt;
+      box.showModal();
+    }));
     // #ipad opens on the iPad.
     show(location.hash === '#ipad' ? firstOn('ipad') : 0);
     requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("ready")));
@@ -270,7 +267,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 
   /* ---- Stage ---- */
   .stage { display: flex; flex-direction: column; align-items: center; }
-  /* min-height keeps the page still when switching device. */
+  /* min-height keeps the page still when the iPad turns sideways. */
   .devices { display: grid; place-items: center; --h: min(78vh, 780px); min-height: var(--h); }
   .device {
     grid-area: 1 / 1;
@@ -317,8 +314,8 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 
   .iphone { --bezel: calc(var(--h) * .016); --ar: 1179 / 2556; --r-outer: calc(var(--h) * .085); --r-inner: calc(var(--h) * .07); }
   .ipad   { --bezel: calc(var(--h) * .04);  --ar: 1488 / 2266; --r-outer: calc(var(--h) * .05);  --r-inner: calc(var(--h) * .03); }
-  /* Sideways iPad (only in the popup): --h is the short side. */
-  .ipad[data-landscape='true'] { --ar: 2266 / 1488; --bezel: calc(var(--h) * .06); --r-outer: calc(var(--h) * .076); --r-inner: calc(var(--h) * .046); }
+  /* Sideways iPad: --h is now the short side. */
+  .ipad[data-landscape='true'] { --h: min(46vh, 440px); --ar: 2266 / 1488; --bezel: calc(var(--h) * .06); --r-outer: calc(var(--h) * .076); --r-inner: calc(var(--h) * .046); }
   /* Size changes animate only once the page has loaded (.ready). */
   .ready .frame { transition: transform .3s ease, padding .6s ease, border-radius .6s ease; }
   .ready .screen { transition: height .6s ease, aspect-ratio .6s ease, border-radius .6s ease; }
@@ -393,6 +390,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     /* Size each device by the narrower of screen height and width. */
     .iphone { --h: min(82vh, 640px, calc((100vw - 56px) * 2.1)); }
     .ipad   { --h: min(82vh, 640px, calc((100vw - 40px) * 1.4)); }
+    .ipad[data-landscape='true'] { --h: min(50vh, 440px, calc((100vw - 40px) * .62)); }
     .devices { min-height: 0; }
     /* On a phone the hidden device takes no room, so no gap round a sideways iPad. */
     .device[data-active='false'] { height: 0; overflow: hidden; }
