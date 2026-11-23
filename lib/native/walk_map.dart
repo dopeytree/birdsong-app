@@ -737,7 +737,7 @@ class _WalkMapState extends State<WalkMap> {
     final line = w.trail;
     final a = line.isNotEmpty ? line.first : w.place;
     String time(DateTime? t) => t == null ? '' : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-    Marker end(LatLng at, bool start, String label, String when) => Marker(
+    Marker end(LatLng at, bool start, String label, String when, {bool station = false}) => Marker(
           point: at,
           width: 80,
           height: 56,
@@ -750,14 +750,17 @@ class _WalkMapState extends State<WalkMap> {
                   final local = box?.globalToLocal(d.globalPosition) ?? Offset.zero;
                   _say(local, label, when);
                 },
-                child: CustomPaint(size: const Size.square(22), painter: _EndPainter(start)),
+                // Start +, finish ✕, in ink (Ed, Nov 2026); a station keeps its ring.
+                child: CustomPaint(
+                    size: const Size.square(22),
+                    painter: station ? const _EndPainter(false) : _StartFinishPainter(start)),
               ),
               Positioned(top: 28 + 11, child: IgnorePointer(child: _Halo(label, 11, ink, halo: 1.6))),
             ],
           ),
         );
     if (w.station != null) {
-      return [if (w.place != null) end(w.place!, false, w.station!, 'The station')];
+      return [if (w.place != null) end(w.place!, false, w.station!, 'The station', station: true)];
     }
     return [
       if (a != null) end(a, true, 'Start', time(w.start)),
@@ -1025,7 +1028,12 @@ class _WalkMapState extends State<WalkMap> {
               label: '${b.common}: open its card',
               child: GestureDetector(
                 onTap: () => widget.onBird(b.sci, b.common),
-                child: CustomPaint(size: Size.square(size + 8), painter: _CrossPainter(size)),
+                // A small heart on fire for each bird (Ed, Nov 2026; was a
+                // madder cross), larger for a species' first.
+                child: SizedBox.square(
+                  dimension: size + 8,
+                  child: Center(child: Text('❤️‍🔥', style: TextStyle(fontSize: first ? 15 : 11, height: 1))),
+                ),
               ),
             ),
             if (first) Positioned(top: 32 + 15, child: IgnorePointer(child: _Halo(b.common, 11, madder, halo: 1.6))),
@@ -1428,38 +1436,6 @@ class _Halo extends StatelessWidget {
   }
 }
 
-/// The map's ✕: two drawn strokes in madder over a broad paper one.
-class _CrossPainter extends CustomPainter {
-  const _CrossPainter(this.size);
-
-  final double size;
-
-  @override
-  void paint(Canvas canvas, Size box) {
-    // drawn in the page's 48-unit picture, shown at [size]
-    final k = size / 48;
-    canvas.translate((box.width - size) / 2, (box.height - size) / 2);
-    canvas.scale(k);
-    final path = ui.Path()
-      ..moveTo(12, 13)
-      ..quadraticBezierTo(24, 23, 36, 35)
-      ..moveTo(35, 12)
-      ..quadraticBezierTo(25, 25, 13, 36);
-    Paint s(Color c, double w) => Paint()
-      ..color = c
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas
-      ..drawPath(path, s(paper, 13))
-      ..drawPath(path, s(madder, 6));
-  }
-
-  @override
-  bool shouldRepaint(_CrossPainter old) => old.size != size;
-}
-
 /// A label point worked out beforehand (see _labelPoint).
 @immutable
 class _LabelAt implements PolygonLabelPlacementCalculator {
@@ -1618,6 +1594,45 @@ class _EndPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_EndPainter old) => old.start != start;
+}
+
+/// The walk's start (+) and finish (✕), in ink on a paper halo, in the
+/// cross's hand-drawn manner.
+class _StartFinishPainter extends CustomPainter {
+  const _StartFinishPainter(this.start);
+
+  final bool start;
+
+  @override
+  void paint(Canvas canvas, Size box) {
+    const size = 16.0;
+    final k = size / 48;
+    canvas.translate((box.width - size) / 2, (box.height - size) / 2);
+    canvas.scale(k);
+    final path = start
+        ? (ui.Path()
+          ..moveTo(24, 9)
+          ..quadraticBezierTo(23, 24, 24.5, 39)
+          ..moveTo(9, 24.5)
+          ..quadraticBezierTo(24, 23, 39, 24))
+        : (ui.Path()
+          ..moveTo(12, 13)
+          ..quadraticBezierTo(24, 23, 36, 35)
+          ..moveTo(35, 12)
+          ..quadraticBezierTo(25, 25, 13, 36));
+    Paint s(Color c, double w) => Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas
+      ..drawPath(path, s(paper, 14))
+      ..drawPath(path, s(ink, 6));
+  }
+
+  @override
+  bool shouldRepaint(_StartFinishPainter old) => old.start != start;
 }
 
 /// The map's + and − at the top left, on paper.
