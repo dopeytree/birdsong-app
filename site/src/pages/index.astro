@@ -561,6 +561,14 @@ const credits = [
     const stageFilm = document.querySelector('.devices .device[data-device="film"] video');
     if (gateMode === 'none') {
       gate.remove();
+      // The film tries to play with sound, as the old veil's video did; the
+      // browser decides (it allows it on sites a visitor often plays sound on).
+      // If it refuses, the film plays silently and a click turns sound on.
+      if (stageFilm.closest('.device').dataset.active === 'true') {
+        stageFilm.muted = false;
+        stageFilm.play().then(() => { soundOK = true; song.muted = false; })
+          .catch(() => { stageFilm.muted = true; stageFilm.play().catch(() => {}); });
+      }
       startPulse();
       startCredits(credits);
     }
