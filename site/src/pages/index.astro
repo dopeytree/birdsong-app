@@ -328,9 +328,6 @@ const credits = [
   <!-- Text effect: murmuration (Ed's choice). ?fx=ink or ?fx=none to compare. -->
   <script>
     import { startTextFx } from '../scripts/text-fx.js';
-    // Liquid glass on trial (Ed, Nov 2026): ?glass=liquid. Loaded only then.
-    const liquidGlass = new URLSearchParams(location.search).get('glass') === 'liquid';
-    if (liquidGlass) import('simple-liquid-glass/web-component');
     // Murmuration (Ed, Nov 2026): the text, Coming Soon and the credits. The
     // buttons, icons, pill, pictures, lion and notifications stay still.
     // Only the text brings the notification.
@@ -382,15 +379,6 @@ const credits = [
     function notify(text) {
       const n = template.content.firstElementChild.cloneNode(true);
       n.querySelector('.notice-text').textContent = text;
-      // On trial, ?glass=liquid: real refracting glass behind the notification
-      // (simple-liquid-glass, MIT), bending the page behind it.
-      if (liquidGlass) {
-        const g = document.createElement('liquid-glass');
-        g.className = 'notice-glass';
-        for (const [k, v] of Object.entries({ radius: '22', 'lens-profile': 'player', strength: '0.18', blur: '6', saturation: '1.8', 'backdrop-selector': '.page' })) g.setAttribute(k, v);
-        n.classList.add('liquid');
-        n.prepend(g);
-      }
       flip(() => stack.prepend(n));
       requestAnimationFrame(() => requestAnimationFrame(() => n.classList.add('show')));
       n.addEventListener('pointerdown', () => dismiss(n), { once: true });
@@ -833,9 +821,6 @@ const credits = [
     transition: transform .65s cubic-bezier(.2, .9, .25, 1.04), opacity .35s ease;
   }
   .notice.show { opacity: 1; transform: none; }
-  /* ?glass=liquid: the refracting glass element does the backdrop instead. */
-  .notice.liquid, html[data-bg='black'] .notice.liquid { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; position: relative; isolation: isolate; }
-  .notice-glass { position: absolute; inset: 0; z-index: -1; border-radius: 22px; display: block; pointer-events: none; }
   /* On the black page: dark glass and light text, as iOS does in dark mode. */
   html[data-bg='black'] .notice {
     background:
