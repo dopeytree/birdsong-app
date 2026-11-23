@@ -55,3 +55,6 @@ or a small test before building it.
   "Birdsongs / I just spotted Kingfisher! ❤️‍🔥 50 points". iOS look (frosted
   glass, system font); its icon is the
   cardinal from the app's loading screen (`assets/app/cardinal.png`) on paper.
+- **Splash page background (Ed, Nov 2026):** the page is a darker paper,
+  #C8B68C (`--page`), so the app's lighter screens stand out. Chosen over
+  #E3D7B8, #D6C6A0 and #B8A479.
