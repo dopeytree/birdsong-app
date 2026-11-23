@@ -196,3 +196,9 @@ or a small test before building it.
   the popup, from the start, trying sound (silent if refused). When it ends
   the popup closes itself and the page's film loops from the start; a click
   closes it sooner. Opening the film later by a click also closes at its end.
+- **Popup (Ed, Nov 2026):** an ✕ top right instead of "Click anywhere to close"
+  (a click anywhere still closes). ‹ › at the sides and the arrow keys step
+  through the film, iPhone and iPad full size; the page's dots follow. The film
+  always opens from the beginning, with sound; small on the page it is muted.
+  The film's soft picture edges are trimmed (rows 113–1388 of Ed's 1460) and
+  its corners sit on the film's own dark, so no pale rim.
