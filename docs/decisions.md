@@ -169,6 +169,6 @@ or a small test before building it.
   Old as Time.") beats on its own: the strong lub-dub of ripples a click gives, through the
   murmuring page at about 70 a minute, resting while the tab is hidden. A
   click on it gives four strong beats; it doesn't also bring the cardinal.
-- **Button icons (Ed, Nov 2026):** Coming Soon carries a filled bird and Tap
-  to Enter a filled speaker (it brings the sound), both Phosphor (MIT). Tap to
+- **Button icons (Ed, Nov 2026):** Coming Soon carries a filled heart and Tap
+  to Enter a tapping hand, both Phosphor (MIT); a bird and a speaker were tried. Tap to
   Enter is in the iOS/Android colour (sepia), not madder.
