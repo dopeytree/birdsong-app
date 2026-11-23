@@ -30,8 +30,14 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 <html lang="en-GB">
 <head>
   <meta charset="utf-8" />
-  <!-- Background on trial: ?bg=dark, ?bg=black or ?bg=night (see the styles). -->
-  <script is:inline>document.documentElement.dataset.bg = new URLSearchParams(location.search).get('bg') || 'paper';</script>
+  <!-- Page mode: ?bg= in the address, else the visitor's last choice, else black. -->
+  <script is:inline>
+    (() => {
+      const modes = ['black', 'paper', 'white'];
+      const pick = [new URLSearchParams(location.search).get('bg'), localStorage.getItem('bg')].find(m => modes.includes(m));
+      document.documentElement.dataset.bg = pick || 'black';
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Birdsongs</title>
   <meta name="description" content="Take Birdsongs on a walk. It listens as you go, with private AI on your own device, and illustrates every bird it hears in the manner of the old natural-history books." />
@@ -43,6 +49,14 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   <link rel="preload" href={`${base}/fonts/IMFeENsc28P.ttf`} as="font" type="font/ttf" crossorigin />
 </head>
 <body>
+  <!-- Light / dark: cycles black → paper → white. -->
+  <button class="mode" type="button" aria-label="Change background" title="Change background">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" />
+    </svg>
+  </button>
+
   <main class="page">
     <section class="text">
       <!-- Wording, and earlier versions: docs/site-copy.md -->
@@ -195,6 +209,17 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     import { startTextFx } from '../scripts/text-fx.js';
     startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur');
 
+    const modes = ['black', 'paper', 'white'];
+    const modeButton = document.querySelector('.mode');
+    const label = () => modeButton.title = `Background: ${document.documentElement.dataset.bg} (click to change)`;
+    label();
+    modeButton.addEventListener('click', () => {
+      const root = document.documentElement;
+      root.dataset.bg = modes[(modes.indexOf(root.dataset.bg) + 1) % modes.length];
+      localStorage.setItem('bg', root.dataset.bg);
+      label();
+    });
+
     const notice = document.querySelector('.notice');
     const hide = () => notice.classList.remove('show');
     // Stays until clicked or tapped.
@@ -227,27 +252,21 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     --vignette: rgba(188, 171, 134, .35);
   }
 
-  /* Dark backgrounds, on trial: ?bg=dark (charcoal), ?bg=black, or ?bg=night
-     (paper by day, charcoal when the device is in dark mode). Only the page
-     inverts: ink and paper swap; the app's screens stay as they are. */
-  html[data-bg='dark'], html[data-bg='black'] {
-    --page: #2B2926;
+  /* Page modes: black (the default), paper, white. The button at the
+     top right cycles them; ?bg=paper etc. in the address picks one. Only the
+     page changes: in black, ink and paper swap; the app's screens stay as they are. */
+  html[data-bg='black'] {
+    --page: #0E0D0C;
     --ink: #EEE5CE;
     --sepia: #BFAE8A;
     --rule: #5A5145;
     --seg-ink: #D9A08F;
     --vignette: transparent;
   }
-  html[data-bg='black'] { --page: #0E0D0C; }
-  @media (prefers-color-scheme: dark) {
-    html[data-bg='night'] {
-      --page: #2B2926;
-      --ink: #EEE5CE;
-      --sepia: #BFAE8A;
-      --rule: #5A5145;
-      --seg-ink: #D9A08F;
-      --vignette: transparent;
-    }
+  html[data-bg='white'] {
+    --page: #FFFFFF;
+    --rule: #D8D0BF;
+    --vignette: transparent;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -450,6 +469,23 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   .notice-head strong { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
   .notice-time { font-size: 13px; color: rgba(60, 60, 67, .6); }
   .notice-text { display: block; font-size: 15px; line-height: 1.3; letter-spacing: -.01em; }
+
+  /* The light / dark button, top right, in the pill's red. */
+  .mode {
+    position: fixed; z-index: 40;
+    top: 18px; right: 18px;
+    width: 40px; height: 40px;
+    display: grid; place-items: center;
+    border: 1.5px solid var(--seg-ink);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--seg-ink);
+    cursor: pointer;
+    transition: color .4s, border-color .4s, transform .3s;
+  }
+  .mode:hover { transform: rotate(180deg); }
+  .mode:focus-visible { outline: 2px solid var(--seg-ink); outline-offset: 3px; }
+  body { transition: background-color .5s ease, color .5s ease; }
 
   /* Text effect (src/scripts/text-fx.js): words and letters it moves. */
   .fx-word { display: inline-block; white-space: nowrap; }

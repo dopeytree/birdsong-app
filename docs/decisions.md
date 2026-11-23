@@ -58,3 +58,7 @@ or a small test before building it.
 - **Splash page background (Ed, Nov 2026):** the page is a darker paper,
   #C8B68C (`--page`), so the app's lighter screens stand out. Chosen over
   #E3D7B8, #D6C6A0 and #B8A479.
+- **Splash page modes (Ed, Nov 2026):** black is the default page (#0E0D0C;
+  ink and paper swap, the app's screens stay as they are). A round light/dark
+  button, top right, cycles black → paper (#C8B68C) → white and remembers the
+  visitor's choice; `?bg=paper` etc. picks one. White is on test.
