@@ -178,3 +178,10 @@ or a small test before building it.
 - **Glass notifications (Ed, Nov 2026):** more see-through, a strong blur (44 px) with colour lift (saturate 2.4), a
   light sheen and bright hairline edge; on the black page dark glass with light
   text, as iOS in dark mode.
+- **Three dots and the film (Ed, Nov 2026):** the iphone | ipad pill became
+  three dots under the device: the film, iPhone, iPad. The film is the first
+  dot and opens first, playing silently on a loop in the sideways iPad frame;
+  a click on it turns the sound on, then pauses and plays. No gate by default:
+  straight in, credits and heartbeat start at once. On trial: `?gate=play` (a
+  play button over the page faded to 75%; a click anywhere plays the film with
+  sound) and `?gate=video` (the earlier film with Tap to Enter).

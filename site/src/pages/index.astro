@@ -11,6 +11,10 @@
 // for a device, a "‹ Plate i of ii ›" line appears to step through them.
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const shots = {
+  // The film (Ed, Nov 2026): the first dot, playing in the sideways iPad.
+  film: [
+    { type: 'video', src: 'media/coming-soon.mp4', alt: 'A short film of Birdsongs.ai', landscape: true },
+  ],
   iphone: [
     { type: 'image', src: 'shots/iphone-plate.jpg', alt: 'A plate of the birds heard on one walk, on iPhone' },
   ],
@@ -20,9 +24,12 @@ const shots = {
     { type: 'image', src: 'shots/ipad-landscape.jpg', alt: 'The plate on iPad, turned sideways', landscape: true },
   ],
 };
+// The pill is three dots (Ed, Nov 2026): the film, iPhone, iPad. frame: which
+// device is drawn round it.
 const devices = [
-  { id: 'iphone', label: 'iphone', other: 'iPad' },
-  { id: 'ipad', label: 'ipad', other: 'iPhone' },
+  { id: 'film', label: 'The film', frame: 'ipad' },
+  { id: 'iphone', label: 'iPhone' },
+  { id: 'ipad', label: 'iPad' },
 ];
 const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 // The footer's credits, shown one at a time (src/scripts/credits.js).
@@ -58,6 +65,11 @@ const credits = [
       const system = matchMedia('(prefers-color-scheme: dark)').matches ? 'black' : 'white';
       const pick = [new URLSearchParams(location.search).get('bg'), localStorage.getItem('bg')].find(m => modes.includes(m));
       document.documentElement.dataset.bg = pick || system;
+      // The way in (Ed, Nov 2026): none (straight in, the film playing in the
+      // stage), or on trial ?gate=play (a play button over the faded page) or
+      // ?gate=video (the earlier film with Tap to Enter).
+      const g = new URLSearchParams(location.search).get('gate');
+      document.documentElement.dataset.gate = ['play', 'video'].includes(g) ? g : 'none';
       const veil = new URLSearchParams(location.search).get('veil');
       if (['grain', 'song', 'both'].includes(veil)) document.documentElement.dataset.veil = veil;
     })();
@@ -117,6 +129,12 @@ const credits = [
     </div>
   </div>
 
+  <!-- On trial, ?gate=play (Ed, Nov 2026): a play button over the page faded
+       to 75%; a click anywhere starts the film, with sound. -->
+  <div class="playgate" role="button" tabindex="0" aria-label="Play the film">
+    <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z"/></svg>
+  </div>
+
   <main class="page">
     <section class="text">
       <!-- Wording, and earlier versions: docs/site-copy.md -->
@@ -143,13 +161,13 @@ const credits = [
     <section class="stage" aria-label="The app">
       <div class="devices">
         {devices.map((d, i) => (
-          <figure class={`device ${d.id}`} data-device={d.id} data-active={i === 0 ? 'true' : 'false'} data-landscape={shots[d.id][0]?.landscape ? 'true' : 'false'} aria-hidden={i === 0 ? 'false' : 'true'}>
+          <figure class={`device ${d.frame ?? d.id}`} data-device={d.id} data-active={i === 0 ? 'true' : 'false'} data-landscape={shots[d.id][0]?.landscape ? 'true' : 'false'} aria-hidden={i === 0 ? 'false' : 'true'}>
             <button class="frame" title="See it full size" aria-label="See it full size" tabindex={i === 0 ? 0 : -1}>
               {d.id === 'iphone' && <><span class="btn b1"></span><span class="btn b2"></span><span class="btn b3"></span><span class="btn b4"></span></>}
               <span class="screen">
                 {shots[d.id].map((s, j) => (
                   s.type === 'video'
-                    ? <video class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={`${base}/${s.src}`} muted loop playsinline autoplay aria-label={s.alt}></video>
+                    ? <video class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={`${base}/${s.src}`} poster={`${base}/media/coming-soon-poster.jpg`} muted loop playsinline autoplay preload="auto" aria-label={s.alt}></video>
                     : <img class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={`${base}/${s.src}`} alt={s.alt} loading={i === 0 && j === 0 ? 'eager' : 'lazy'} />
                 ))}
                 {d.id === 'iphone' && <span class="island" aria-hidden="true"></span>}
@@ -167,11 +185,9 @@ const credits = [
         <button class="step next" aria-label="Next">›</button>
       </nav>
       <!-- The device switch sits under the device (Ed, Nov 2026). -->
-      <div class="pill" role="tablist" aria-label="Show the app on">
+      <div class="pill" role="tablist" aria-label="Show">
         {devices.map((d, i) => (
-          <button role="tab" class="seg" data-device={d.id} aria-selected={i === 0 ? 'true' : 'false'}>
-            {d.label}
-          </button>
+          <button role="tab" class="seg" data-device={d.id} aria-selected={i === 0 ? 'true' : 'false'} aria-label={d.label} title={d.label}></button>
         ))}
       </div>
       <p class="hint"><em>Tap the screen to see it full size.</em></p>
@@ -222,6 +238,7 @@ const credits = [
         s.dataset.active = j === i ? 'true' : 'false';
         if (s.tagName === 'VIDEO') j === i ? s.play() : s.pause();
       });
+      devices.forEach(dev => { if (dev !== d) dev.querySelectorAll('video').forEach(v => v.pause()); });
       d.dataset.landscape = stops[k].sideways ? 'true' : 'false';
       segs.forEach(s => s.setAttribute('aria-selected', s.dataset.device === d.dataset.device ? 'true' : 'false'));
       const own = stops.filter(t => t.d === d);
@@ -290,6 +307,14 @@ const credits = [
 
     devices.forEach(d => d.querySelector('.frame').addEventListener('click', e => {
       byPointer = e.detail > 0;   // 0 when opened from the keyboard
+      const v = stops[k].s;
+      // The film: the first click turns its sound on; after that, pause and play.
+      if (v.tagName === 'VIDEO') {
+        if (v.muted) { v.muted = false; v.play().catch(() => {}); }
+        else if (v.paused) v.play().catch(() => {});
+        else v.pause();
+        return;
+      }
       openBox();
     }));
     nav.querySelector('.prev').addEventListener('click', () => step(-1));
@@ -305,8 +330,12 @@ const credits = [
     const touch = matchMedia('(pointer: coarse)');
     const upright = matchMedia('(orientation: portrait)');
     const byShape = () => touch.matches ? (upright.matches ? 'ipad' : 'iphone') : 'iphone';
-    show(firstOn(location.hash === '#ipad' ? 'ipad' : byShape()));
-    upright.addEventListener('change', () => { if (!picked && touch.matches) show(firstOn(byShape())); });
+    // The film is the first dot and opens first (Ed, Nov 2026); #iphone or
+    // #ipad in the address opens on that. byShape picks between iPhone and iPad
+    // when the device turns, unless the film is showing or the pill was used.
+    const hashDev = location.hash.slice(1);
+    show(firstOn(['iphone', 'ipad'].includes(hashDev) ? hashDev : 'film'));
+    upright.addEventListener('change', () => { if (!picked && touch.matches && stops[k].d.dataset.device !== 'film') show(firstOn(byShape())); });
     requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("ready")));
   </script>
 
@@ -438,9 +467,11 @@ const credits = [
     // never enter the site. "Sound on" turns the sound on where it is.
     const film = gate.querySelector('.gate-video');
     const soundBtn = gate.querySelector('.gate-sound');
-    film.muted = false;
-    film.play().then(() => { soundBtn.hidden = true; })
-      .catch(() => { film.muted = true; film.play().catch(() => {}); });
+    if (document.documentElement.dataset.gate === 'video') {
+      film.muted = false;
+      film.play().then(() => { soundBtn.hidden = true; })
+        .catch(() => { film.muted = true; film.play().catch(() => {}); });
+    }
     film.addEventListener('click', e => e.stopPropagation());
     film.addEventListener('volumechange', () => { if (!film.muted) soundBtn.hidden = true; });
     soundBtn.addEventListener('click', e => {
@@ -449,7 +480,7 @@ const credits = [
       if (film.paused) film.play().catch(() => {});
       soundBtn.hidden = true;
     });
-    addEventListener('keydown', e => { if (!entered && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); } });
+    addEventListener('keydown', e => { if (!entered && document.documentElement.dataset.gate === 'video' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); } });
 
 
     // Bell: the cardinal notification, straight away (Ed, Nov 2026).
@@ -524,6 +555,35 @@ const credits = [
       notify(CARDINAL_TEXT);
     });
 
+
+    // How the visitor comes in (see the head): straight in, or by a gate.
+    const gateMode = document.documentElement.dataset.gate;
+    const stageFilm = document.querySelector('.devices .device[data-device="film"] video');
+    if (gateMode === 'none') {
+      gate.remove();
+      startPulse();
+      startCredits(credits);
+    }
+    // ?gate=play: a click anywhere starts the film from the beginning, with
+    // sound, and lets the page sound from then on.
+    const playgate = document.querySelector('.playgate');
+    if (gateMode === 'play') {
+      gate.remove();
+      const go = () => {
+        playgate.classList.add('gone');
+        setTimeout(() => playgate.remove(), 900);
+        soundOK = true;
+        song.muted = false;
+        document.querySelector('.seg[data-device="film"]').click();
+        stageFilm.muted = false;
+        stageFilm.currentTime = 0;
+        stageFilm.play().catch(() => {});
+        startPulse();
+        startCredits(credits);
+      };
+      playgate.addEventListener('click', go, { once: true });
+      playgate.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    } else playgate.remove();
   </script>
 </body>
 </html>
@@ -631,27 +691,24 @@ const credits = [
 
   /* The app's mic / listen pill, reused as the device switch. */
   /* Centred under the device (Ed, Nov 2026). */
+  /* The switch is three dots (Ed, Nov 2026): the film, iPhone, iPad. */
   .pill {
     display: flex;
+    gap: 14px;
     width: fit-content;
     margin: 1.8rem auto 0;
-    border: 1.5px solid var(--madder);
-    border-radius: 999px;
-    overflow: hidden;
   }
   .seg {
-    border: 0;
+    width: 12px; height: 12px;
+    padding: 0;
+    border: 1.5px solid var(--madder);
+    border-radius: 50%;
     background: transparent;
-    color: var(--seg-ink);
-    font-family: var(--fell-sc);
-    font-size: 1.1rem;
-    letter-spacing: .05em;
-    padding: .45em 1.3em .5em;
     cursor: pointer;
-    transition: background .25s, color .25s;
+    transition: background .25s, transform .25s;
   }
-  .seg + .seg { border-left: 1.5px solid var(--madder); }
-  .seg[aria-selected='true'] { background: var(--madder); color: var(--paper); }
+  .seg:hover { transform: scale(1.2); }
+  .seg[aria-selected='true'] { background: var(--madder); }
   .seg:focus-visible, .frame:focus-visible, .step:focus-visible { outline: 2px solid var(--madder); outline-offset: 4px; }
   /* "Coming Soon" in a thin rounded outline (Ed, Nov 2026): a label, not a
      button, in the pill's red. */
@@ -889,6 +946,22 @@ const credits = [
   body { cursor: default; }
 
   /* The gate: the page faded behind "Tap to Enter"; it fades away on entry. */
+  /* Which way in shows (see the head): the earlier gate only at ?gate=video,
+     the play button only at ?gate=play. */
+  html:not([data-gate='video']) .gate { display: none; }
+  html:not([data-gate='play']) .playgate { display: none; }
+  .playgate {
+    position: fixed; inset: 0; z-index: 100;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--page) 75%, transparent);
+    color: var(--ink);
+    cursor: pointer;
+    transition: opacity .8s ease;
+  }
+  .playgate.gone { opacity: 0; pointer-events: none; }
+  .playgate svg { width: clamp(64px, 9vw, 110px); height: auto; fill: currentColor; opacity: .9; filter: drop-shadow(0 6px 20px rgba(0, 0, 0, .35)); }
+  .playgate:focus-visible { outline: none; }
+
   .gate {
     position: fixed; inset: 0; z-index: 100;
     display: grid; place-items: center;
@@ -1021,7 +1094,7 @@ const credits = [
     .ipad   { --h: min(100cqh, calc(100cqw * 1.4)); }
     .ipad[data-landscape='true'] { --h: min(100cqh, calc(100cqw / 1.47)); }
     .pill { margin-top: 1.1rem; }
-    .seg { font-size: .95rem; padding: .35em 1.1em .4em; }
+    .seg { width: 11px; height: 11px; }
     .hint { display: none; }
 
     footer { padding: 4px 12px 10px; font-size: .8rem; }
