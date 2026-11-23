@@ -93,6 +93,12 @@ const credits = [
     <img src={`${base}/ed-stone-lion.gif`} alt="Ed Stone" width="70" height="35" />
   </a>
 
+  <!-- The gate (Ed, Nov 2026): the page faded behind "Tap to Enter". The
+       tap lifts it and, being a tap, lets the page play sound. -->
+  <div class="gate" role="dialog" aria-modal="true" aria-label="Birdsongs.ai">
+    <button class="gate-btn" type="button">Tap to Enter</button>
+  </div>
+
   <main class="page">
     <section class="text">
       <!-- Wording, and earlier versions: docs/site-copy.md -->
@@ -279,7 +285,7 @@ const credits = [
     });
 
     import { startCredits } from '../scripts/credits.js';
-    startCredits(document.querySelector('footer .credit'));
+    // The credits start once the visitor has entered (see the gate below).
 
     // Light / dark. A choice matching the device's own setting isn't stored,
     // so the page goes back to following the device.
@@ -360,6 +366,22 @@ const credits = [
     };
     ['pointerdown', 'keydown', 'touchstart'].forEach(t => addEventListener(t, unlock, { passive: true }));
     const sing = () => { if (!soundOK) return; song.currentTime = 0; song.play().catch(() => {}); };
+
+    // The gate: a click, tap or key lifts it (the tap also allows sound),
+    // then the credits begin, so the first cardinal comes with its song.
+    const gate = document.querySelector('.gate');
+    let entered = false;
+    const enter = () => {
+      if (entered) return;
+      entered = true;
+      unlock();
+      gate.classList.add('gone');
+      setTimeout(() => gate.remove(), 900);
+      startCredits(credits);
+    };
+    gate.addEventListener('click', enter);
+    addEventListener('keydown', e => { if (!entered && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); } });
+    gate.querySelector('button').focus({ preventScroll: true });
 
     credits.addEventListener('credit', e => {
       if (!(cued && e.detail === CUE && !document.hidden)) return;
@@ -727,6 +749,30 @@ const credits = [
   /* The plain arrow over text, not the text-selection I-beam (Ed, Nov 2026).
      Buttons and the screen keep their own pointers. */
   body { cursor: default; }
+
+  /* The gate: the page faded behind "Tap to Enter"; it fades away on entry. */
+  .gate {
+    position: fixed; inset: 0; z-index: 100;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--page) 65%, transparent);   /* faded, not blurred: the page shows through */
+    cursor: pointer;
+    transition: opacity .8s ease;
+  }
+  .gate.gone { opacity: 0; pointer-events: none; }
+  .gate-btn {
+    font-family: var(--fell-sc);
+    font-size: clamp(1.4rem, 4vw, 2rem);
+    letter-spacing: .08em;
+    color: var(--ink);
+    background: none;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    padding: .45em 1.5em .5em;
+    cursor: pointer;
+    animation: breathe 3s ease-in-out infinite;
+  }
+  .gate-btn:focus-visible { outline: 2px solid var(--madder); outline-offset: 4px; }
+  @keyframes breathe { 50% { opacity: .55; } }
 
   /* Text effect (src/scripts/text-fx.js): words and letters it moves. */
   .fx-word { display: inline-block; white-space: nowrap; }

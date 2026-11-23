@@ -122,3 +122,8 @@ or a small test before building it.
   and its rules, the dot and the notifications sway and drift as whole pieces
   (CSS translate/rotate, turning less the bigger they are). Only the text
   brings the notification.
+- **Splash gate (Ed, Nov 2026):** the site opens under a veil, the page faded
+  (65% of the page colour, no blur) behind a breathing "Tap to Enter" pill.
+  A click, tap, Enter or Space lifts it with a fade; that tap also lets the page
+  play sound, and the credits (and so the first cardinal, with its song) start
+  then.
