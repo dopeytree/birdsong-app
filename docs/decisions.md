@@ -96,9 +96,9 @@ or a small test before building it.
   Apple's own Mac App Store badge exists if a Mac badge is wanted.
 - **Splash page on phones and iPads (Ed, Nov 2026):** up to 820px wide
   (phones, upright iPads) the page is one column sized to the visible screen
-  (`dvh`), with smaller text and buttons; the device takes the height left.
+  (`dvh`), with smaller text and buttons; the device takes the height left, at most half the screen.
   Up to 600px (phones) the device comes first, under the tagline and title,
-  at about 56% of the screen; the paragraphs, badges and Coming soon follow
+  at about 48% of the screen (never more than half); the paragraphs, badges and Coming soon follow
   below, a short scroll away. The shuffle test button goes top left on these.
   Phones held sideways scroll, with the device at about 82% of the screen
   height, below the text.

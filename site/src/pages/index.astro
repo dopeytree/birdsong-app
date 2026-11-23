@@ -250,7 +250,7 @@ const credits = [
        on top; a click dismisses one. Built from the template below. -->
   <div class="notices" aria-live="polite"></div>
   <template id="notice">
-    <div class="notice" role="status" title="Dismiss">
+    <div class="notice" role="status">
       <img class="notice-icon" src={`${base}/notice-icon.png`} alt="" />
       <span class="notice-body">
         <span class="notice-head"><strong>Birdsongs</strong><span class="notice-time">now</span></span>
@@ -794,7 +794,8 @@ const credits = [
 
     /* The device fills what's left: sized from its box's height and width. */
     .stage { flex: 1 1 auto; min-height: 0; align-self: stretch; }
-    .devices { flex: 1 1 auto; min-height: 0; width: 100%; container-type: size; }
+    .devices { flex: 1 1 auto; min-height: 0; max-height: 50svh; width: 100%; container-type: size; }
+    .stage { justify-content: center; }   /* capped at half the screen, centred in the space */
     .iphone { --h: min(100cqh, calc(100cqw * 2.1)); }
     .ipad   { --h: min(100cqh, calc(100cqw * 1.4)); }
     .ipad[data-landscape='true'] { --h: min(100cqh, calc(100cqw / 1.47)); }
@@ -819,7 +820,7 @@ const credits = [
     .kicker { order: 1; }
     h1 { order: 2; margin-bottom: .6rem; }
     .stage { order: 3; flex: none; margin-bottom: 1.2rem; }
-    .devices { flex: none; height: 56svh; }
+    .devices { flex: none; height: 48svh; }
     /* The sideways iPad is as wide as the screen and no taller than it needs. */
     .devices:has(.ipad[data-active='true'][data-landscape='true']) { height: calc((100vw - 32px) / 1.46); }
     .lede, .badges, .soon { order: 4; }
