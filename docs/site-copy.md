@@ -18,8 +18,8 @@ the day.
 
 *As old as time. Each walk becomes an artwork, with its own index of species.*
 
-Earlier taglines: "A field journal that listens now", "Be here now", "I just spotted Kingfisher! :D" (the notification now says Northern Cardinal
-words), "I wonder who has the fairest call of them all?".
+Earlier taglines: "A field journal that listens now", "Be here now", "I just spotted Kingfisher! :D" (the
+notification's words, now with Northern Cardinal), "I wonder who has the fairest call of them all?".
 
 ## Second draft (Ed, Nov 2026)
 
