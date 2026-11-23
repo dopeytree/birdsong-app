@@ -345,14 +345,15 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 
   /* ---- Stage ---- */
   .stage { display: flex; flex-direction: column; align-items: center; }
-  /* min-height keeps the page still when the iPad turns sideways. */
-  .devices { display: grid; place-items: center; --h: min(78vh, 780px); min-height: var(--h); }
+  /* Sized by the device showing, so the hint sits just below it. */
+  .devices { position: relative; display: grid; place-items: center; --h: min(78vh, 780px); }
   .device {
     grid-area: 1 / 1;
     margin: 0;
     transition: opacity .55s ease, transform .55s cubic-bezier(.2, .7, .2, 1), filter .55s;
   }
-  .device[data-active='false'] { opacity: 0; transform: scale(.94) translateY(12px); filter: blur(2px); pointer-events: none; }
+  /* The hidden device fades out over the other and takes no room. */
+  .device[data-active='false'] { position: absolute; top: 0; left: 0; right: 0; width: fit-content; margin: 0 auto; opacity: 0; transform: scale(.94) translateY(12px); filter: blur(2px); pointer-events: none; }
 
   .frame {
     position: relative;
@@ -529,9 +530,6 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     .iphone { --h: min(82vh, 640px, calc((100vw - 56px) * 2.1)); }
     .ipad   { --h: min(82vh, 640px, calc((100vw - 40px) * 1.4)); }
     .ipad[data-landscape='true'] { --h: min(50vh, 440px, calc((100vw - 40px) * .62)); }
-    .devices { min-height: 0; }
-    /* On a phone the hidden device takes no room, so no gap round a sideways iPad. */
-    .device[data-active='false'] { height: 0; overflow: hidden; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }
