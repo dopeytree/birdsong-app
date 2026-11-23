@@ -63,7 +63,7 @@ or a small test before building it.
   device's light or dark setting, live, until the visitor picks; the round
   button top right (Lucide sun and moon, ISC) switches and remembers it.
   `?bg=white` / `?bg=black` picks one. The paper mode (#C8B68C) was dropped.
-- **Splash page credits (Ed, Nov 2026):** the footer cycles 18 credits
+- **Splash page credits (Ed, Nov 2026):** the footer cycles 16 credits
   (list in `index.astro`, `credits`), each flocking in letter by letter, then
   fading out (`site/src/scripts/credits.js`). Left out: the model
   gallery (tphakala) and the MIT code licence. Screen readers get the full list.
@@ -90,16 +90,16 @@ or a small test before building it.
   call. The bell, top right beside light/dark, pauses and resumes. The icon
   stays the app's: iOS doesn't allow a per-notification icon (a picture
   thumbnail is allowed).
-- **Splash store badges (Ed, Nov 2026):** official App Store badge (black,
-  from developer.apple.com) and Get it on Google Play (from play.google.com,
-  clear margin trimmed), unaltered, then "Coming soon." Not links yet; at
-  launch they must link to the listings. Trademark lines added to the credits.
-  Apple's own Mac App Store badge exists if a Mac badge is wanted.
+- **Splash "Coming soon" (Ed, Nov 2026):** the App Store and Google Play
+  badges were tried and removed (with their trademark lines in the credits).
+  "Coming soon." sits in a thin rounded outline in the text's colour, a label
+  rather than a button. The badges (official, from developer.apple.com and
+  play.google.com) can come back at launch, linking to the listings.
 - **Splash page on phones and iPads (Ed, Nov 2026):** two layouts only.
   Desktop, over 820px wide: text left, device right. Mobile, 820px and under
   (phones, upright iPads, narrow windows): one column with the tagline and
-  title, then the device at most half the screen height, then the paragraphs,
-  badges and Coming soon, a short scroll away; smaller text and buttons; no
+  title, then the device at most half the screen height, then the paragraphs
+  and Coming soon, a short scroll away; smaller text and buttons; no
   "Tap the screen" hint; the shuffle test button top left. Held sideways, the
   device gets about 82% of the screen height.
   On touch screens the first shot is the opposite shape to the screen: held

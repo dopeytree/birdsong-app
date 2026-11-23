@@ -45,5 +45,5 @@ on a plate, in the manner of the old natural-history books."
 ## Always on the page
 
 - Device switch: iPhone | iPad
-- App Store and Google Play badges, then "*Coming soon.*" (was "for Mac, iPhone & iPad. *Coming soon.*")
+- "*Coming soon.*" in a thin rounded outline (earlier: store badges; before that "for Mac, iPhone & iPad. *Coming soon.*")
 - Footer: "Type: IM Fell English, by Igino Marini"
