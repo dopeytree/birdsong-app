@@ -5,7 +5,7 @@ kept here so they can be reused.
 
 ## Current (Ed, Nov 2026)
 
-> Be here now
+> A field journal that listens now
 
 **Birdsongs**
 
@@ -16,7 +16,7 @@ the day.
 
 *Each walk becomes an artwork, with its own index of species. As old as time.*
 
-Earlier taglines: "I just spotted Kingfisher! :D" (now the notification's
+Earlier taglines: "Be here now", "I just spotted Kingfisher! :D" (now the notification's
 words), "I wonder who has the fairest call of them all?".
 
 ## Second draft (Ed, Nov 2026)
