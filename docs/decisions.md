@@ -208,3 +208,5 @@ or a small test before building it.
   to the next dot, then the dots go round by themselves every 3 s (film,
   iPhone, iPad). They wait while the popup is open and stop for good once the
   visitor picks a dot.
+- **Popup fade, light mode (Ed, Nov 2026):** white at 97%, with the ✕ and ‹ ›
+  in ink; dark mode stays black at 96%.

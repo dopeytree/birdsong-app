@@ -1137,6 +1137,9 @@ const credits = [
   .lightbox .device.film[data-landscape='true'] { --h: min(calc(100vh - 110px), calc((100vw - 140px) / 1.505)); }   /* room for ‹ › */
   .lightbox .frame { cursor: zoom-out; }
   .lightbox .frame:hover { transform: none; }
+  /* Light mode: the popup fades to white, and its ✕ and ‹ › turn to ink (Ed, Nov 2026). */
+  html[data-bg='white'] .lightbox::backdrop { background: rgba(255, 255, 255, .97); }
+  html[data-bg='white'] .box-close, html[data-bg='white'] .box-step { color: var(--ink); }
   .box-close {
     position: fixed; top: clamp(10px, 2vw, 24px); right: clamp(10px, 2vw, 24px);
     border: 0; background: none; padding: 6px; cursor: pointer;
