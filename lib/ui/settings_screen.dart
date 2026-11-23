@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:url_launcher/url_launcher.dart';
@@ -13,6 +14,7 @@ import '../settings.dart';
 import 'format.dart';
 import 'splash.dart' show Cardinal, SupportQuote;
 import 'station_editor.dart';
+import 'station_history.dart';
 
 /// Everything that isn't the plate: where birds come from, listening,
 /// models, the location filter and stored data. Opened from the plate's
@@ -83,7 +85,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return ListView(
             padding: EdgeInsets.fromLTRB(side, 4, side, 32),
             children: [
-              _displaySection(context, listen),
+              // the same menu whether listening here or showing a station:
+              // the plate, the map and the experiments apply to both
+              s.webPlate ? _displaySection(context, listen) : _flutterDisplaySection(context),
+              _mapSection(context),
+              _section(
+                context,
+                'Experimental',
+                summary: s.webPlate ? 'The old web plate' : 'Nothing switched on',
+                [
+                  _switch('Use the old web plate', s.webPlate, (v) => s.update((x) => x.webPlate = v)),
+                  Text(
+                    'The plate as the web page drew it, before it was moved into Flutter. '
+                    'Its own Display options show above while it is on.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               SegmentedButton<AppMode>(
                 segments: const [
@@ -106,13 +124,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
               const SizedBox(height: 8),
-              if (listen) ...[
-                _listening(context),
-                _models(context),
-                _location(context),
-                _data(context),
-              ] else
-                _remote(context),
+              // the saved stations, then listening here: both, either way
+              _remote(context),
+              _listening(context),
+              _models(context),
+              _location(context),
+              _data(context),
+              // what keeping the stations' days is doing (station_archive.dart)
+              if (s.stations.isNotEmpty)
+                _section(
+                  context,
+                  'Station history',
+                  summary: 'Days kept on this device, and the log',
+                  [StationHistory(root: app.store.root, stations: s.stations)],
+                ),
               const Divider(height: 32),
               _credits(context, listen),
               const Divider(height: 1),
@@ -194,6 +219,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
+          // each station's past days, kept on this device in the session
+          // format (a phone asks first, in the calendar)
+          for (final st in s.stations)
+            _switch('Keep ${st.name}\'s past days on this device', s.keepPastOf(st) ?? false,
+                (v) => s.update((x) => x.stationKeepPast[st.id] = v)),
           const SizedBox(height: 4),
           Wrap(
             spacing: 8,
@@ -256,6 +286,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text('${engine.skipped} windows skipped', style: theme.textTheme.bodySmall),
           const Divider(height: 24),
         ],
+        _dropdown('Microphone', s.micSource, microphones, (v) => s.update((x) => x.micSource = v)),
+        Text(
+          s.micSource == 'headset'
+              ? 'Bluetooth headphones send their microphone at call quality, which misses '
+                  'the higher songs, and your music drops to call quality while listening. '
+                  'A wired headset\'s microphone hears the full range, but rubs on clothes. '
+                  'Both work; for the best detections use the phone\'s own.'
+              : 'Best for birds: the full range of song, even with headphones plugged in. '
+                  'Music and podcasts keep playing, in full quality on Bluetooth headphones.',
+          style: theme.textTheme.bodySmall,
+        ),
+        if (locked)
+          Text('A change of microphone applies from the next recording.',
+              style: theme.textTheme.bodySmall),
+        const SizedBox(height: 8),
         _slider('Threshold ${(s.threshold * 100).round()}%', s.threshold, 0.05, 0.95, 18,
             (v) => s.update((x) => x.threshold = v)),
         _slider('Every ${s.hopSeconds.toStringAsFixed(1)} s', s.hopSeconds, 0.5, 5, 9,
@@ -483,6 +528,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
     app.page?.set(key, value);
   }
 
+  /// The Flutter plate's Display options (the web plate's, below, while
+  /// Experimental > Use the old web plate is on).
+  Widget _flutterDisplaySection(BuildContext context) => _section(
+        context,
+        'Display',
+        summary: PageControl.sizeBy[s.nativeSizeBy] ?? '',
+        [
+          _switch('Fit on one screen', s.nativeFit, (v) => s.update((x) => x.nativeFit = v)),
+          _switch('Title', s.nativeShowTitle, (v) => s.update((x) => x.nativeShowTitle = v)),
+          _switch('Date', s.nativeShowDate, (v) => s.update((x) => x.nativeShowDate = v)),
+          _switch('Species and calls under the date', s.nativeTotals, (v) => s.update((x) => x.nativeTotals = v)),
+          _switch('Heading in small capitals', s.nativeTitleCaps, (v) => s.update((x) => x.nativeTitleCaps = v)),
+          _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
+              const {'ink': 'Black, as the title (default)', 'sepia': 'Sepia'},
+              (v) => s.update((x) => x.nativeHeadingInk = v == 'ink')),
+          _dropdown('Latest marked by', s.nativeMarkAt, const {...PageControl.markAt, 'none': 'Nothing'},
+              (v) => s.update((x) => x.nativeMarkAt = v)),
+          _dropdown('Size by', s.nativeSizeBy, PageControl.sizeBy, (v) => s.update((x) => x.nativeSizeBy = v)),
+          _dropdown(
+              'Plates on paper',
+              s.nativePlateStyle,
+              const {
+                'cutout': 'Cut out, as the web plate does',
+                'tint': 'Tinted into the page',
+                'plain': 'As they come',
+              },
+              (v) => s.update((x) => x.nativePlateStyle = v)),
+          _switch('Skulls, wings and eggs', s.nativeParts, (v) => s.update((x) => x.nativeParts = v)),
+          _dropdown(
+              'Limit species',
+              '${s.nativeLimit}',
+              {
+                '0': 'All',
+                for (final n in const [5, 10, 15, 20, 30, 40]) '$n': 'The $n most heard',
+                if (!const [0, 5, 10, 15, 20, 30, 40].contains(s.nativeLimit))
+                  '${s.nativeLimit}': 'The ${s.nativeLimit} most heard',
+              },
+              (v) => s.update((x) => x.nativeLimit = int.tryParse(v) ?? 0)),
+        ],
+      );
+
+  /// The web plate's Display options, read from and set through the page.
   Widget _displaySection(BuildContext context, bool listen) {
     final d = _display;
     if (d == null) {
@@ -528,6 +615,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Which microphone listens (Settings.micSource).
+  static const microphones = {
+    'phone': "The phone's own",
+    'headset': "Headphones' or headset's (wired or Bluetooth)",
+  };
+
+  /// The map of the walk (the map button on the plate switches to it).
+  static const mapBirds = {
+    'first': 'Where each was first heard',
+    'all': 'Every call',
+  };
+
+  Widget _mapSection(BuildContext context) {
+    final theme = Theme.of(context);
+    return _section(
+      context,
+      'Map',
+      summary: s.showMap ? 'Showing the walk · ${mapBirds[s.mapBirds]}' : 'Showing the collage',
+      [
+        _switch('Show the walk on a map', s.showMap, (v) => s.update((x) => x.showMap = v)),
+        _dropdown('Crosses', s.mapBirds, mapBirds, (v) => s.update((x) => x.mapBirds = v)),
+        _switch('Landmarks, heritage and nature sites', s.mapExtras,
+            (v) => s.update((x) => x.mapExtras = v)),
+        if (s.mapExtras)
+          _switch('Descriptions in Passed on the way', s.mapPassedAbout,
+              (v) => s.update((x) => x.mapPassedAbout = v)),
+        if (kDebugMode)
+          _switch('Timing readout on the map (debug)', s.mapDebugReadout,
+              (v) => s.update((x) => x.mapDebugReadout = v)),
+        Text(
+          'The map is drawn from OpenFreeMap and open elevation data, so the area of each walk '
+          'is sent to them. Landmarks also send it to Historic England, Natural England and '
+          'Wikipedia, and list what the walk passed above the map.',
+          style: theme.textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
   Widget _link(String label, String url) => TextButton(
         style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
         onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
@@ -549,7 +675,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Birdsong${snap.data == null ? '' : ' v${snap.data}'}. Created by Ed Stone. '
           'Detections by $detections. Bird cut-outs from the Fugleramme project by '
           'Arne Giacomo, after Gould, the von Wright brothers, Audubon and others, used under '
-          'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Weather from MET Norway, CC BY 4.0. Further plates from '
+          'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Weather from MET Norway, CC BY 4.0. '
+          'Maps from OpenFreeMap and OpenStreetMap contributors (ODbL), drawn with MapLibre; '
+          'heights from the Mapzen Terrain Tiles. Names of woods and heaths from OS Open Names: '
+          'contains OS data \u00a9 Crown copyright and database right 2026 (OGL). Further plates from '
           'Nederlandsche Vogelen (Nozeman & Sepp, Amsterdam, 1770\u20131829), digitised by the '
           'Koninklijke Bibliotheek, with others from public-domain works held on Wikimedia Commons.',
           style: theme.textTheme.bodyMedium,

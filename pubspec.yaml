@@ -24,11 +24,22 @@ dependencies:
   plate_share:
     path: packages/plate_share
 
+  # Playing a bird's recordings on the Flutter plate's card, sharing the
+  # audio session with the recorder (lib/native/bird_card.dart).
+  audioplayers: ^6.4.0
+
+  # The walk on a map on the Flutter plate (lib/native/walk_map.dart):
+  # flutter_map, with the paper style drawn from OpenFreeMap's vector tiles.
+  flutter_map: ^8.2.0
+  flutter_map_vector_tiles: ^2.12.0
+  latlong2: ^0.9.1
+
   # Where models, detections and recordings live.
   path_provider: ^2.1.5
 
   # Where each listening session happened.
   geolocator: ^14.1.1
+  animations: ^3.0.0
 
 dev_dependencies:
   flutter_test:
@@ -41,6 +52,7 @@ flutter:
     - assets/web/
     - assets/web/fonts/
     - assets/app/
+    - assets/places/
 
   # The plate's typeface, so the app's own screens match it.
   # IM Fell English by Igino Marini, SIL Open Font Licence.

@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 
 import '../settings.dart';
 import '../store/detection_store.dart';
+import 'place_names.dart';
 import 'weather.dart';
 import '../store/media.dart';
 import 'classifier.dart';
@@ -35,6 +36,16 @@ class ModelReport {
 /// A session's plate holds at most this many species; the next new one
 /// starts a fresh session.
 const maxSessionSpecies = 42;
+
+/// The map's trail: keep a position at most this often while moving...
+const trackEvery = Duration(seconds: 30);
+
+/// ...and only once the phone has moved this far (metres), so standing
+/// still costs nothing. Rough is fine: the trail shows where the walk went.
+const trackMetres = 15;
+
+/// A detection takes the latest fix if it is no older than this.
+const fixFreshFor = Duration(minutes: 2);
 
 /// Listens to the microphone and runs every active model over it.
 class ListenEngine extends ChangeNotifier {
@@ -78,6 +89,13 @@ class ListenEngine extends ChangeNotifier {
   /// The session being recorded, while listening.
   Session? session;
 
+  // The trail: position updates while listening, the latest fix, and when
+  // a point was last kept.
+  StreamSubscription<Position>? _trackSub;
+  Position? _fix;
+  DateTime? _fixAt;
+  DateTime? _keptAt;
+
   /// Location problems, for the Listen tab; listening carries on without.
   String? locationNote;
 
@@ -115,14 +133,9 @@ class ListenEngine extends ChangeNotifier {
       }
       _raw.clear();
       _at32.clear();
-      final stream = await rec.startStream(const RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
-        sampleRate: captureRate,
-        numChannels: 1,
-        autoGain: false,
-        echoCancel: false,
-        noiseSuppress: false,
-      ));
+      final headset = settings.micSource == 'headset';
+      final stream =
+          await rec.startStream(_recordConfig(headset, headset ? null : await _phoneMic(rec)));
       _sub = stream.listen(_onAudio, onError: (Object e) {
         error = 'Microphone: $e';
         notifyListeners();
@@ -154,6 +167,7 @@ class ListenEngine extends ChangeNotifier {
       await _recorder?.stop();
     } catch (_) {}
     running = false;
+    await _stopTrack();
     // Wait for a window still in flight before closing its sessions.
     while (_busy) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -322,6 +336,8 @@ class ListenEngine extends ChangeNotifier {
       }
       return;
     }
+    final fix = _freshFix(now);
+    if (fix != null) _keepFix(fix, now, always: true); // the trail passes each bird
     final d = await store.add(
         model: m.spec.id,
         sci: l.sci,
@@ -329,7 +345,9 @@ class ListenEngine extends ChangeNotifier {
         confidence: score,
         at: now,
         windowSeconds: m.spec.windowSeconds.toDouble(),
-        scores: ranked);
+        scores: ranked,
+        lat: fix?.latitude,
+        lon: fix?.longitude);
     _open[key] = d;
     unawaited(_saveClip(d, m));
   }
@@ -357,7 +375,11 @@ class ListenEngine extends ChangeNotifier {
         models: old.models);
     session!
       ..weather = old.weather
+      ..placeName = old.placeName
       ..locationSource = old.locationSource;
+    // The walk goes on: start the new session's trail where the last left off.
+    final fix = _fix;
+    if (fix != null) _keepFix(fix, now, always: true);
     _open.clear();
     _lastHeard.clear();
     notifyListeners();
@@ -387,8 +409,11 @@ class ListenEngine extends ChangeNotifier {
     try {
       final pos = await _gps();
       if (pos != null) {
-        ses.lat = pos.$1;
-        ses.lon = pos.$2;
+        // Location is allowed: the map's trail starts here.
+        _startTrack();
+        _onFix(pos);
+        ses.lat = pos.latitude;
+        ses.lon = pos.longitude;
         ses.locationSource = 'gps';
         locationNote = null;
       } else if (settings.latitude != null && settings.longitude != null) {
@@ -401,6 +426,13 @@ class ListenEngine extends ChangeNotifier {
       }
       _geoScores = null; // the location filter now knows where we are
       await store.saveSession(ses);
+      // the nearest town or village, for the calendar
+      nearestPlace(ses.lat!, ses.lon!).then((name) {
+        if (name != null) {
+          ses.placeName = name;
+          store.saveSession(ses);
+        }
+      });
       if (settings.recordWeather) {
         final w = await fetchWeather(ses.lat!, ses.lon!, at: ses.start);
         if (w != null) {
@@ -416,7 +448,7 @@ class ListenEngine extends ChangeNotifier {
   }
 
   /// The phone's position, or null (with [locationNote] saying why).
-  Future<(double, double)?> _gps() async {
+  Future<Position?> _gps() async {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
         locationNote = 'Location Services are off, so this session has no GPS place.';
@@ -434,11 +466,155 @@ class ListenEngine extends ChangeNotifier {
           timeLimit: Duration(seconds: 20),
         ),
       );
-      return (pos.latitude, pos.longitude);
+      return pos;
     } catch (e) {
       locationNote = 'Could not get a GPS place: $e';
       return null;
     }
+  }
+
+  // ---- the microphone ------------------------------------------------------
+
+  /// How the microphone is opened. Either way other apps' audio (music, a
+  /// podcast) keeps playing: on iPhone the session mixes with others, and on
+  /// Android a recorder takes no audio focus.
+  ///
+  /// [headset] false, the phone's own microphone: on iPhone the category
+  /// leaves out allowBluetooth (the hands-free profile), so Bluetooth
+  /// headphones stay on A2DP for the music and can't become the input; on
+  /// Android no Bluetooth SCO link is opened.
+  ///
+  /// [headset] true, the headphones' or headset's: Bluetooth microphones go
+  /// over the hands-free profile, 16 kHz (24 kHz on recent AirPods) instead
+  /// of the phone's 48 kHz, so higher songs are lost and music drops to call
+  /// quality while listening.
+  ///
+  /// A wired headset's microphone (or a USB one) would otherwise take over by
+  /// itself on both platforms, so with the phone's own chosen [device] names
+  /// the built-in microphone ([_phoneMic]).
+  ///
+  /// If the microphone in use goes away (headphones taken out), recording
+  /// carries on with the phone's own rather than pausing.
+  static RecordConfig _recordConfig(bool headset, InputDevice? device) => RecordConfig(
+        device: device,
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: captureRate,
+        numChannels: 1,
+        autoGain: false,
+        echoCancel: false,
+        noiseSuppress: false,
+        audioRouteChange: AudioRouteChangeMode.follow,
+        iosConfig: IosRecordConfig(categoryOptions: [
+          IosAudioCategoryOption.mixWithOthers,
+          IosAudioCategoryOption.defaultToSpeaker,
+          IosAudioCategoryOption.allowBluetoothA2DP,
+          if (headset) IosAudioCategoryOption.allowBluetooth,
+        ]),
+        androidConfig: AndroidRecordConfig(manageBluetooth: headset),
+      );
+
+  /// The phone's built-in microphone, or null to leave the choice to the
+  /// system (it still won't be a Bluetooth one: see [_recordConfig]).
+  ///
+  /// On iPhone the plugin can only list inputs once the session can record,
+  /// and if it isn't yet it sets a category of its own without mixing, which
+  /// would pause the music; so the mixing category goes on first.
+  static Future<InputDevice?> _phoneMic(AudioRecorder rec) async {
+    try {
+      switch (defaultTargetPlatform) {
+        case TargetPlatform.iOS:
+          await rec.ios?.setAudioSessionCategory(options: const [
+            IosAudioCategoryOptions.mixWithOthers,
+            IosAudioCategoryOptions.defaultToSpeaker,
+            IosAudioCategoryOptions.allowBluetoothA2DP,
+          ]);
+        case TargetPlatform.android:
+          break;
+        default:
+          return null;
+      }
+      for (final d in await rec.listInputDevices()) {
+        if (d.type == InputDeviceType.builtIn) return d;
+      }
+    } catch (e) {
+      debugPrint('microphone: $e');
+    }
+    return null;
+  }
+
+  // ---- the trail, for the map --------------------------------------------
+
+  /// Position updates while listening: only after moving [trackMetres],
+  /// kept at most every [trackEvery] (see [_onFix]). On iPhone they carry on
+  /// with the screen locked, like the listening (UIBackgroundModes location;
+  /// tool/patch_platforms.py).
+  void _startTrack() {
+    if (_trackSub != null || !running) return;
+    final LocationSettings how;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        how = AppleSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: trackMetres,
+          activityType: ActivityType.fitness,
+          // Paused updates don't come back by themselves in the background,
+          // which would cut the trail short; distanceFilter keeps it light.
+          pauseLocationUpdatesAutomatically: false,
+          allowBackgroundLocationUpdates: true,
+          showBackgroundLocationIndicator: false,
+        );
+      case TargetPlatform.macOS:
+        how = AppleSettings(accuracy: LocationAccuracy.high, distanceFilter: trackMetres);
+      case TargetPlatform.android:
+        how = AndroidSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: trackMetres,
+          intervalDuration: trackEvery,
+        );
+      default:
+        how = const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: trackMetres);
+    }
+    _trackSub = Geolocator.getPositionStream(locationSettings: how).listen(
+      _onFix,
+      onError: (Object e) => debugPrint('track: $e'),
+    );
+  }
+
+  Future<void> _stopTrack() async {
+    await _trackSub?.cancel();
+    _trackSub = null;
+    _fix = null;
+    _fixAt = null;
+    _keptAt = null;
+  }
+
+  void _onFix(Position p) {
+    final now = DateTime.now();
+    _fix = p;
+    _fixAt = now;
+    _keepFix(p, now);
+  }
+
+  /// Add [p] to the session's trail, unless one was kept under
+  /// [trackEvery] ago ([always]: at a detection, or a new session).
+  void _keepFix(Position p, DateTime at, {bool always = false}) {
+    final ses = session;
+    if (ses == null) return;
+    final kept = _keptAt;
+    if (!always && kept != null && at.difference(kept) < trackEvery) return;
+    final last = ses.track.isEmpty ? null : ses.track.last;
+    // The same fix again (a detection while standing still): nothing new.
+    if (last != null && last.lat == p.latitude && last.lon == p.longitude) return;
+    _keptAt = at;
+    store.addTrackPoint(
+        ses, TrackPoint(at: at, lat: p.latitude, lon: p.longitude, accuracy: p.accuracy));
+  }
+
+  /// The latest fix, if recent enough to say where a bird was heard.
+  Position? _freshFix(DateTime now) {
+    final f = _fix, at = _fixAt;
+    if (f == null || at == null || now.difference(at) > fixFreshFor) return null;
+    return f;
   }
 
   /// Disk used by recordings.

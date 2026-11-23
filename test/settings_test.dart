@@ -18,7 +18,7 @@ void main() {
   test('the plate modes run a to g', () {
     expect([for (var i = 1; i <= plateModes.length; i++) plateLetter(i)].join(), 'abcdefg');
     expect(plateModes.map((m) => m.key).toList(),
-        ['calls', 'noindex', 'index', 'latest', 'top', 'time', 'equal']);
+        ['calls', 'latest', 'top', 'index', 'noindex', 'time', 'equal']);
   });
 
   test('a mode is kept by its key', () async {
@@ -28,9 +28,9 @@ void main() {
   });
 
   test('a number saved in the first order finds the same mode', () async {
-    // 5 was the index alone; it is c now.
+    // 5 was the index alone; it is d now.
     final s = await loadWith({'plateMode': 5});
-    expect(plateLetter(s.plateMode), 'c');
+    expect(plateLetter(s.plateMode), 'd');
     // 2 was recent ramblings; it is f now.
     expect(plateLetter((await loadWith({'plateMode': 2})).plateMode), 'f');
   });
@@ -85,5 +85,46 @@ void main() {
     s.removeStation(s.station!.id);
     expect(s.mode, AppMode.listen);
     expect(s.stations, isEmpty);
+  });
+
+  test('the Flutter plate is the plate, even where the old file said otherwise', () async {
+    expect((await loadWith({})).nativePlate, isTrue);
+    // every saved file says nativePlate: false; it is no longer read
+    expect((await loadWith({'nativePlate': false})).nativePlate, isTrue);
+    final web = await loadWith({'webPlate': true});
+    expect((web.nativePlate, web.toJson()['webPlate']), (false, true));
+    final s = await loadWith({'nativeShowTitle': false});
+    expect((s.nativeShowTitle, s.nativeShowDate), (false, true));
+  });
+
+  test('the Flutter plate marks the latest below and fits one screen, unless told otherwise', () async {
+    final s = await loadWith({});
+    expect(s.nativeMarkAt, 'below');
+    expect(s.nativeFit, isTrue);
+    expect(s.nativeIndexFolded, isTrue);
+    // a first run opens on recent ramblings
+    expect(plateModes[s.plateMode - 1].key, 'time');
+    expect(s.nativeTotals, isFalse);
+    expect((await loadWith({'nativeTotals': true})).toJson()['nativeTotals'], isTrue);
+    expect((await loadWith({'nativeIndexFolded': false})).toJson()['nativeIndexFolded'], isFalse);
+    final t = await loadWith({'nativeMarkAt': 'fade', 'nativeFit': false});
+    expect(t.toJson()['nativeMarkAt'], 'fade');
+    expect(t.toJson()['nativeFit'], isFalse);
+    // a value this version does not know falls back
+    expect((await loadWith({'nativeMarkAt': 'sideways'})).nativeMarkAt, 'below');
+  });
+
+  test("a station's past days: as answered, else yes on a computer", () async {
+    final s = await loadWith({
+      'stations': [
+        {'id': 'a', 'name': 'Garden', 'birdnetUrl': 'http://garden.local'},
+        {'id': 'b', 'name': 'Wood', 'birdweather': '1234'},
+      ],
+      'stationKeepPast': {'a': false},
+    });
+    expect(s.keepPastOf(s.stations[0]), isFalse);
+    // the tests run on a computer, which doesn't ask
+    expect(s.keepPastOf(s.stations[1]), isTrue);
+    expect(s.toJson()['stationKeepPast'], {'a': false});
   });
 }

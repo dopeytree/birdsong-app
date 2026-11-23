@@ -14,6 +14,9 @@ String day(DateTime t) {
   return '${_days[t.weekday - 1]} ${t.day} ${_months[t.month - 1]}$y';
 }
 
+/// "20 Nov".
+String dayMonth(DateTime t) => '${t.day} ${_months[t.month - 1]}';
+
 bool sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
 /// "13m", "1hr32", "2hr"; "under a minute".
@@ -42,10 +45,8 @@ String weatherWords(Map<String, dynamic>? w) {
   if (w == null) return '';
   final t = (w['temperatureC'] as num?)?.round();
   final sym = w['symbol'] as String?;
-  final sky = sym == null
-      ? null
-      : sym
-          .replaceAll(RegExp(r'_(day|night|polartwilight)$'), '')
+  final sky = sym
+          ?.replaceAll(RegExp(r'_(day|night|polartwilight)$'), '')
           .replaceAll('_', ' ')
           .replaceAll('lightrain', 'light rain')
           .replaceAll('heavyrain', 'heavy rain')

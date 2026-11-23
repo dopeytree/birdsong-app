@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -19,6 +20,15 @@ class Settings extends ChangeNotifier {
   /// Remote stations the user has saved; [stationId] is the one in use.
   List<Station> stations = [];
   String? stationId;
+
+  /// Whether each station's past days are filled in on this device (by
+  /// its id): a phone asks first; elsewhere they are, unless switched off.
+  Map<String, bool> stationKeepPast = {};
+
+  /// Whether this device fills in [st]'s past days: as answered, else yes
+  /// on a computer and not yet on a phone; null on a phone not yet asked.
+  bool? keepPastOf(Station st) =>
+      stationKeepPast[st.id] ?? (Platform.isIOS || Platform.isAndroid ? null : true);
 
   /// The station a remote plate shows: the chosen one, else the first.
   Station? get station {
@@ -87,6 +97,13 @@ class Settings extends ChangeNotifier {
   /// Listen here: seconds between analyses.
   double hopSeconds = 1.0;
 
+  /// Listen here: which microphone hears the birds. 'phone' (the phone's
+  /// own: full range, and music keeps playing in high quality on Bluetooth
+  /// headphones) or 'headset' (headphones' or a headset's: Bluetooth sends
+  /// it at call quality, which loses the higher songs and turns music to
+  /// call quality too). Other apps' audio keeps playing either way.
+  String micSource = 'phone';
+
   /// Listen here: the same species from the same model within this many
   /// seconds counts as the same call.
   double repeatSeconds = 10.0;
@@ -107,13 +124,114 @@ class Settings extends ChangeNotifier {
   /// What the plate shows: its place, 1 to 7, in [plateModes], lettered a to
   /// g in the order the view button steps through them. Saved by the mode's [PlateMode.key], so a new order of
   /// the modes keeps the one chosen.
-  int plateMode = 1;
+  int plateMode = defaultPlateMode;
 
   /// Models that listen. Each window goes through every one of them.
   Set<String> activeModels = {'bnl-v3-10k'};
 
   /// Which model's detections the plate draws, or 'all'.
   String plateModel = 'bnl-v3-10k';
+
+  /// The plate as the old web page draws it (assets/web/index.html in a web
+  /// view, lib/ui/plate_view.dart) instead of Flutter's own
+  /// (lib/native/native_plate.dart, the default since 22 Nov 2026). Saved
+  /// as 'webPlate': the old 'nativePlate' key, off in every saved file, is
+  /// no longer read, so every install opens on the Flutter plate once.
+  bool webPlate = false;
+
+  /// Whether the plate is Flutter's own ([webPlate] off).
+  bool get nativePlate => !webPlate;
+
+  /// The Flutter plate's heading: the title line ("Birdsong #3/12") and the
+  /// lines under it (when, where, the weather), as the web plate's Title
+  /// and Date switches.
+  bool nativeShowTitle = true;
+  bool nativeShowDate = true;
+
+  /// The Flutter plate's collage: 'calls' (noisiest species), 'time'
+  /// (recent ramblings) or 'equal' (no pecking order).
+  String nativeSizeBy = 'calls';
+
+  /// The Flutter plate: what is done to a plate still on its paper:
+  /// 'cutout' (lifted off the page, as the web plate does), 'tint' or
+  /// 'plain' (PlateStyle in lib/native/plate_library.dart).
+  String nativePlateStyle = 'cutout';
+
+  /// The Flutter plate: how the creature heard last is marked: 'centre' (a
+  /// dot over it), 'below' (a dot under it, the app's choice for the web
+  /// plate in Listen here), 'fade' (the rest faded) or 'none'.
+  String nativeMarkAt = 'below';
+
+  /// The Flutter plate: the collage takes what the heading and index leave
+  /// of the screen, as the web plate's "Fit everything on one screen".
+  bool nativeFit = true;
+
+  /// The Flutter plate: the index folded away under its heading (the web
+  /// plate keeps this as birdplate.bsIndexFolded).
+  bool nativeIndexFolded = true;
+
+  /// The Flutter plate: offer plates of skulls, wings and eggs among a
+  /// bird's other plates (never chosen first), as the web plate's option.
+  bool nativeParts = false;
+
+  /// The Flutter plate: draw and list only the [nativeLimit] most heard
+  /// species; 0 for all (the web plate's Limit species).
+  int nativeLimit = 0;
+
+  /// The Flutter plate: the heading's "22 species from 90 calls" line. Off
+  /// unless chosen; the index's heading carries the number of species.
+  bool nativeTotals = false;
+
+  /// The Flutter plate: the whole heading (title, number, date, place,
+  /// weather) in small capitals, as Index of Species is set (the default),
+  /// or in the page's serif and italic.
+  bool nativeTitleCaps = true;
+
+  /// The Flutter plate: the lines under the title (session number, date,
+  /// place, weather) in the title's ink (the default) or in sepia.
+  bool nativeHeadingInk = true;
+
+  /// Listen here: show the walk on a map in place of the collage.
+  bool showMap = false;
+
+  /// The map's crosses: 'first' (where each species was first heard) or
+  /// 'all' (every call).
+  String mapBirds = 'first';
+
+  /// The map's extras: listed buildings, scheduled monuments, protected
+  /// nature sites and Wikipedia places along the walk. Off by default, as
+  /// they send the walk's area to Historic England, Natural England and
+  /// Wikipedia.
+  bool mapExtras = false;
+
+  /// Whether "Passed on the way" says what each place is (its kind, or its
+  /// Wikipedia description) after its name. The name alone is shorter; the
+  /// map's label still says it.
+  bool mapPassedAbout = true;
+
+  /// Whether the map shows its timing readout (debug builds only).
+  bool mapDebugReadout = false;
+
+  /// The map's layers (its layers button): what each kind of extra shows,
+  /// and so what is looked up. Heritage: Historic England. Nature sites:
+  /// Natural England, NatureScot, Natural Resources Wales. Wikipedia places.
+  /// Reserves and Hides & viewpoints: from OpenStreetMap, in the map tiles.
+  bool mapShowHeritage = true;
+  bool mapShowNature = true;
+
+  /// Ancient woods (Natural England) a shade deeper than other woods.
+  bool mapShowAncient = true;
+  bool mapShowWiki = true;
+  bool mapShowReserves = true;
+  bool mapShowHides = true;
+
+  /// The bird whose records (GBIF) are shown on the map, by scientific
+  /// name; '' for none.
+  String mapRecordsSci = '';
+
+  /// Wildlife pictures on the map: a deer in a wood, a whale at sea, for
+  /// decoration (from the map's own tiles; nothing looked up).
+  bool mapWildlife = true;
 
   static Future<Settings> load(Directory dir) async {
     final s = Settings._(File('${dir.path}/settings.json'));
@@ -143,8 +261,16 @@ class Settings extends ChangeNotifier {
       if (bw.isNotEmpty) stations.add(Station(id: 'birdweather', name: 'BirdWeather $bw', birdweather: bw));
       stationId = stations.isEmpty ? null : stations.last.id;
     }
+    final keep = j['stationKeepPast'];
+    if (keep is Map) {
+      stationKeepPast = {
+        for (final e in keep.entries)
+          if (e.value is bool) '${e.key}': e.value as bool
+      };
+    }
     threshold = (j['threshold'] as num?)?.toDouble() ?? threshold;
     hopSeconds = (j['hopSeconds'] as num?)?.toDouble() ?? hopSeconds;
+    micSource = j['micSource'] == 'headset' ? 'headset' : 'phone';
     repeatSeconds = (j['repeatSeconds'] as num?)?.toDouble() ?? repeatSeconds;
     animalsOnly = (j['animalsOnly'] as bool?) ?? animalsOnly;
     useGeomodel = (j['useGeomodel'] as bool?) ?? useGeomodel;
@@ -163,6 +289,38 @@ class Settings extends ChangeNotifier {
     final active = j['activeModels'];
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
+    webPlate = (j['webPlate'] as bool?) ?? webPlate;
+    nativeShowTitle = (j['nativeShowTitle'] as bool?) ?? nativeShowTitle;
+    nativeShowDate = (j['nativeShowDate'] as bool?) ?? nativeShowDate;
+    nativePlateStyle = const ['cutout', 'tint', 'plain'].contains(j['nativePlateStyle'])
+        ? j['nativePlateStyle'] as String
+        : nativePlateStyle;
+    nativeMarkAt = const ['centre', 'below', 'fade', 'none'].contains(j['nativeMarkAt'])
+        ? j['nativeMarkAt'] as String
+        : nativeMarkAt;
+    nativeFit = (j['nativeFit'] as bool?) ?? nativeFit;
+    nativeIndexFolded = (j['nativeIndexFolded'] as bool?) ?? nativeIndexFolded;
+    nativeParts = (j['nativeParts'] as bool?) ?? nativeParts;
+    nativeLimit = math.max(0, (j['nativeLimit'] as num?)?.toInt() ?? nativeLimit);
+    nativeTotals = (j['nativeTotals'] as bool?) ?? nativeTotals;
+    nativeTitleCaps = (j['nativeTitleCaps'] as bool?) ?? nativeTitleCaps;
+    nativeHeadingInk = (j['nativeHeadingInk'] as bool?) ?? nativeHeadingInk;
+    nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
+        ? j['nativeSizeBy'] as String
+        : nativeSizeBy;
+    showMap = (j['showMap'] as bool?) ?? showMap;
+    mapBirds = j['mapBirds'] == 'all' ? 'all' : 'first';
+    mapExtras = (j['mapExtras'] as bool?) ?? mapExtras;
+    mapPassedAbout = (j['mapPassedAbout'] as bool?) ?? mapPassedAbout;
+    mapDebugReadout = (j['mapDebugReadout'] as bool?) ?? mapDebugReadout;
+    mapShowHeritage = (j['mapShowHeritage'] as bool?) ?? mapShowHeritage;
+    mapShowNature = (j['mapShowNature'] as bool?) ?? mapShowNature;
+    mapShowAncient = (j['mapShowAncient'] as bool?) ?? mapShowAncient;
+    mapShowWiki = (j['mapShowWiki'] as bool?) ?? mapShowWiki;
+    mapShowReserves = (j['mapShowReserves'] as bool?) ?? mapShowReserves;
+    mapShowHides = (j['mapShowHides'] as bool?) ?? mapShowHides;
+    mapRecordsSci = (j['mapRecordsSci'] as String?) ?? mapRecordsSci;
+    mapWildlife = (j['mapWildlife'] as bool?) ?? mapWildlife;
     // Settings saved before defaults v2 still carry the first test build's
     // defaults (3 s, 50 %); move those, and only those, to the new ones.
     if (((j['defaults'] as num?) ?? 1) < 2) {
@@ -178,6 +336,7 @@ class Settings extends ChangeNotifier {
         'hopSeconds': hopSeconds,
         'repeatSeconds': repeatSeconds,
         'animalsOnly': animalsOnly,
+        'microphone': micSource,
         'locationFilter': useGeomodel,
         if (useGeomodel) 'locationFilterThreshold': geoThreshold,
         'coreMl': useCoreMl,
@@ -190,11 +349,13 @@ class Settings extends ChangeNotifier {
         'mode': mode.name,
         'stations': [for (final st in stations) st.toJson()],
         'station': stationId,
+        if (stationKeepPast.isNotEmpty) 'stationKeepPast': stationKeepPast,
         // the station in use, as builds before saved stations read it
         'birdnetUrl': birdnetUrl,
         'birdweatherStation': birdweatherStation,
         'threshold': threshold,
         'hopSeconds': hopSeconds,
+        'micSource': micSource,
         'repeatSeconds': repeatSeconds,
         'animalsOnly': animalsOnly,
         'useGeomodel': useGeomodel,
@@ -206,6 +367,32 @@ class Settings extends ChangeNotifier {
         'plateView': plateModes[plateMode - 1].key,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
+        'webPlate': webPlate,
+        'nativeShowTitle': nativeShowTitle,
+        'nativeShowDate': nativeShowDate,
+        'nativeSizeBy': nativeSizeBy,
+        'nativePlateStyle': nativePlateStyle,
+        'nativeMarkAt': nativeMarkAt,
+        'nativeFit': nativeFit,
+        'nativeIndexFolded': nativeIndexFolded,
+        'nativeParts': nativeParts,
+        'nativeLimit': nativeLimit,
+        'nativeTotals': nativeTotals,
+        'nativeTitleCaps': nativeTitleCaps,
+        'nativeHeadingInk': nativeHeadingInk,
+        'showMap': showMap,
+        'mapBirds': mapBirds,
+        'mapExtras': mapExtras,
+        'mapPassedAbout': mapPassedAbout,
+        'mapDebugReadout': mapDebugReadout,
+        'mapShowHeritage': mapShowHeritage,
+        'mapShowNature': mapShowNature,
+        'mapShowAncient': mapShowAncient,
+        'mapShowWiki': mapShowWiki,
+        'mapShowReserves': mapShowReserves,
+        'mapShowHides': mapShowHides,
+        'mapRecordsSci': mapRecordsSci,
+        'mapWildlife': mapWildlife,
       };
 
   void update(void Function(Settings s) change) {
@@ -262,15 +449,18 @@ class PlateMode {
 
 const plateModes = <PlateMode>[
   PlateMode('calls', 'Noisiest species', sizeBy: 'calls'),                       // a
-  PlateMode('noindex', 'The collage, no index', query: 'hide=index'),             // b
-  PlateMode('index', 'The index alone', query: 'view=index&show=title,date'),     // c
-  PlateMode('latest', 'The latest bird, and when',                                // d
+  PlateMode('latest', 'The latest bird, and when',                                // b
       query: 'view=latest&show=time,title,date', currentOnly: true),
-  PlateMode('top', 'Most heard this session',                                     // e
+  PlateMode('top', 'Most heard this session',                                     // c
       query: 'view=top&show=title,date', currentOnly: true),
+  PlateMode('index', 'The index alone', query: 'view=index&show=title,date'),     // d
+  PlateMode('noindex', 'The collage, no index', query: 'hide=index'),             // e
   PlateMode('time', 'Recent ramblings', sizeBy: 'time'),                          // f
   PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                        // g
 ];
+
+/// The view the app opens on until another is chosen: recent ramblings.
+final defaultPlateMode = plateModes.indexWhere((m) => m.key == 'time') + 1;
 
 /// Mode [n] (1 to 7) as its letter, a to g: how the modes are named in the code and tests.
 String plateLetter(int n) => String.fromCharCode(0x60 + n);

@@ -8,10 +8,12 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../app_state.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
-import '../main.dart' show ink, paper, rule, sepia, serif;
+import '../main.dart' show paper, sepia;
 import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
+import 'plate_buttons.dart';
+import 'settings_button.dart';
 import 'station_editor.dart';
 
 /// Birdsong's own page, served by the app's local server. In Listen here it
@@ -40,6 +42,7 @@ class _PlateViewState extends State<PlateView> {
   Timer? _refreshSoon;
   String _livePushed = '';
   String _sessionPushed = '';
+  String _mapPushed = '';
 
   /// One of the page's own pop-ups (a creature's card, its dialog) is open:
   /// the app's buttons and arrows step aside.
@@ -51,6 +54,10 @@ class _PlateViewState extends State<PlateView> {
   double? _plateMid;
 
   final _shareKey = GlobalKey();
+
+  /// The top-right buttons, measured so the page can keep its title and
+  /// date clear of them (see _pushInsets).
+  final _topKey = GlobalKey();
 
   /// The page is showing the session arrows beside "Index of species"; the
   /// app's own pair is only for modes without that line.
@@ -120,19 +127,38 @@ class _PlateViewState extends State<PlateView> {
   EdgeInsets _insets = EdgeInsets.zero;
   String _insetsPushed = '';
 
+  // With them, the room the app's own buttons take, so nothing on the page
+  // sits under one (local_server.dart lays the page out around these):
+  //   --bs-ui-row1    the top-right row's width (record, pill, menu)
+  //   --bs-ui-col     the menu and view column's width, on the right
+  //   --bs-ui-bottom  the bottom row's height (map, share)
   void _pushInsets() {
     final p = _insets;
-    final key = '${p.top},${p.right},${p.bottom},${p.left}';
+    final box = _topKey.currentContext?.findRenderObject() as RenderBox?;
+    final row = box != null && box.hasSize ? box.size.width : 0.0;
+    final ui = (
+      row1: row > 0 ? row + 8 + 12 : 0.0, // its right margin, and a gap
+      col: 48 + 8 + 12.0,
+      bottom: _bottomButtons ? _bottomButtonSize + 8 + 6 : 0.0,
+    );
+    final key = '${p.top},${p.right},${p.bottom},${p.left}|${ui.row1},${ui.col},${ui.bottom}';
     if (key == _insetsPushed) return;
     _insetsPushed = key;
     String px(double v) => '${v.toStringAsFixed(1)}px';
     _web
         .runJavaScript('(function(s){s.setProperty("--bs-top","${px(p.top)}");'
             's.setProperty("--bs-right","${px(p.right)}");s.setProperty("--bs-bottom","${px(p.bottom)}");'
-            's.setProperty("--bs-left","${px(p.left)}");dispatchEvent(new Event("resize"));})'
+            's.setProperty("--bs-left","${px(p.left)}");'
+            's.setProperty("--bs-ui-row1","${px(ui.row1)}");s.setProperty("--bs-ui-col","${px(ui.col)}");'
+            's.setProperty("--bs-ui-bottom","${px(ui.bottom)}");dispatchEvent(new Event("resize"));})'
             '(document.documentElement.style)')
         .catchError((Object _) {});
   }
+
+  /// The map and share buttons at the bottom corners: a little smaller than
+  /// the top ones, to take less of the page.
+  static const _bottomButtonSize = 40.0;
+  bool get _bottomButtons => PlateShare.supported || _mapAllowed;
 
   AppState get app => widget.app;
   Settings get _s => app.settings;
@@ -201,10 +227,12 @@ class _PlateViewState extends State<PlateView> {
         _pushInsets();
         _livePushed = '';
         _sessionPushed = '';
+        _mapPushed = '';
         _pushLive();
         _pushSession();
         final mode = plateModes[_s.plateMode - 1];
         if (mode.sizeBy != null) app.page?.set('sizeBy', mode.sizeBy!);
+        _pushMap();
         widget.onLoaded?.call();
       }));
     _load();
@@ -235,6 +263,7 @@ class _PlateViewState extends State<PlateView> {
   }
 
   void _settingsChanged() {
+    _pushMap();
     final station = '${_s.birdnetBase}|${_s.stationDigits}';
     if (_s.mode != _mode || _s.plateModel != _plateModel || station != _station) {
       _mode = _s.mode;
@@ -253,9 +282,32 @@ class _PlateViewState extends State<PlateView> {
     _refreshSoon ??= Timer(const Duration(milliseconds: 500), () {
       _refreshSoon = null;
       _web
-          .runJavaScript('typeof refresh==="function"&&refresh(false)')
+          .runJavaScript('typeof refresh==="function"&&refresh(false);'
+              'window.birdsongMapRefresh&&window.birdsongMapRefresh()')
           .catchError((Object _) {});
     });
+  }
+
+  // Map or collage, and the map's options (assets/app/map-mode.js). The map
+  // is a Listen here view (a station has no walks) and takes the collage's
+  // place, so it has no room in views d and e, which show one bird alone.
+  bool get _mapAllowed =>
+      _s.mode == AppMode.listen && !plateModes[_s.plateMode - 1].currentOnly;
+  bool get _mapOn => _mapAllowed && _s.showMap;
+
+  void _pushMap() {
+    final opts = jsonEncode({'birds': _s.mapBirds, 'extras': _s.mapExtras});
+    final js = 'window.birdsongMapOptions&&window.birdsongMapOptions($opts);'
+        'window.birdsongMap&&window.birdsongMap($_mapOn)';
+    if (js == _mapPushed) return;
+    _mapPushed = js;
+    _web.runJavaScript(js).catchError((Object _) {});
+  }
+
+  void _toggleMap() {
+    final on = !_s.showMap;
+    _s.update((x) => x.showMap = on);
+    _say(on ? 'The walk, on a map.' : 'The plate.', seconds: 2);
   }
 
   // Tell the page which creatures are being heard right now, so they glow.
@@ -343,42 +395,84 @@ class _PlateViewState extends State<PlateView> {
     _say(mode.name, seconds: 2);
   }
 
-  // The microphone, a tap: while recording, stop; otherwise show Listen
-  // here (already there, a reminder that a hold records).
-  Future<void> _micTap() async {
-    if (app.engine.running) {
-      await _toggleListening();
-      return;
-    }
-    if (_s.mode != AppMode.listen) {
-      _s.update((x) => x.mode = AppMode.listen);
-      _say('Listen here & now', seconds: 2);
-    } else {
-      _say('Hold the microphone to record', seconds: 2);
-    }
+  // ---- the source pill, the record button and the stations button --------
+
+  // The pill's microphone half: show Listen here.
+  void _toListen() {
+    if (_s.mode == AppMode.listen) return;
+    _s.update((x) => x.mode = AppMode.listen);
+    _say('Listen here & now', seconds: 2);
   }
 
-  // A hold: record a new session. It starts before the plate moves to
-  // Listen here, so the plate opens on the new session rather than drawing
-  // the last one first.
-  Future<void> _micHold() async {
-    if (app.engine.running || app.engine.starting) return;
-    HapticFeedback.mediumImpact();
+  // The pill's sensors half: show the remote station last shown. With none
+  // saved yet, it asks for one.
+  void _toRemote() {
+    if (_s.stations.isEmpty) {
+      editStation(context, _s);
+      return;
+    }
+    if (_s.mode == AppMode.station) return;
+    _s.update((x) {
+      x.mode = AppMode.station;
+      x.stationId = x.station!.id;
+    });
+    _say(_s.station!.name, seconds: 2);
+  }
+
+  // The record button, under the microphone: a tap starts a new session, a
+  // tap while recording stops it. A session started from a station's plate
+  // starts before the plate moves to Listen here, so it opens on the new
+  // session rather than drawing the last one first.
+  Future<void> _record() async {
+    if (app.engine.starting) return;
+    if (!app.engine.running) HapticFeedback.mediumImpact();
     await _toggleListening();
     if (mounted && app.engine.running && _s.mode != AppMode.listen) {
       _s.update((x) => x.mode = AppMode.listen);
     }
   }
 
-  // To the remote station; on one already, the next saved station. With
-  // none saved yet, it asks for one.
-  void _toStation() {
-    if (_s.stations.isEmpty) {
-      editStation(context, _s);
+  // The stations button, under the sensors: it lists them, to choose one,
+  // with Add a station.
+  Future<void> _stationsTap(BuildContext context) async {
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    final at = RelativeRect.fromRect(
+        box.localToGlobal(Offset(0, box.size.height), ancestor: overlay) & box.size,
+        Offset.zero & overlay.size);
+    final current = _s.mode == AppMode.station ? _s.station?.id : null;
+    final picked = await showMenu<String>(
+      context: context,
+      position: at,
+      color: paper,
+      items: [
+        for (final st in _s.stations)
+          PopupMenuItem(
+            value: st.id,
+            child: ListTile(
+              dense: true,
+              leading: Icon(st.id == current ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: Theme.of(context).colorScheme.primary),
+              title: Text(st.name),
+              subtitle: Text(st.kind),
+            ),
+          ),
+        const PopupMenuItem(
+          value: '+',
+          child: ListTile(dense: true, leading: Icon(Icons.add), title: Text('Add a station')),
+        ),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    if (picked == '+') {
+      if (context.mounted) await editStation(context, _s);
       return;
     }
-    if (_s.mode == AppMode.station && _s.stations.length == 1) return;
-    _s.nextStation();
+    _s.update((x) {
+      x.mode = AppMode.station;
+      x.stationId = picked;
+    });
     _say(_s.station!.name, seconds: 2);
   }
 
@@ -410,13 +504,15 @@ class _PlateViewState extends State<PlateView> {
   @override
   Widget build(BuildContext context) {
     final safe = MediaQuery.paddingOf(context);
-    if (safe != _insets) {
-      _insets = safe;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _pushInsets());
-    }
+    _insets = safe;
     return ListenableBuilder(
       listenable: Listenable.merge([_s, app.store, app.engine]),
       builder: (context, _) {
+        // After layout: the insets, and the buttons' size as just laid out
+        // (the row changes as the source switches, or recording starts).
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _pushInsets();
+        });
         final listen = _s.mode == AppMode.listen;
         final store = app.store;
         final i = store.selectedIndex;
@@ -431,63 +527,104 @@ class _PlateViewState extends State<PlateView> {
                 right: 8 + safe.right,
                 top: 8 + safe.top,
                 child: Row(
+                  key: _topKey,
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Both sources, always there: the one shown in madder. The
-                    // microphone: a tap shows Listen here, a hold records a new
-                    // session, a tap on the slashed microphone stops.
-                    _MicButton(
-                      listening: app.engine.running,
-                      busy: app.engine.starting,
-                      shown: listen || app.engine.running,
-                      onTap: _micTap,
-                      onHold: _micHold,
-                    ),
-                    IconButton(
-                      tooltip: _s.stations.isEmpty
-                          ? 'Add a remote station'
-                          : listen
-                              ? 'Remote station: ${_s.station!.name}'
-                              : _s.stations.length > 1
-                                  ? '${_s.station!.name} · next: ${_s.nextStationName}'
-                                  : _s.station!.name,
-                      icon: const Icon(Icons.sensors),
-                      color: listen ? sepia.withValues(alpha: 0.55) : Theme.of(context).colorScheme.primary,
-                      onPressed: _toStation,
-                    ),
-                    IconButton(
-                      tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
-                      icon: const Icon(Icons.dashboard_outlined),
-                      color: Theme.of(context).colorScheme.primary,
-                      onPressed: _nextMode,
-                    ),
-                    if (PlateShare.supported)
-                      PopupMenuButton<String>(
-                        key: _shareKey,
-                        tooltip: 'Share or save the plate',
-                        icon: Icon(Icons.ios_share,
-                            color: Theme.of(context).colorScheme.primary),
-                        color: paper,
-                        onSelected: (v) => v == 'save' ? _save() : _share(),
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: 'share',
-                            child: ListTile(
-                                leading: Icon(Icons.ios_share), title: Text('Share…')),
-                          ),
-                          PopupMenuItem(
-                            value: 'save',
-                            child: ListTile(
-                                leading: Icon(Icons.photo_library_outlined),
-                                title: Text('Save to Photos')),
-                          ),
-                        ],
+                    // Left of the pill: the record button (Listen here, or
+                    // while a session is recording) and, on a remote
+                    // station, the stations button.
+                    if (listen || app.engine.running || app.engine.starting)
+                      RecordButton(
+                        recording: app.engine.running,
+                        busy: app.engine.starting,
+                        onTap: _record,
                       ),
-                    IconButton(
-                      tooltip: 'Settings',
-                      icon: const Icon(Icons.menu),
-                      color: Theme.of(context).colorScheme.primary,
-                      onPressed: widget.openSettings,
+                    if (!listen && _s.stations.isNotEmpty)
+                      Builder(
+                        builder: (bc) => IconButton(
+                          tooltip: 'Stations',
+                          constraints: const BoxConstraints.tightFor(
+                              width: SourcePill.rowHeight, height: SourcePill.rowHeight),
+                          icon: const Icon(Icons.add),
+                          color: Theme.of(context).colorScheme.primary,
+                          onPressed: () => _stationsTap(bc),
+                        ),
+                      ),
+                    // The source: a two-part pill, Listen here | remote
+                    // station, the one shown filled.
+                    SizedBox(
+                      // level with the record and menu buttons
+                      height: SourcePill.rowHeight,
+                      child: Center(
+                      
+                      child: SourcePill(
+                        listen: listen,
+                        stationName: _s.station?.name,
+                        onListen: _toListen,
+                        onRemote: _toRemote,
+                      ),
+                      ),
+                    ),
+                    // The menu, and the plate's view (a to g) under it.
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SettingsButton(
+                            app: widget.app, color: Theme.of(context).colorScheme.primary),
+                        IconButton(
+                          tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
+                          icon: const Icon(Icons.dashboard_outlined),
+                          color: Theme.of(context).colorScheme.primary,
+                          onPressed: _nextMode,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            // The walk on a map in place of the collage (Listen here), at the
+            // bottom left.
+            if (_mapAllowed && !_popup)
+              Positioned(
+                left: 8 + safe.left,
+                bottom: 8 + safe.bottom,
+                child: IconButton(
+                  constraints: const BoxConstraints.tightFor(
+                      width: _bottomButtonSize, height: _bottomButtonSize),
+                  padding: EdgeInsets.zero,
+                  iconSize: 22,
+                  tooltip: _mapOn ? 'Back to the plate' : 'The walk on a map',
+                  icon: Icon(_mapOn ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
+                  color: Theme.of(context).colorScheme.primary,
+                  onPressed: _toggleMap,
+                ),
+              ),
+            // Share or save, out of the way at the bottom right.
+            if (PlateShare.supported && !_popup)
+              Positioned(
+                right: 8 + safe.right,
+                bottom: 8 + safe.bottom,
+                child: PopupMenuButton<String>(
+                  key: _shareKey,
+                  padding: const EdgeInsets.all(9),
+                  iconSize: 22,
+                  tooltip: 'Share or save the plate',
+                  icon: Icon(Icons.ios_share,
+                      color: Theme.of(context).colorScheme.primary),
+                  color: paper,
+                  onSelected: (v) => v == 'save' ? _save() : _share(),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'share',
+                      child: ListTile(
+                          leading: Icon(Icons.ios_share), title: Text('Share…')),
+                    ),
+                    PopupMenuItem(
+                      value: 'save',
+                      child: ListTile(
+                          leading: Icon(Icons.photo_library_outlined),
+                          title: Text('Save to Photos')),
                     ),
                   ],
                 ),
@@ -496,14 +633,14 @@ class _PlateViewState extends State<PlateView> {
               Positioned(
                 left: 16 + safe.left,
                 right: 16 + safe.right,
-                top: 64 + safe.top,
+                top: 112 + safe.top,
                 child: IgnorePointer(
                   ignoring: !_noteShown,
                   child: AnimatedOpacity(
                     opacity: _noteShown && !_popup ? 1 : 0,
                     duration: const Duration(milliseconds: 250),
                     child: Center(
-                      child: _Note(
+                      child: PlateNote(
                         text: _note!,
                         action: _noteAction,
                         onAction: _noteDo == null
@@ -564,147 +701,6 @@ class _Arrow extends StatelessWidget {
       color: sepia.withValues(alpha: 0.75),
       icon: Icon(icon),
       onPressed: onPressed,
-    );
-  }
-}
-
-/// A short message on paper, ruled like the plate's pop-ups.
-class _Note extends StatelessWidget {
-  const _Note({required this.text, this.action, this.onAction});
-
-  final String text;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: paper,
-      elevation: 3,
-      shadowColor: const Color(0x553C280A),
-      shape: const RoundedRectangleBorder(side: BorderSide(color: rule)),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 10, action == null ? 16 : 6, 10),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Text(text,
-                  style: const TextStyle(
-                      fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 16, color: ink)),
-            ),
-            if (action != null)
-              TextButton(onPressed: onAction, child: Text(action!)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The microphone: plain when idle, slashed while recording (a tap stops
-/// it), with a slow pulse around it; a spinner while it starts. Madder when
-/// it is the plate on show or recording, faded otherwise.
-class _MicButton extends StatefulWidget {
-  const _MicButton({
-    required this.listening,
-    required this.busy,
-    required this.shown,
-    required this.onTap,
-    required this.onHold,
-  });
-
-  final bool listening;
-  final bool busy;
-  final bool shown;
-  final VoidCallback onTap;
-  final VoidCallback onHold;
-
-  @override
-  State<_MicButton> createState() => _MicButtonState();
-}
-
-class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.listening) _pulse.repeat();
-  }
-
-  @override
-  void didUpdateWidget(_MicButton old) {
-    super.didUpdateWidget(old);
-    if (widget.listening && !_pulse.isAnimating) _pulse.repeat();
-    if (!widget.listening && _pulse.isAnimating) _pulse.reset();
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final red = Theme.of(context).colorScheme.primary;
-    final color = widget.shown ? red : sepia.withValues(alpha: 0.55);
-    const size = 40.0;
-    return SizedBox(
-      width: size + 8,
-      height: size + 8,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (widget.listening)
-            AnimatedBuilder(
-              animation: _pulse,
-              builder: (context, _) => Container(
-                width: size * 0.8 + 14 * _pulse.value,
-                height: size * 0.8 + 14 * _pulse.value,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: red.withValues(alpha: 0.25 * (1 - _pulse.value)),
-                ),
-              ),
-            ),
-          widget.busy
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: red),
-                )
-              // A tooltip that shows on hover only: on a touch screen a long
-              // press is the hold that records.
-              : Tooltip(
-                  triggerMode: TooltipTriggerMode.manual,
-                  message: widget.listening
-                      ? 'Stop recording'
-                      : widget.shown
-                          ? 'Hold to record'
-                          : 'Listen here & now · hold to record',
-                  child: Semantics(
-                    button: true,
-                    label: widget.listening ? 'Stop recording' : 'Listen here and now',
-                    onLongPressHint: widget.listening ? null : 'record a new session',
-                    child: InkResponse(
-                      radius: 22,
-                      onTap: widget.onTap,
-                      onLongPress: widget.listening ? null : widget.onHold,
-                      child: SizedBox(
-                        width: size,
-                        height: size,
-                        child: Icon(
-                            widget.listening ? Icons.mic_off_outlined : Icons.mic_none_outlined,
-                            color: color),
-                      ),
-                    ),
-                  ),
-                ),
-        ],
-      ),
     );
   }
 }

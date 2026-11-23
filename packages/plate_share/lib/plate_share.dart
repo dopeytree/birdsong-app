@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/services.dart';
 
 /// Takes a picture of the plate (the app's web view, without the app's own
@@ -10,10 +11,11 @@ class PlateShare {
   /// iPhone, iPad and Mac for now.
   static bool get supported => Platform.isIOS || Platform.isMacOS;
 
-  /// Saves the picture of the plate to Photos. Returns 'saved', 'denied'
-  /// (not allowed in Settings) or 'failed'.
-  static Future<String> saveToPhotos() async =>
-      await _channel.invokeMethod<String>('save') ?? 'failed';
+  /// Saves the picture of the plate to Photos: [png] when given (the plate
+  /// drawn by Flutter), else the web view's. Returns 'saved', 'denied' (not
+  /// allowed in Settings) or 'failed'.
+  static Future<String> saveToPhotos({Uint8List? png}) async =>
+      await _channel.invokeMethod<String>('save', {if (png != null) 'png': png}) ?? 'failed';
 
   /// iOS: let the web view run under the status bar and the Dynamic Island
   /// (no automatic safe-area insets), in the page's paper colour. The page
@@ -28,11 +30,13 @@ class PlateShare {
   }
 
   /// [from] is where the button is, in logical pixels from the window's top
-  /// left: the sheet points at it on iPad and Mac. Returns false if there
-  /// was no plate to take.
-  static Future<bool> share({String? text, Rect? from}) async {
+  /// left: the sheet points at it on iPad and Mac. [png] is the picture when
+  /// given (the plate drawn by Flutter), else the web view is taken.
+  /// Returns false if there was no plate to take.
+  static Future<bool> share({String? text, Rect? from, Uint8List? png}) async {
     final ok = await _channel.invokeMethod<bool>('share', {
       'text': text,
+      if (png != null) 'png': png,
       if (from != null) ...{
         'x': from.left,
         'y': from.top,

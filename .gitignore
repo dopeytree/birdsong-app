@@ -30,9 +30,23 @@ models/
 
 .DS_Store
 build-log.txt
+sim-log.txt
+copy-sim-log.txt
 ios-log.txt
 
 # Upstream web page checkout used by tool/sync_web.py
 .upstream/
 web-log.txt
 github-log.txt
+copy-log.txt
+__pycache__/
+
+# Made by Build on Mac.command (flutter create and its backups), not source
+.bootstrap/
+.metadata
+android/
+ios/
+macos/
+
+# Claude Code: personal settings stay local
+.claude/settings.local.json

@@ -39,9 +39,11 @@ class Detection {
     this.scores = const [],
     this.hasClip = false,
     this.reviewStatus = 'unreviewed',
+    this.lat,
+    this.lon,
   }) : uuid = uuid ?? newUuid();
 
-  /// Short local id, used in the plate's URLs (/api/v2/audio/<id>).
+  /// Short local id, used in the plate's URLs (`/api/v2/audio/<id>`).
   final int id;
   final String uuid;
   final String model;
@@ -60,6 +62,12 @@ class Detection {
 
   /// unreviewed, correct, wrong or unsure.
   String reviewStatus;
+
+  /// Where it was heard: the phone's latest position fix at the time, for
+  /// the map. Null when location was off or no fix had come in yet.
+  double? lat;
+  double? lon;
+  bool get hasPlace => lat != null && lon != null;
 
   String get clipPath => 'audio/$id.wav';
   String get spectrogramPath => 'spectrograms/$id.bmp';
@@ -80,6 +88,8 @@ class Detection {
               {'scientificName': s.sci, 'confidence': double.parse(s.confidence.toStringAsFixed(4))}
           ],
         'reviewStatus': reviewStatus,
+        if (lat != null) 'latitude': lat,
+        if (lon != null) 'longitude': lon,
         if (hasClip) 'clip': clipPath,
         if (hasClip) 'spectrogram': spectrogramPath,
       };
@@ -102,6 +112,8 @@ class Detection {
         ],
         hasClip: j['clip'] != null,
         reviewStatus: (j['reviewStatus'] as String?) ?? 'unreviewed',
+        lat: (j['latitude'] as num?)?.toDouble(),
+        lon: (j['longitude'] as num?)?.toDouble(),
       );
 
   /// A line from the old detections.jsonl (before session folders).
@@ -113,6 +125,32 @@ class Detection {
         confidence: (j['confidence'] as num).toDouble(),
         at: DateTime.parse(j['at'] as String),
         hasClip: (j['clip'] as bool?) ?? false,
+      );
+}
+
+/// One position fix on the way, for the map's trail. A line of track.jsonl.
+class TrackPoint {
+  const TrackPoint({required this.at, required this.lat, required this.lon, this.accuracy});
+
+  final DateTime at;
+  final double lat;
+  final double lon;
+
+  /// Horizontal accuracy in metres, as the phone reported it.
+  final double? accuracy;
+
+  Map<String, dynamic> toJson() => {
+        'timestamp': _utc(at),
+        'latitude': double.parse(lat.toStringAsFixed(6)),
+        'longitude': double.parse(lon.toStringAsFixed(6)),
+        if (accuracy != null) 'accuracy': double.parse(accuracy!.toStringAsFixed(1)),
+      };
+
+  static TrackPoint fromJson(Map<String, dynamic> j) => TrackPoint(
+        at: _local(j['timestamp'] as String),
+        lat: (j['latitude'] as num).toDouble(),
+        lon: (j['longitude'] as num).toDouble(),
+        accuracy: (j['accuracy'] as num?)?.toDouble(),
       );
 }
 
@@ -135,6 +173,8 @@ class Session {
     this.weather,
     this.folder,
     this.locationSource,
+    this.placeName,
+    this.placeArea,
   })  : uuid = uuid ?? newUuid(),
         utcOffsetMinutes = utcOffsetMinutes ?? start.timeZoneOffset.inMinutes;
 
@@ -167,8 +207,21 @@ class Session {
   /// Conditions when the session began; see engine/weather.dart.
   Map<String, dynamic>? weather;
 
+  /// The nearest town or village (engine/place_names.dart), '' when there
+  /// is none; null until looked up.
+  String? placeName;
+
+  /// Where the walk went, after [placeName] in the calendar: the reserve,
+  /// wood or heath it was most in (native/walk_names.dart), '' when none;
+  /// null until looked up, once the session has ended.
+  String? placeArea;
+
   /// Folder name under sessions/, set when first written.
   String? folder;
+
+  /// Where the phone went while listening, oldest first (track.jsonl).
+  /// Recorded about every 30 seconds while moving, and at each detection.
+  final List<TrackPoint> track = [];
 
   bool get live => end == null;
   bool get hasPlace => lat != null && lon != null;
@@ -207,9 +260,13 @@ class Session {
         if (settings.isNotEmpty) 'settings': settings,
         if (models.isNotEmpty) 'models': models,
         if (weather != null) 'weather': weather,
+        if (placeName != null) 'placeName': placeName,
+        if (placeArea != null) 'placeArea': placeArea,
+        if (placeArea != null) 'placeAreaRule': placeAreaRule,
         'summary': {
           'detections': inside.length,
           'species': {for (final d in inside) d.sci}.length,
+          if (track.isNotEmpty) 'trackPoints': track.length,
         },
       };
 
@@ -230,7 +287,14 @@ class Session {
         ],
         weather: j['weather'] == null ? null : Map<String, dynamic>.from(j['weather'] as Map),
         folder: folder,
+        placeName: j['placeName'] as String?,
+        // named under an older rule: asked again
+        placeArea: j['placeAreaRule'] == placeAreaRule ? j['placeArea'] as String? : null,
       );
+
+  /// Bumped when the way walks are named changes, so saved names are
+  /// worked out again. 2: OS names only within 0.5 km (22 Nov).
+  static const placeAreaRule = 2;
 
   /// A line from the old sessions.jsonl.
   static Session fromLegacyJson(Map<String, dynamic> j) => Session(
@@ -275,8 +339,9 @@ Future<void> _writeAtomic(File file, String text) async {
 ///   sessions/2026-11-18T221904Z_a91e4c/
 ///     session.json        the session (see [Session.toJson])
 ///     detections.jsonl    one detection per line (see [Detection.toJson])
-///     audio/<id>.wav      the clip around each detection
-///     spectrograms/<id>.bmp
+///     track.jsonl         position fixes on the way (see [TrackPoint]), if any
+///     `audio/<id>.wav`      the clip around each detection
+///     `spectrograms/<id>.bmp`
 ///
 /// Everything is held in memory too. A session's files are rewritten as a
 /// whole, shortly after a change and at once when it ends.
@@ -334,6 +399,16 @@ class DetectionStore extends ChangeNotifier {
               _nextId = max(_nextId, d.id + 1);
             } catch (_) {}
           }
+        }
+        final track = File('${e.path}/track.jsonl');
+        if (await track.exists()) {
+          for (final line in await track.readAsLines()) {
+            if (line.trim().isEmpty) continue;
+            try {
+              x.track.add(TrackPoint.fromJson(jsonDecode(line) as Map<String, dynamic>));
+            } catch (_) {}
+          }
+          x.track.sort((a, b) => a.at.compareTo(b.at));
         }
       } catch (e) {
         debugPrint('session ${file.path}: $e');
@@ -456,6 +531,10 @@ class DetectionStore extends ChangeNotifier {
     final inside = inSession(x);
     await _writeAtomic(File('${dir.path}/detections.jsonl'),
         inside.map((d) => '${jsonEncode(d.toJson())}\n').join());
+    if (x.track.isNotEmpty) {
+      await _writeAtomic(File('${dir.path}/track.jsonl'),
+          x.track.map((p) => '${jsonEncode(p.toJson())}\n').join());
+    }
     await _writeAtomic(File('${dir.path}/session.json'),
         const JsonEncoder.withIndent('  ').convert(x.toJson(inside)));
   }
@@ -506,6 +585,13 @@ class DetectionStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Show [x] on the plate (the calendar's choice).
+  void select(Session x) {
+    if (x.id == _selectedId || !sessions.contains(x)) return;
+    _selectedId = x.id;
+    notifyListeners();
+  }
+
   Future<Session> startSession({
     DateTime? at,
     double? lat,
@@ -547,6 +633,46 @@ class DetectionStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Give sessions with a place but no name yet the name of their nearest
+  /// town or village, one at a time, saving each as it comes (for the
+  /// calendar). [lookUp] is engine/place_names.dart nearestPlace.
+  Future<void> namePlaces(Future<String?> Function(double lat, double lon) lookUp) async {
+    for (final x in [...sessions]) {
+      if (!x.hasPlace || x.placeName != null) continue;
+      final name = await lookUp(x.lat!, x.lon!);
+      if (name == null) return; // offline: try again another time
+      x.placeName = name;
+      await saveSession(x);
+    }
+  }
+
+  /// Give ended sessions with a place but no [Session.placeArea] yet the
+  /// reserve, wood or heath their walk was most in, one walk at a time,
+  /// saving each as it comes (for the calendar). [lookUp] is
+  /// native/walk_names.dart areaOfWalk: '' for none, null when offline
+  /// (stops; tried again another time).
+  Future<void> nameAreas(Future<String?> Function(List<(double, double)> path) lookUp) async {
+    for (final x in [...sessions]) {
+      if (x.live || !x.hasPlace || x.placeArea != null) continue;
+      final walk = walkOf(x);
+      if (walk.any((s) => s.live)) continue;
+      final path = <(double, double)>[
+        for (final s in walk) ...[
+          for (final p in s.track) (p.lat, p.lon),
+          for (final d in inSession(s))
+            if (d.hasPlace) (d.lat!, d.lon!),
+        ],
+      ];
+      if (path.isEmpty) path.add((x.lat!, x.lon!));
+      final area = await lookUp(path);
+      if (area == null) return;
+      for (final s in walk) {
+        s.placeArea = area;
+        await saveSession(s);
+      }
+    }
+  }
+
   /// Record a change to a session (its place or weather found).
   Future<void> saveSession(Session x) async {
     _touch(x);
@@ -554,6 +680,33 @@ class DetectionStore extends ChangeNotifier {
   }
 
   List<Detection> inSession(Session x) => all.where((d) => x.contains(d.at)).toList();
+
+  /// Add a position fix to a session's trail.
+  void addTrackPoint(Session x, TrackPoint p) {
+    x.track.add(p);
+    _touch(x);
+    notifyListeners();
+  }
+
+  /// The walk [x] belongs to: [x] and the sessions run straight on from it
+  /// or into it because one filled up at [maxSessionSpecies] (stopReason
+  /// speciesLimit, the next starting within a few seconds). Oldest first.
+  List<Session> walkOf(Session x) {
+    final i = sessions.indexOf(x);
+    if (i < 0) return [x];
+    bool joined(Session a, Session b) =>
+        a.stopReason == 'speciesLimit' &&
+        a.end != null &&
+        b.start.difference(a.end!).abs() <= const Duration(seconds: 5);
+    var from = i, to = i;
+    while (from > 0 && joined(sessions[from - 1], sessions[from])) {
+      from--;
+    }
+    while (to < sessions.length - 1 && joined(sessions[to], sessions[to + 1])) {
+      to++;
+    }
+    return sessions.sublist(from, to + 1);
+  }
 
   Session? sessionOf(Detection d) {
     for (var i = sessions.length - 1; i >= 0; i--) {
@@ -572,6 +725,8 @@ class DetectionStore extends ChangeNotifier {
     required DateTime at,
     double? windowSeconds,
     List<RankedScore> scores = const [],
+    double? lat,
+    double? lon,
   }) async {
     final d = Detection(
         id: _nextId++,
@@ -581,7 +736,9 @@ class DetectionStore extends ChangeNotifier {
         confidence: confidence,
         at: at,
         windowSeconds: windowSeconds,
-        scores: scores);
+        scores: scores,
+        lat: lat,
+        lon: lon);
     all.add(d);
     // Heard with no session open (shouldn't happen): give it one.
     var x = sessionOf(d);

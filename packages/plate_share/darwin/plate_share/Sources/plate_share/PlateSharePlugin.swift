@@ -1,6 +1,7 @@
 // Takes a picture of the app's web view (the plate) with WKWebView's own
 // snapshot, which leaves out the Flutter buttons drawn over it, writes it
-// as a PNG and opens the system share sheet with it.
+// as a PNG and opens the system share sheet with it. The plate drawn by
+// Flutter sends its own picture instead (the png argument).
 
 #if os(iOS)
 import Flutter
@@ -25,8 +26,10 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let args = call.arguments as? [String: Any] ?? [:]
+    let png = (args["png"] as? FlutterStandardTypedData)?.data
     if call.method == "save" {
-      DispatchQueue.main.async { self.save(result: result) }
+      DispatchQueue.main.async { self.save(png: png, result: result) }
       return
     }
     if call.method == "fullBleed" {
@@ -37,12 +40,20 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       result(FlutterMethodNotImplemented)
       return
     }
-    let args = call.arguments as? [String: Any] ?? [:]
     let text = args["text"] as? String
     let anchor = CGRect(
       x: (args["x"] as? Double) ?? 0, y: (args["y"] as? Double) ?? 0,
       width: (args["w"] as? Double) ?? 1, height: (args["h"] as? Double) ?? 1)
-    DispatchQueue.main.async { self.share(text: text, anchor: anchor, result: result) }
+    DispatchQueue.main.async { self.share(text: text, anchor: anchor, png: png, result: result) }
+  }
+
+  /// The picture to share or save: the one Flutter sent, else the web view's.
+  private func picture(_ png: Data?, _ done: @escaping (URL?) -> Void) {
+    if let png = png {
+      done(pngFile(png))
+    } else {
+      snapshot(done)
+    }
   }
 
   private func pngFile(_ data: Data?) -> URL? {
@@ -59,8 +70,8 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
   }
 
   /// Adds the plate's picture to Photos (add-only access).
-  private func save(result: @escaping FlutterResult) {
-    snapshot { url in
+  private func save(png: Data?, result: @escaping FlutterResult) {
+    picture(png) { url in
       guard let url = url else {
         result("failed")
         return
@@ -122,12 +133,12 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
     web.takeSnapshot(with: nil) { image, _ in done(self.pngFile(image?.pngData())) }
   }
 
-  private func share(text: String?, anchor: CGRect, result: @escaping FlutterResult) {
+  private func share(text: String?, anchor: CGRect, png: Data?, result: @escaping FlutterResult) {
     guard let window = keyWindow() else {
       result(false)
       return
     }
-    snapshot { url in
+    picture(png) { url in
       guard let url = url else {
         result(false)
         return
@@ -172,14 +183,14 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
     }
   }
 
-  private func share(text: String?, anchor: CGRect, result: @escaping FlutterResult) {
+  private func share(text: String?, anchor: CGRect, png: Data?, result: @escaping FlutterResult) {
     guard let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first,
       let view = window.contentView
     else {
       result(false)
       return
     }
-    snapshot { url in
+    picture(png) { url in
       guard let url = url else {
         result(false)
         return
