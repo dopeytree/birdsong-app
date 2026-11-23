@@ -70,18 +70,20 @@ or a small test before building it.
 - **Notifications name the full species (Ed, Nov 2026):** e.g. "Northern
   Cardinal", not "cardinal", matching the species index. An iPhone banner
   shows about four lines (~160 characters), so even the longest names fit.
-- **Splash notifications (Ed, Nov 2026):** a round of five, replayed: the
-  Northern Cardinal (50 points), then the first four species heard on walk
-  #20 (Fri 25 Dec 2026): Eastern, Spotted, Green-tailed and Canyon Towhee.
-  Three, a rest with 5 s of clear screen, two, then a long rest with 10 s
-  clear, and again. Gaps within a burst are the walk's own, 5× faster. Each
-  banner leaves after ~5 s (about an iPhone's) or when tapped. Data:
-  `site/src/data/walk-20.json` (all 42 species), made by
-  `tool/export_site_walk.py` (species, calls, confidence only; no location or
-  IDs). Points are a stand-in: 10 for a new species plus 10 a call. The bell,
-  top right beside light/dark, pauses and resumes; a shuffle button, bottom
-  right, tries made-up gaps (`?rhythm=random`). The icon stays the app's: iOS
-  doesn't allow a per-notification icon (a picture thumbnail is allowed).
+- **Splash notifications (Ed, Nov 2026):** three modes, on trial; the shuffle
+  button (bottom right) cycles them, or `?rhythm=single|round|random`.
+  *One at a time* (default): the opening Northern Cardinal (50 points), then
+  all 42 species of walk #20 (Fri 25 Dec 2026) in the order first heard, each
+  shown alone for ~5 s, then 3 s of clear screen (about 6 minutes a loop).
+  *Round of five*: the cardinal and the walk's first four, as three, 5 s
+  clear, two, 10 s clear, then again; gaps in a burst are the walk's own, 5×
+  faster. *Random*: the round with made-up gaps. A banner leaves after ~5 s
+  (about an iPhone's) or when tapped. Data: `site/src/data/walk-20.json`,
+  made by `tool/export_site_walk.py` (species, calls, confidence only; no
+  location or IDs). Points are a stand-in: 10 for a new species plus 10 a
+  call. The bell, top right beside light/dark, pauses and resumes. The icon
+  stays the app's: iOS doesn't allow a per-notification icon (a picture
+  thumbnail is allowed).
 - **Splash store badges (Ed, Nov 2026):** official App Store badge (black,
   from developer.apple.com) and Get it on Google Play (from play.google.com,
   clear margin trimmed), unaltered, then "Coming soon." Not links yet; at
