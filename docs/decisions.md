@@ -94,14 +94,13 @@ or a small test before building it.
   clear margin trimmed), unaltered, then "Coming soon." Not links yet; at
   launch they must link to the listings. Trademark lines added to the credits.
   Apple's own Mac App Store badge exists if a Mac badge is wanted.
-- **Splash page on phones and iPads (Ed, Nov 2026):** up to 820px wide
-  (phones, upright iPads) the page is one column sized to the visible screen
-  (`dvh`), with smaller text and buttons; the device takes the height left, at most half the screen.
-  Up to 600px (phones) the device comes first, under the tagline and title,
-  at about 48% of the screen (never more than half); the paragraphs, badges and Coming soon follow
-  below, a short scroll away. The shuffle test button goes top left on these.
-  Phones held sideways scroll, with the device at about 82% of the screen
-  height, below the text.
+- **Splash page on phones and iPads (Ed, Nov 2026):** two layouts only.
+  Desktop, over 820px wide: text left, device right. Mobile, 820px and under
+  (phones, upright iPads, narrow windows): one column with the tagline and
+  title, then the device at most half the screen height, then the paragraphs,
+  badges and Coming soon, a short scroll away; smaller text and buttons; no
+  "Tap the screen" hint; the shuffle test button top left. Held sideways, the
+  device gets about 82% of the screen height.
   On touch screens the first shot is the opposite shape to the screen: held
   upright, the sideways iPad; held sideways, the upright iPhone. Turning the
   device switches it, until the visitor uses the pill. Desktops open on the

@@ -767,41 +767,44 @@ const credits = [
   .lightbox .frame:hover { transform: none; }
   .close-hint { margin: 0; color: var(--paper); opacity: .8; font-size: 1rem; }
 
-  /* Phones and upright iPads: one column that fits the visible screen, so
-     there's nothing to scroll. The text is smaller; the device takes the
-     height that's left (tap it for full size). dvh is the height Safari
-     leaves free between its bars. */
+  /* Mobile: phones, upright iPads and narrow windows, up to 820px wide
+     (Ed, Nov 2026: two modes only, desktop and this). One column: the tagline
+     and title, then the device (at most half the screen height; tap it for
+     full size), then the paragraphs, badges and "Coming soon", a short scroll
+     away. Smaller text and buttons. svh is the height Safari leaves free. */
   @media (max-width: 820px) {
     .page {
       display: flex; flex-direction: column;
-      height: calc(100dvh - 34px);           /* the footer below */
-      min-height: 0;
+      height: auto; min-height: 0;
       padding: 54px 16px 6px;                /* room for the round buttons */
-      gap: 10px;
+      gap: 0;
       text-align: center;
     }
-    .text { flex: none; align-self: stretch; }   /* full width: it's a size container */
-    .kicker { justify-content: center; margin-bottom: .2rem; }
+    .text { display: contents; }
+    .kicker { order: 1; justify-content: center; margin-bottom: .2rem; }
     .kicker em { font-size: clamp(.85rem, 3.4vw, 1.05rem); }
     .kicker::after { display: none; }
-    h1 { font-size: clamp(1.9rem, 8.5vw, 3.2rem); margin-bottom: .5rem; }
-    .lede { font-size: clamp(.86rem, 3.5vw, 1.1rem); line-height: 1.42; margin: 0 auto .45rem; }
-    /* The paragraphs sit centred as a block, their lines set left. */
+    h1 { order: 2; font-size: clamp(1.9rem, 8.5vw, 3.2rem); margin-bottom: .6rem; }
+    .stage { order: 3; flex: none; align-self: stretch; margin-bottom: 1.2rem; }
+    .lede, .badges, .soon { order: 4; }
+    .lede { width: 100%; font-size: clamp(.86rem, 3.5vw, 1.1rem); line-height: 1.42; margin: 0 auto .45rem; }
+    /* The paragraphs sit centred as a block, their lines set left; the quote
+       keeps to the right. */
     .lede:not(.attribution) { text-align: left; }
     .badges { margin: .6rem 0 .25rem; gap: 10px; }
     .badges img { height: 30px; }
     .soon { font-size: .9rem; }
 
-    /* The device fills what's left: sized from its box's height and width. */
-    .stage { flex: 1 1 auto; min-height: 0; align-self: stretch; }
-    .devices { flex: 1 1 auto; min-height: 0; max-height: 50svh; width: 100%; container-type: size; }
-    .stage { justify-content: center; }   /* capped at half the screen, centred in the space */
+    /* The device: sized from its box, which is at most half the screen high. */
+    .devices { flex: none; height: 48svh; width: 100%; container-type: size; }
+    /* The sideways iPad is as wide as the screen and no taller than it needs. */
+    .devices:has(.ipad[data-active='true'][data-landscape='true']) { height: min(48svh, calc((100vw - 32px) / 1.46)); }
     .iphone { --h: min(100cqh, calc(100cqw * 2.1)); }
     .ipad   { --h: min(100cqh, calc(100cqw * 1.4)); }
     .ipad[data-landscape='true'] { --h: min(100cqh, calc(100cqw / 1.47)); }
     .pill { margin-top: .6rem; }
     .seg { font-size: .95rem; padding: .35em 1.1em .4em; }
-    .hint { margin-top: .35rem; font-size: .82rem; }
+    .hint { display: none; }
 
     footer { padding: 4px 12px 10px; font-size: .8rem; }
 
@@ -811,28 +814,10 @@ const credits = [
     .test-notice { right: 52px; }
     .rhythm { top: 10px; bottom: auto; right: auto; left: 10px; }
   }
-  /* Phones (Ed, Nov 2026): the device comes first, under the tagline and
-     title, filling most of the first screen; the paragraphs, badges and
-     "Coming soon" follow below, a short scroll away. */
-  @media (max-width: 600px) {
-    .page { height: auto; gap: 0; }
-    .text { display: contents; }
-    .kicker { order: 1; }
-    h1 { order: 2; margin-bottom: .6rem; }
-    .stage { order: 3; flex: none; margin-bottom: 1.2rem; }
-    .devices { flex: none; height: 48svh; }
-    /* The sideways iPad is as wide as the screen and no taller than it needs. */
-    .devices:has(.ipad[data-active='true'][data-landscape='true']) { height: calc((100vw - 32px) / 1.46); }
-    .lede, .badges, .soon { order: 4; }
-    /* Full width (up to the measure), so the quote can sit to the right. */
-    .lede { width: 100%; }
-  }
-  /* Phones held sideways: too short to fit, so the page scrolls and the
-     device gets most of a screen's height of its own. */
+  /* Mobile held sideways: the screen is short, so the device gets most of
+     its height. */
   @media (max-width: 820px) and (orientation: landscape) {
-    .page { height: auto; }
-    .stage { flex: none; }
-    .devices { flex: none; height: max(240px, 82svh); }
+    .devices { height: max(240px, 82svh); }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }
