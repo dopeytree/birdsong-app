@@ -290,6 +290,29 @@ const credits = [
       box.showModal();
     };
     box.addEventListener('close', () => boxFilm.pause());
+    let stageFrom = null;   // the page's film while it plays large
+    function openFilm(v) {
+      stageFrom = v;
+      const t = v.currentTime;
+      v.pause();
+      boxDev.className = 'device ipad film';
+      boxDev.dataset.landscape = 'true';
+      boxImg.hidden = true;
+      boxFilm.hidden = false;
+      if (!boxFilm.src.endsWith(v.getAttribute('src'))) { boxFilm.src = v.currentSrc || v.src; boxFilm.poster = v.poster; }
+      boxFilm.setAttribute('aria-label', v.getAttribute('aria-label'));
+      boxFilm.muted = false;
+      boxFilm.currentTime = t;
+      boxFilm.play().catch(() => { boxFilm.muted = true; boxFilm.play().catch(() => {}); });
+      box.showModal();
+    }
+    box.addEventListener('close', () => {
+      if (!stageFrom) return;
+      stageFrom.currentTime = boxFilm.currentTime;
+      if (stageFrom.closest('.device').dataset.active === 'true') stageFrom.play().catch(() => {});
+      stageFrom = null;
+      boxFilm.muted = true;
+    });
     document.addEventListener('click', e => {
       const t = e.target instanceof Element && e.target.closest('.to-index, .to-map');
       if (!t) return;
@@ -309,13 +332,9 @@ const credits = [
     devices.forEach(d => d.querySelector('.frame').addEventListener('click', e => {
       byPointer = e.detail > 0;   // 0 when opened from the keyboard
       const v = stops[k].s;
-      // The film: the first click turns its sound on; after that, pause and play.
-      if (v.tagName === 'VIDEO') {
-        if (v.muted) { v.muted = false; v.play().catch(() => {}); }
-        else if (v.paused) v.play().catch(() => {});
-        else v.pause();
-        return;
-      }
+      // The film (Ed, Nov 2026): a click opens it large in the popup, with
+      // sound, carrying on from where it was; closing hands it back.
+      if (v.tagName === 'VIDEO') { openFilm(v); return; }
       openBox();
     }));
     nav.querySelector('.prev').addEventListener('click', () => step(-1));
@@ -807,7 +826,7 @@ const credits = [
      soft shadow (Ed, Nov 2026). Its file has black bands, cropped off here. */
   .device.film { --bezel: 0px; --ar: 1920 / 1282; --r-outer: 12px; --r-inner: 12px; }
   .device.film .frame, .device.film .frame:hover { background: none; box-shadow: 0 30px 60px -12px rgba(0, 0, 0, .5); }
-  .device.film video.shot { object-position: 50% 61.8%; }
+  .device.film video { object-position: 50% 61.8%; }
   .ipad .frame { box-shadow:
       0 0 0 1.5px #6a6761, 0 0 0 3px #3a3936,
       0 2px 3px 3px rgba(42, 36, 28, .25),

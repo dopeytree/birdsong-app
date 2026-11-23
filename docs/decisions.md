@@ -189,3 +189,6 @@ or a small test before building it.
   sound) and `?gate=video` (the earlier film with Tap to Enter).
 - **Leaving the film (Ed, Nov 2026):** choosing another dot stops the film
   and sends it back to the start.
+- **The film large (Ed, Nov 2026):** a click on the film opens it in the popup,
+  as large as the screen allows, with sound, carrying on from where it was;
+  closing returns it to the page, carrying on from there. No Tap to Enter.
