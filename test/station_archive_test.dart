@@ -34,9 +34,9 @@ void main() {
     final jsonl = [
       for (final c in [
         ...calls,
-        StationCall(id: 1, at: DateTime(2026, 11, 23, 20, 32), sci: 'Tadarida teniotis', common: 'European Free-tailed Bat', confidence: .82),
+        StationCall(id: 1, at: DateTime(2026, 11, 23, 20, 32), sci: 'Tadarida teniotis', common: 'European Free-tailed Bat', confidence: .82, daysKnown: 40),
         StationCall(id: 2, at: DateTime(2026, 11, 23, 20, 29), sci: 'Nyctalus noctula', common: 'Noctule bat', confidence: .51),
-        StationCall(id: 3, at: DateTime(2026, 11, 23, 20, 4), sci: 'Tadarida teniotis', common: 'European Free-tailed Bat', confidence: .98),
+        StationCall(id: 3, at: DateTime(2026, 11, 23, 20, 4), sci: 'Tadarida teniotis', common: 'European Free-tailed Bat', confidence: .98, daysKnown: 40),
       ])
         jsonEncode(stationCallJson(go, c))
     ].join('\n');
@@ -44,6 +44,13 @@ void main() {
     expect(rows.map((r) => r.common), ['Tawny Owl', 'European Free-tailed Bat', 'Robin', 'Noctule bat']);
     expect(rows.first.count, 2);
     expect(rows[1].maxConf, .98);
+    // how long the station has known it, and the usual confidence, survive the count
+    final bat = rows[1];
+    expect(bat.daysKnown, 40);
+    expect(bat.avgConf, closeTo((.82 + .98) / 2, .001));
+    // calls by hour, so day and night can be split without asking again
+    expect(bat.hourly![20], 2);
+    expect(bat.hourly!.reduce((a, b) => a + b), 2);
     // a line that won't parse is skipped, not fatal
     expect(speciesFromCalls('$jsonl\nnot json\n').length, rows.length);
     expect(speciesFromCalls(''), isEmpty);

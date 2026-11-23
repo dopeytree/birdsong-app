@@ -63,7 +63,7 @@ List<StationSpecies> byLight(
     for (var i = 0; i < 24; i++) {
       if (inLight(i, light, sun)) n += h[i];
     }
-    if (n > 0) out.add(r.withCount(n));
+    if (n > 0) out.add(r.withCount(n, byHour: h));
   }
   out.sort((a, b) => b.count.compareTo(a.count));
   return out;
@@ -160,8 +160,9 @@ class StationSpecies {
   /// BirdWeather's own id for the species, for its card.
   final String? bwId;
 
-  /// The same species, heard [n] times (the day or the night alone).
-  StationSpecies withCount(int n) => StationSpecies(
+  /// The same species, heard [n] times (the day or the night alone), with
+  /// [byHour] in place of its hours when the recount has them.
+  StationSpecies withCount(int n, {List<int>? byHour}) => StationSpecies(
       sci: sci,
       common: common,
       count: n,
@@ -170,7 +171,7 @@ class StationSpecies {
       maxConf: maxConf,
       avgConf: avgConf,
       daysKnown: daysKnown,
-      hourly: hourly,
+      hourly: byHour ?? hourly,
       bwId: bwId);
 }
 
@@ -208,6 +209,7 @@ class StationCall {
     this.audioUrl,
     this.spectrogramUrl,
     this.clip,
+    this.daysKnown = 0,
   });
 
   /// The station's own number for it.
@@ -224,6 +226,9 @@ class StationCall {
 
   /// The call within a longer recording (BirdWeather's soundscapes), in seconds.
   final (double, double)? clip;
+
+  /// Days since the station first heard this species, when it says.
+  final int daysKnown;
 }
 
 /// BirdNET-Go's daily lists for several [dates] ({date: [{scientific_name,
@@ -663,6 +668,7 @@ class StationFeed extends ChangeNotifier {
           common: '${r['commonName'] ?? r['common_name'] ?? sci}',
           confidence: ((r['confidence'] ?? 0) as num).toDouble(),
           verified: r['verified'] as String?,
+          daysKnown: ((r['daysSinceFirstSeen'] ?? r['days_since_first_seen'] ?? 0) as num).toInt(),
           audioUrl: id != null && r['spectrogramOnly'] != true ? '$_base/api/v2/audio/$id' : null,
           spectrogramUrl: id != null ? '$_base/api/v2/spectrogram/$id?size=md' : null,
         ));

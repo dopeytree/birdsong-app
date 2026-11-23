@@ -344,6 +344,7 @@ Map<String, dynamic> stationCallJson(Station st, StationCall c) => {
         },
       ).toJson(),
       'stationDetectionId': c.id,
+      if (c.daysKnown > 0) 'daysSinceFirstSeen': c.daysKnown,
       if (c.audioUrl != null) 'audioUrl': c.audioUrl,
       if (c.spectrogramUrl != null) 'spectrogramUrl': c.spectrogramUrl,
       if (c.clip != null) 'clipStart': c.clip!.$1,
@@ -381,20 +382,26 @@ StationCall? stationCallFromJson(Map<dynamic, dynamic> j) {
     sci: sci,
     common: '${j['commonName'] ?? sci}',
     confidence: (j['confidence'] as num?)?.toDouble() ?? 0,
+    daysKnown: ((j['daysSinceFirstSeen'] ?? 0) as num).toInt(),
   );
 }
 
 /// [calls] counted into species, most heard first.
 List<StationSpecies> speciesOfCalls(List<StationCall> calls) {
-  final by = <String, ({String common, int count, DateTime? first, DateTime? last, double max})>{};
+  final by = <String, ({String common, int count, DateTime? first, DateTime? last, double max, double sum, int known, List<int> hours})>{};
   for (final c in calls) {
     final had = by[c.sci];
+    final hours = had?.hours ?? List.filled(24, 0);
+    hours[c.at.hour]++;
     by[c.sci] = (
       common: had?.common ?? c.common,
       count: (had?.count ?? 0) + 1,
       first: had == null || had.first == null || c.at.isBefore(had.first!) ? c.at : had.first,
       last: had == null || had.last == null || c.at.isAfter(had.last!) ? c.at : had.last,
       max: c.confidence > (had?.max ?? 0) ? c.confidence : (had?.max ?? 0),
+      sum: (had?.sum ?? 0) + c.confidence,
+      known: c.daysKnown > (had?.known ?? 0) ? c.daysKnown : (had?.known ?? 0),
+      hours: hours,
     );
   }
   final out = [
@@ -406,6 +413,9 @@ List<StationSpecies> speciesOfCalls(List<StationCall> calls) {
         first: e.value.first,
         last: e.value.last,
         maxConf: e.value.max,
+        avgConf: e.value.count == 0 ? 0 : e.value.sum / e.value.count,
+        daysKnown: e.value.known,
+        hourly: e.value.hours,
       ),
   ]..sort((a, b) => b.count.compareTo(a.count));
   return out;
