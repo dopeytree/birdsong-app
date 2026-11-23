@@ -97,7 +97,7 @@ class PlateLibrary {
   final _client = HttpClient()
     ..connectionTimeout = const Duration(seconds: 10)
     // Wikimedia asks for a User-Agent that says who is calling.
-    ..userAgent = 'BirdsongApp/0.1 (https://github.com/dopeytree/birdsong-app)';
+    ..userAgent = 'BirdsongApp/0.1 (https://github.com/dopeytree/birdsongs.ai)';
 
   final Map<String, Future<PlateArt?>> _asked = {};
   Future<void>? _manifestLoad;

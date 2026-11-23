@@ -1,5 +1,5 @@
 # Builds the splash page in site/ and publishes it to GitHub Pages
-# (dopeytree.github.io/birdsong-app). Runs when site/ changes on main, or by hand.
+# (dopeytree.github.io/birdsongs.ai). Runs when site/ changes on main, or by hand.
 # One-off setup: repo Settings > Pages > Source: GitHub Actions.
 name: Splash page
 
