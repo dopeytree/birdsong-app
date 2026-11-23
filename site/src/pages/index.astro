@@ -99,7 +99,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   <script is:inline define:vars={{ roman }}>
     const devices = [...document.querySelectorAll('.device')];
     const segs = [...document.querySelectorAll('.seg')];
-    const other = document.querySelector('.hint .other');
+    const hint = document.querySelector('.hint em');
     const nav = document.querySelector('.index');
     const pos = {};
 
@@ -114,6 +114,10 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
         if (s.tagName === 'VIDEO') i === n ? s.play() : s.pause();
       });
       dev.dataset.landscape = shots[n].dataset.landscape;
+      const nextIsSideways = shots[n + 1]?.dataset.landscape === 'true';
+      hint.textContent = n < shots.length - 1
+        ? (nextIsSideways ? 'Tap the screen to turn it sideways.' : 'Tap the screen for the next plate.')
+        : `Tap the screen to see it on ${dev.dataset.device === 'iphone' ? 'iPad' : 'iPhone'}.`;
       nav.hidden = shots.length < 2;
       nav.querySelector('.num').textContent = roman[n] || n + 1;
       nav.querySelector('.count').textContent = roman[shots.length - 1] || shots.length;
@@ -127,12 +131,17 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
         d.querySelector('.frame').tabIndex = on ? 0 : -1;
       });
       segs.forEach(s => s.setAttribute('aria-selected', s.dataset.device === id ? 'true' : 'false'));
-      other.textContent = id === 'iphone' ? 'iPad' : 'iPhone';
       showShot(current(), pos[id] || 0);
     }
 
-    devices.forEach(d => d.querySelector('.frame').addEventListener('click', () =>
-      setDevice(d.dataset.device === 'iphone' ? 'ipad' : 'iphone')));
+    // A tap on the screen steps through every shot: this device's next one,
+    // then the other device from its first.
+    function lastShot(d) { return (pos[d.dataset.device] || 0) >= d.querySelectorAll('.shot').length - 1; }
+    function otherId(d) { return d.dataset.device === 'iphone' ? 'ipad' : 'iphone'; }
+    devices.forEach(d => d.querySelector('.frame').addEventListener('click', () => {
+      if (lastShot(d)) { pos[otherId(d)] = 0; setDevice(otherId(d)); }
+      else showShot(d, (pos[d.dataset.device] || 0) + 1);
+    }));
     segs.forEach(s => s.addEventListener('click', () => setDevice(s.dataset.device)));
     nav.querySelector('.prev').addEventListener('click', () => { const d = current(); showShot(d, (pos[d.dataset.device] || 0) - 1); });
     nav.querySelector('.next').addEventListener('click', () => { const d = current(); showShot(d, (pos[d.dataset.device] || 0) + 1); });
