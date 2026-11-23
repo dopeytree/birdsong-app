@@ -370,6 +370,8 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     cursor: zoom-out;
   }
   .lightbox:not([open]) { display: none; }
+  /* The popup takes focus when it opens (so Esc works); no browser focus ring. */
+  .lightbox:focus, .lightbox:focus-visible { outline: none; }
   .lightbox::backdrop {
     background: rgba(238, 229, 206, .7);
   }
