@@ -66,7 +66,7 @@ const credits = [
   <meta name="theme-color" content="#EEE5CE" />
   <meta property="og:title" content="Birdsongs" />
   <meta property="og:description" content="A field journal that listens here &amp; now" />
-  <meta property="og:image" content={`${base}/shots/iphone-plate.jpg`} />
+  <meta property="og:image" content={`${Astro.site ? Astro.site.origin : ""}${base}/shots/iphone-plate.jpg`} />
   <link rel="preload" href={`${base}/fonts/IMFeENrm28P.ttf`} as="font" type="font/ttf" crossorigin />
   <link rel="preload" href={`${base}/fonts/IMFeENsc28P.ttf`} as="font" type="font/ttf" crossorigin />
   <!-- The typeface, with paths from the build's base (astro.config.mjs). -->
