@@ -381,7 +381,6 @@ const credits = [
     };
     gate.addEventListener('click', enter);
     addEventListener('keydown', e => { if (!entered && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); } });
-    gate.querySelector('button').focus({ preventScroll: true });
 
     credits.addEventListener('credit', e => {
       if (!(cued && e.detail === CUE && !document.hidden)) return;
@@ -771,7 +770,7 @@ const credits = [
     cursor: pointer;
     animation: breathe 3s ease-in-out infinite;
   }
-  .gate-btn:focus-visible { outline: 2px solid var(--madder); outline-offset: 4px; }
+  .gate-btn:focus, .gate-btn:focus-visible { outline: none; }   /* no focus ring (Ed, Nov 2026); Enter and Space work anyway */
   @keyframes breathe { 50% { opacity: .55; } }
 
   /* Text effect (src/scripts/text-fx.js): words and letters it moves. */
