@@ -176,7 +176,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("ready")));
   </script>
 
-  <!-- An iPhone-style notification slides down from the top, then goes. -->
+  <!-- An iPhone-style notification slides down from the top; a click dismisses it. -->
   <div class="notice" role="status" aria-live="polite" title="Dismiss">
     <img class="notice-icon" src={`${base}/notice-icon.png`} alt="" />
     <span class="notice-body">
@@ -192,8 +192,8 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 
     const notice = document.querySelector('.notice');
     const hide = () => notice.classList.remove('show');
+    // Stays until clicked or tapped.
     setTimeout(() => notice.classList.add('show'), 1200);
-    setTimeout(hide, 1200 + 6000);
     notice.addEventListener('pointerdown', hide);
   </script>
 </body>
