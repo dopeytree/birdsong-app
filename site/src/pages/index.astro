@@ -129,7 +129,7 @@ const credits = [
         the day!
       </p>
       <p class="lede second">
-        <span class="madder">Aye Old as Time.</span> Each <span class="underline to-map">walk</span> becomes an<br class="desk-br" /> artwork, with its own <span class="underline to-index">Index of Species</span>.
+        <span class="madder">Aye Old as </span><span class="madder to-beat">Time</span><span class="madder">.</span> Each <span class="underline to-map">walk</span> becomes an<br class="desk-br" /> artwork, with its own <span class="underline to-index">Index of Species</span>.
       </p>
       <p class="lede second attribution">
         Now I wonder how many you can <span class="underline">collect</span>?
@@ -484,6 +484,26 @@ const credits = [
     document.fonts?.ready.then(fitQuote);
     addEventListener('resize', fitQuote);
 
+    // A click on "Time" sends ripples out through the page in a heartbeat
+    // (Ed, Nov 2026): lub-dub, four beats, from the word itself.
+    let beating = false;
+    document.addEventListener('click', e => {
+      const t = e.target instanceof Element && e.target.closest('.to-beat');
+      if (!t) return;
+      e.stopPropagation();          // the heartbeat alone, not the cardinal too
+      if (beating) return;
+      beating = true;
+      const r = t.getBoundingClientRect();
+      const x = r.left + scrollX + r.width / 2, y = r.top + scrollY + r.height / 2;
+      const beat = k => dispatchEvent(new CustomEvent('fx-ripple', { detail: { x, y, k } }));
+      const BEAT = 850;              // about 70 beats a minute
+      for (let i = 0; i < 4; i++) {
+        setTimeout(() => beat(1.6), i * BEAT);        // lub
+        setTimeout(() => beat(1.0), i * BEAT + 210);  // dub
+      }
+      setTimeout(() => { beating = false; }, 4 * BEAT);
+    }, true);
+
     // Coming Soon: a click brings the song and the notification, like the bell.
     document.querySelector('.soon > .cs').addEventListener('click', () => {
       soundOK = true;            // a click, so sound is allowed now
@@ -634,7 +654,7 @@ const credits = [
   .soon { color: var(--sepia); margin: 3.2rem 0 0; font-size: 1.1rem; text-align: center; }
   /* Words picked out in madder, the colour of "Coming Soon". */
   .madder { color: var(--madder); }
-  .to-index, .to-map { cursor: pointer; }
+  .to-index, .to-map, .to-beat { cursor: pointer; }
   .underline, .underline .fx-ch { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
   .soon { display: flex; justify-content: center; align-items: center; flex-wrap: nowrap; gap: .6rem; }
   /* The three buttons never wrap inside themselves; in a narrower column

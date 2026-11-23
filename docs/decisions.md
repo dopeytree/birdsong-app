@@ -165,3 +165,6 @@ or a small test before building it.
   hearts.
 - **Corner icons (Ed, Nov 2026):** the bell (top right) and sun/moon (bottom
   right) are filled icons on their own, no circle round them.
+- **Heartbeat (Ed, Nov 2026):** a click on "Time" (in "Aye Old as Time.")
+  sends ripples out through the murmuring page from the word, in a heartbeat:
+  lub-dub, four beats at about 70 a minute. It doesn't also bring the cardinal.
