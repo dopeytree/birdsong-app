@@ -128,3 +128,8 @@ or a small test before building it.
   before a tap, so it plays silently with a "Sound on" label (sound on, from
   where it is). It has the browser's controls (pause, scrub, volume); clicks
   on it never enter. Entering stops it.
+- **Gate texture (on trial, Ed, Nov 2026):** the veil carries the Northern
+  Cardinal's own spectrogram (made from its song with ffmpeg, the 1.5–7.5 kHz
+  band, cleaned; `site/public/media/cardinal-spectrogram.png`) along the
+  bottom in the ink colour, faint, plus fine grain. `?veil=song`, `?veil=grain`
+  or `?veil=both` (default) to compare.

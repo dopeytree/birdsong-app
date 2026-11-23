@@ -58,6 +58,8 @@ const credits = [
       const system = matchMedia('(prefers-color-scheme: dark)').matches ? 'black' : 'white';
       const pick = [new URLSearchParams(location.search).get('bg'), localStorage.getItem('bg')].find(m => modes.includes(m));
       document.documentElement.dataset.bg = pick || system;
+      const veil = new URLSearchParams(location.search).get('veil');
+      if (['grain', 'song', 'both'].includes(veil)) document.documentElement.dataset.veil = veil;
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -778,6 +780,21 @@ const credits = [
     transition: opacity .8s ease;
   }
   .gate.gone { opacity: 0; pointer-events: none; }
+  /* Texture on the veil (on trial): ?veil=grain, ?veil=song (the cardinal's
+     spectrogram along the bottom, in the ink colour), or ?veil=both (the default). */
+  .gate::before, .gate::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+  .gate::before {
+    background-color: var(--ink);
+    -webkit-mask: url(/media/cardinal-spectrogram.png) center bottom / min(1400px, 140vw) auto no-repeat;
+            mask: url(/media/cardinal-spectrogram.png) center bottom / min(1400px, 140vw) auto no-repeat;
+    opacity: .14;
+  }
+  .gate::after {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5  0 0 0 0 .45  0 0 0 0 .38  0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    opacity: .22;                       /* plain grain: blending it made the page show through */
+  }
+  html[data-veil='grain'] .gate::before, html[data-veil='song'] .gate::after { display: none; }
+  .gate-inner { position: relative; z-index: 1; }
   .gate-inner { display: flex; flex-direction: column; align-items: center; gap: clamp(18px, 4vh, 36px); padding: 20px; }
   .gate-film { position: relative; }
   /* The recording has black bands top and bottom; cropped off. */
