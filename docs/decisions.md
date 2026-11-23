@@ -100,3 +100,7 @@ or a small test before building it.
 - **Splash page maker's mark (Ed, Nov 2026):** Ed's animated amber lion from
   ed-stone.co.uk, bottom left (70px; 56px on mobile), linking to his site.
   Copied into the site at 140px wide (`site/public/ed-stone-lion.gif`).
+- **Licence (Ed, 23 Nov 2026):** the project moved from MIT to CC BY-NC 4.0,
+  with no commercial use spelt out in `LICENSE` and the README. Earlier copies
+  keep MIT. Others' work keeps its own licence; the README lists them under
+  "Credits and licences".
