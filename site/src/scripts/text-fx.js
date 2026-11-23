@@ -1,4 +1,5 @@
-// Text effects for the splash page, on trial: ?fx=murmur or ?fx=ink.
+// Text effects for the splash page. Murmur is the default (Ed's choice);
+// ?fx=ink or ?fx=none in the address to compare.
 // Ink colour only; moving the pointer (or a finger) disturbs the words near
 // it, a tap sends a ring outward, and everything settles back to plain text.
 // Off for anyone with Reduce Motion turned on.

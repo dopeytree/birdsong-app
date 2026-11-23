@@ -176,10 +176,25 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("ready")));
   </script>
 
-  <!-- Text effect on trial: add ?fx=murmur or ?fx=ink to the address. -->
+  <!-- An iPhone-style notification slides down from the top, then goes. -->
+  <div class="notice" role="status" aria-live="polite" title="Dismiss">
+    <span class="notice-icon" aria-hidden="true">B</span>
+    <span class="notice-body">
+      <span class="notice-head"><strong>Birdsongs</strong><span class="notice-time">now</span></span>
+      <span class="notice-text">I just spotted Kingfisher! :D ✨ [50pts]</span>
+    </span>
+  </div>
+
+  <!-- Text effect: murmuration (Ed's choice). ?fx=ink or ?fx=none to compare. -->
   <script>
     import { startTextFx } from '../scripts/text-fx.js';
-    startTextFx(new URLSearchParams(location.search).get('fx'));
+    startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur');
+
+    const notice = document.querySelector('.notice');
+    const hide = () => notice.classList.remove('show');
+    setTimeout(() => notice.classList.add('show'), 1200);
+    setTimeout(hide, 1200 + 6000);
+    notice.addEventListener('pointerdown', hide);
   </script>
 </body>
 </html>
@@ -370,6 +385,46 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     font-size: .9rem;
     font-style: italic;
   }
+
+  /* iPhone-style notification: frosted glass and the system font, as on iOS.
+     The icon is a stand-in until the app has one. */
+  .notice {
+    position: fixed; z-index: 50;
+    top: 12px; left: 50%;
+    width: min(calc(100vw - 16px), 400px);
+    display: flex; align-items: center; gap: 11px;
+    padding: 11px 14px 12px 11px;
+    border-radius: 22px;
+    background: rgba(250, 247, 240, .72);
+    backdrop-filter: blur(24px) saturate(1.6);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    box-shadow: 0 10px 34px rgba(42, 36, 28, .2), 0 0 0 .5px rgba(42, 36, 28, .1);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    color: #1c1c1e;
+    cursor: pointer;
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 24px)) scale(.96);
+    transition: transform .65s cubic-bezier(.2, .9, .25, 1.04), opacity .35s ease;
+  }
+  .notice.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  .notice-icon {
+    flex: none;
+    width: 38px; height: 38px;
+    border-radius: 9px;
+    background: var(--paper);
+    box-shadow: inset 0 0 0 .5px rgba(42, 36, 28, .25);
+    color: var(--madder);
+    font-family: var(--fell-sc);
+    font-size: 25px;
+    display: grid; place-items: center;
+    line-height: 1;
+    padding-bottom: 2px;
+  }
+  .notice-body { flex: 1; min-width: 0; }
+  .notice-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .notice-head strong { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .notice-time { font-size: 13px; color: rgba(60, 60, 67, .6); }
+  .notice-text { display: block; font-size: 15px; line-height: 1.3; letter-spacing: -.01em; }
 
   /* Text effect (src/scripts/text-fx.js): words and letters it moves. */
   .fx-word { display: inline-block; white-space: nowrap; }

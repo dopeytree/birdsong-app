@@ -47,3 +47,10 @@ or a small test before building it.
   Clicking the screen opens it full size in a popup over the page faded to
   black at 70%. The upright iPad shot is hidden for now (commented out in
   the shots list). Shots live in `site/public/shots/`.
+- **Splash page extras (Ed, Nov 2026):** murmuration text effect on the
+  tagline, title and paragraphs (`site/src/scripts/text-fx.js`; letters
+  scatter from the pointer and settle; ink colour only; off with Reduce
+  Motion). Chosen over "ink in water", still there with `?fx=ink`. An
+  iPhone-style notification slides down 1.2 s after load for 6 s:
+  "Birdsongs / I just spotted Kingfisher! :D ✨ [50pts]". iOS look (frosted
+  glass, system font); its icon is a stand-in red "B" until the app has one.
