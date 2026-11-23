@@ -338,8 +338,29 @@ const credits = [
     let timer = null;
     const credits = document.querySelector('footer .credit');
     const cued = JSON.parse(credits.dataset.credits || '[]').includes(CUE);
+    // The cardinal's song (Ed, Nov 2026): it sings, and the notification
+    // follows 2 s later, as if the phone heard it. Browsers only allow sound
+    // once the visitor has clicked, tapped or pressed a key on the page, so
+    // the first such touch quietly unlocks it; before that, no sound.
+    const SONG_LEAD = 2000;
+    const song = new Audio(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/sounds/northern_cardinal.mp3`);
+    song.preload = 'auto';
+    let soundOK = false;
+    const unlock = () => {
+      if (soundOK) return;
+      soundOK = true;
+      song.muted = true;
+      // Stop the silent run only if nothing has started the song meanwhile.
+      song.play().then(() => { if (song.muted) { song.pause(); song.currentTime = 0; song.muted = false; } })
+        .catch(() => { song.muted = false; soundOK = false; });
+    };
+    ['pointerdown', 'keydown', 'touchstart'].forEach(t => addEventListener(t, unlock, { passive: true }));
+    const sing = () => { if (!soundOK) return; song.currentTime = 0; song.play().catch(() => {}); };
+
     credits.addEventListener('credit', e => {
-      if (cued && e.detail === CUE && !document.hidden) notify(CARDINAL_TEXT);
+      if (!(cued && e.detail === CUE && !document.hidden)) return;
+      sing();
+      setTimeout(() => notify(CARDINAL_TEXT), SONG_LEAD);
     });
     // The fallback timer, used only without the BirdNET credit.
     function start(wait) {
@@ -350,7 +371,13 @@ const credits = [
     start(FIRST);
 
     // Bell: the cardinal notification, straight away (Ed, Nov 2026).
-    document.querySelector('.test-notice').addEventListener('click', () => notify(CARDINAL_TEXT));
+    // The bell: the song and the notification together.
+    document.querySelector('.test-notice').addEventListener('click', () => {
+      soundOK = true;            // a click, so sound is allowed now
+      song.muted = false;
+      sing();
+      notify(CARDINAL_TEXT);
+    });
 
     // Don't let a hidden tab pile them up.
     document.addEventListener('visibilitychange', () => {
