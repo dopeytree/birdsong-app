@@ -45,5 +45,5 @@ on a plate, in the manner of the old natural-history books."
 ## Always on the page
 
 - Device switch: iPhone | iPad
-- "For Mac, iPhone and iPad. *Coming soon.*"
+- "for Mac, iPhone and iPad. *Coming soon.*"
 - Footer: "Type: IM Fell English, by Igino Marini"
