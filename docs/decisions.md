@@ -52,7 +52,7 @@ or a small test before building it.
   scatter from the pointer and settle; ink colour only; off with Reduce
   Motion). Chosen over "ink in water", still there with `?fx=ink`. An
   iPhone-style notification slides down 1.2 s after load and stays until clicked:
-  "Birdsongs / I just spotted Northern Cardinal! ❤️‍🔥 50 points". iOS look (frosted
+  "Birdsongs.ai / I just spotted Northern Cardinal! ❤️‍🔥 50 points". iOS look (frosted
   glass, system font); its icon is the
   cardinal from the app's loading screen (`assets/app/cardinal.png`) on paper.
 - **Splash page background (Ed, Nov 2026):** the page is a darker paper,
