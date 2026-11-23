@@ -145,7 +145,7 @@ or a small test before building it.
 - **Page spectrogram (Ed, Nov 2026):** the cardinal's spectrogram from the
   veil also lies faint along the foot of the main page, fixed behind
   everything, in the ink colour (7% on black, 9% on white).
-- **iOS and Android buttons (Ed, Nov 2026):** under Coming Soon, outlined like
+- **iOS and Android buttons (Ed, Nov 2026):** either side of Coming Soon, on one line, outlined like
   it but in the quote's colour, each with its logo (Apple, Android; from
   Simple Icons). Plain-word versions were tried and dropped. Labels only, no
   links yet. Apple's rules don't allow its logo on its own in others'
