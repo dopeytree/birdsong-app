@@ -71,26 +71,18 @@ or a small test before building it.
   Cardinal", not "cardinal", matching the species index. An iPhone banner
   shows about four lines (~160 characters), so even the longest names fit.
 - **Splash notifications (Ed, Nov 2026):** only the Northern Cardinal
-  ("Birdsongs.ai / Aye lovely a Northern Cardinal! ❤️‍🔥 +50points"), each
-  time "Powered by BirdNET" flies into the footer credits (about 11 s in,
-  then once a round of the credits). No timer, so they stay in step. The
-  bell, top right (centring it above the tagline was tried), and a click on
-  Coming Soon each send one straight away;
-  light/dark is bottom right. A
-  banner leaves after ~5 s or when tapped. Points are a stand-in. Other
-  rhythms (a run through walk #20's 42 species, a round of five, random) were
-  tried and archived in `docs/splash-notification-modes.md`; the walk's data
-  stays in `site/src/data/walk-20.json` (made by `tool/export_site_walk.py`).
-  The icon stays the app's: iOS doesn't allow a per-notification icon.
-  The cardinal's song (`site/public/sounds/northern_cardinal.mp3`, 4.4 s)
-  plays as "Powered by BirdNET" comes in, and the notification follows 2 s
-  later; the bell plays both at once. Browsers allow sound only after the
-  visitor's first click, tap or key press, so the first visit is silent until
-  then.
-  Easter egg: stirring the murmuration text (tagline, title, paragraphs),
-  by moving the pointer over it or clicking it, brings the song and the
-  notification; then a 10 s rest. Moving alone sings only once sound is
-  allowed (after a click).
+  ("Birdsongs.ai / Aye lovely a Northern Cardinal! ❤️‍🔥 +50points"), with its
+  song (`site/public/sounds/northern_cardinal.mp3`, 4.4 s), and only when the
+  visitor does something: taps "Tap to Enter", presses the bell (top right),
+  clicks Coming Soon, or stirs the text (pointer over or click; then a 10 s
+  rest). Nothing arrives by itself: arriving with the "Powered by BirdNET"
+  credit (song 2 s ahead) was tried and dropped. Browsers allow sound only
+  after a click, tap or key, which entering gives. A banner leaves after ~5 s
+  or when tapped. Points are a stand-in. Other rhythms (a run through walk
+  #20's 42 species, a round of five, random) are archived in
+  `docs/splash-notification-modes.md`; the walk's data stays in
+  `site/src/data/walk-20.json` (made by `tool/export_site_walk.py`). The icon
+  stays the app's: iOS doesn't allow a per-notification icon.
 - **Splash "Coming soon" (Ed, Nov 2026):** the App Store and Google Play
   badges were tried and removed (with their trademark lines in the credits).
   "Coming Soon" sits in a thin rounded outline in the pill's red-orange (madder, #8C3B2A, both modes), a label
@@ -129,4 +121,4 @@ or a small test before building it.
   (85% of the page colour, no blur) behind a breathing "Tap to Enter" pill.
   A click, tap, Enter or Space lifts it with a fade; that tap also lets the page
   play sound, brings the cardinal (song and notification) at once, and starts
-  the credits (so the next comes with "Powered by BirdNET").
+  the credits.

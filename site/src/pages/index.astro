@@ -341,22 +341,16 @@ const credits = [
       setTimeout(() => flip(() => n.remove()), 350);
     }
 
-    // Notifications (Ed, Nov 2026): only the Northern Cardinal, each time
-    // "Powered by BirdNET" flies into the footer credits (first at about
-    // 11 s, then once a round of the credits), so the two stay in step. If
-    // that credit is ever removed, a timer takes over: 10 s, then every 60 s.
-    // Other rhythms were tried and archived: docs/splash-notification-modes.md.
-    // Points are a stand-in until the app has its own rule.
+    // Notifications (Ed, Nov 2026): the Northern Cardinal, with its song, when
+    // the visitor enters, presses the bell, clicks Coming Soon or stirs the
+    // text. Nothing arrives by itself (it used to come with the "Powered by
+    // BirdNET" credit; other rhythms are archived in
+    // docs/splash-notification-modes.md). Points are a stand-in.
     const CARDINAL_TEXT = 'Aye lovely a Northern Cardinal! ❤️‍🔥 +50points';
-    const CUE = 'Powered by BirdNET', FIRST = 10000, EVERY = 60000;
-    let timer = null;
     const credits = document.querySelector('footer .credit');
-    const cued = JSON.parse(credits.dataset.credits || '[]').includes(CUE);
-    // The cardinal's song (Ed, Nov 2026): it sings, and the notification
-    // follows 2 s later, as if the phone heard it. Browsers only allow sound
-    // once the visitor has clicked, tapped or pressed a key on the page, so
-    // the first such touch quietly unlocks it; before that, no sound.
-    const SONG_LEAD = 2000;
+    // The cardinal's song. Browsers only allow sound once the visitor has
+    // clicked, tapped or pressed a key on the page, so the first such touch
+    // quietly unlocks it; before that, no sound.
     const song = new Audio(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/sounds/northern_cardinal.mp3`);
     song.preload = 'auto';
     let soundOK = false;
@@ -389,18 +383,6 @@ const credits = [
     gate.addEventListener('click', enter);
     addEventListener('keydown', e => { if (!entered && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); } });
 
-    credits.addEventListener('credit', e => {
-      if (!(cued && e.detail === CUE && !document.hidden)) return;
-      sing();
-      setTimeout(() => notify(CARDINAL_TEXT), SONG_LEAD);
-    });
-    // The fallback timer, used only without the BirdNET credit.
-    function start(wait) {
-      if (cued) return;
-      clearTimeout(timer);
-      timer = setTimeout(() => { notify(CARDINAL_TEXT); start(EVERY); }, wait);
-    }
-    start(FIRST);
 
     // Bell: the cardinal notification, straight away (Ed, Nov 2026).
     // Easter egg (Ed, Nov 2026): stirring the murmuration text (tagline,
@@ -440,11 +422,6 @@ const credits = [
       notify(CARDINAL_TEXT);
     });
 
-    // Don't let a hidden tab pile them up.
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) clearTimeout(timer);
-      else start(800);
-    });
   </script>
 </body>
 </html>
