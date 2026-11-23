@@ -30,6 +30,8 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 <html lang="en-GB">
 <head>
   <meta charset="utf-8" />
+  <!-- Background on trial: ?bg=dark, ?bg=black or ?bg=night (see the styles). -->
+  <script is:inline>document.documentElement.dataset.bg = new URLSearchParams(location.search).get('bg') || 'paper';</script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Birdsongs</title>
   <meta name="description" content="Take Birdsongs on a walk. It listens as you go, with private AI on your own device, and illustrates every bird it hears in the manner of the old natural-history books." />
@@ -218,6 +220,31 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     --rule: #BCAB86;
     --fell: 'IM Fell English', 'Iowan Old Style', Georgia, serif;
     --fell-sc: 'IM Fell English SC', 'IM Fell English', Georgia, serif;
+    --seg-ink: var(--madder);
+    --vignette: rgba(188, 171, 134, .35);
+  }
+
+  /* Dark backgrounds, on trial: ?bg=dark (charcoal), ?bg=black, or ?bg=night
+     (paper by day, charcoal when the device is in dark mode). Only the page
+     inverts: ink and paper swap; the app's screens stay as they are. */
+  html[data-bg='dark'], html[data-bg='black'] {
+    --page: #2B2926;
+    --ink: #EEE5CE;
+    --sepia: #BFAE8A;
+    --rule: #5A5145;
+    --seg-ink: #D9A08F;
+    --vignette: transparent;
+  }
+  html[data-bg='black'] { --page: #0E0D0C; }
+  @media (prefers-color-scheme: dark) {
+    html[data-bg='night'] {
+      --page: #2B2926;
+      --ink: #EEE5CE;
+      --sepia: #BFAE8A;
+      --rule: #5A5145;
+      --seg-ink: #D9A08F;
+      --vignette: transparent;
+    }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -228,7 +255,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     /* The page sits a shade darker than the app's paper, so the shots stand out. */
     background-color: var(--page);
     background-image:
-      radial-gradient(ellipse at 50% 40%, transparent 55%, rgba(188, 171, 134, .35) 100%),
+      radial-gradient(ellipse at 50% 40%, transparent 55%, var(--vignette) 100%),
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .42  0 0 0 0 .33  0 0 0 0 .22  0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
@@ -280,7 +307,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   .seg {
     border: 0;
     background: transparent;
-    color: var(--madder);
+    color: var(--seg-ink);
     font-family: var(--fell-sc);
     font-size: 1.1rem;
     letter-spacing: .05em;
