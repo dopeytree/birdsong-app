@@ -172,3 +172,8 @@ or a small test before building it.
 - **Button icons (Ed, Nov 2026):** Coming Soon carries a filled heart and Tap
   to Enter a tapping hand, both Phosphor (MIT); a bird and a speaker were tried. Tap to
   Enter is in the iOS/Android colour (sepia), not madder.
+- **Intro video v2 (Ed, Nov 2026):** `site/public/media/coming-soon.mp4` is now
+  Ed's v2 (21 s), black bands cropped in the file, 1280×854, 30 fps, 1.1 MB.
+- **Glass notifications (Ed, Nov 2026):** more see-through, stronger blur, a
+  light sheen and bright hairline edge; on the black page dark glass with light
+  text, as iOS in dark mode.
