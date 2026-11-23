@@ -116,14 +116,16 @@ function split(el, letters) {
   const tokens = [];
   el.childNodes.forEach(n => {
     const cls = n.nodeType === 1 ? n.className : '';
+    if (n.nodeName === 'BR') { tokens.push({ t: '\n', cls }); return; }   // line breaks are kept
     n.textContent.split(/(\s+)/).forEach(t => tokens.push({ t: /^\s+$/.test(t) ? ' ' : t, cls }));
   });
   const words = tokens.filter(x => x.t);
   while (words[0]?.t === ' ') words.shift();
   while (words.at(-1)?.t === ' ') words.pop();
   words.forEach(({ t: tok, cls }, i) => {
+    if (tok === '\n') { const b = document.createElement('br'); if (cls) b.className = cls; shown.append(b); return; }
     if (tok === ' ') {
-      if (words[i - 1]?.t === ' ') return;
+      if (words[i - 1]?.t === ' ' || words[i - 1]?.t === '\n' || words[i + 1]?.t === '\n') return;
       // A space inside a picked-out phrase keeps its class (an underline runs on).
       const same = words[i - 1]?.cls && words[i - 1].cls === words[i + 1]?.cls;
       if (same) { const sp = document.createElement('span'); sp.className = words[i - 1].cls; sp.textContent = ' '; shown.append(sp); }

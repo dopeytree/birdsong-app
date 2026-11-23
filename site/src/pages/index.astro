@@ -129,7 +129,7 @@ const credits = [
         the day!
       </p>
       <p class="lede second">
-        <span class="madder">Aye Old as Time.</span> Each <span class="underline to-map">walk</span> becomes an artwork, with its own <span class="underline to-index">Index of Species</span>.
+        <span class="madder">Aye Old as Time.</span> Each <span class="underline to-map">walk</span> becomes an<br class="desk-br" /> artwork, with its own <span class="underline to-index">Index of Species</span>.
       </p>
       <p class="lede second attribution">
         Now I wonder how many you can <span class="underline">collect</span>?
@@ -473,6 +473,17 @@ const credits = [
       egg();
     });
 
+    // "Now I wonder…" stays on one line: if it doesn't fit, its type shrinks.
+    const quote = document.querySelector('.lede.attribution');
+    const fitQuote = () => {
+      quote.style.fontSize = '';
+      const need = quote.scrollWidth, room = quote.clientWidth;
+      if (need > room) quote.style.fontSize = `${parseFloat(getComputedStyle(quote).fontSize) * room / need * 0.98}px`;
+    };
+    fitQuote();
+    document.fonts?.ready.then(fitQuote);
+    addEventListener('resize', fitQuote);
+
     // Coming Soon: a click brings the song and the notification, like the bell.
     document.querySelector('.soon > .cs').addEventListener('click', () => {
       soundOK = true;            // a click, so sound is allowed now
@@ -582,6 +593,8 @@ const credits = [
   .lede.second { color: var(--sepia); font-style: italic; }
   /* Set like a quotation's author: to the right, after a short ruled line. */
   .attribution { text-align: right; }
+  /* "Now I wonder…" always on one line (Ed, Nov 2026): it shrinks to fit. */
+  .lede.attribution { white-space: nowrap; }
   .attribution::before {
     content: '';
     display: inline-block;
@@ -627,6 +640,7 @@ const credits = [
   /* The three buttons never wrap inside themselves; in a narrower column
      they shrink a little to keep on one line (the column is a size container). */
   .soon > span { white-space: nowrap; font-size: clamp(.85rem, 4.4cqw, 1.1rem); }
+  .soon > span.os { font-size: clamp(.68rem, 3.52cqw, .88rem); }   /* iOS and Android 20% smaller than Coming Soon (Ed, Nov 2026) */
   .soon .os { display: inline-flex; align-items: center; }
   .soon > span.os { color: var(--sepia); cursor: default; }   /* the colour of "Now I wonder…" */
   .soon .os svg { width: .95em; height: .95em; fill: currentColor; vertical-align: -.12em; margin-right: .4em; }
@@ -948,6 +962,7 @@ const credits = [
     .stage { order: 3; flex: none; align-self: stretch; margin-bottom: 1.2rem; }
     .lede, .soon { order: 4; }
     .lede { width: 100%; font-size: clamp(.86rem, 3.5vw, 1.1rem); line-height: 1.42; margin: 0 auto .45rem; }
+    .desk-br { display: none; }   /* the "artwork" line break is for wider screens only */
     /* The paragraphs sit centred as a block, their lines set left; the quote
        keeps to the right. */
     .lede:not(.attribution) { text-align: left; }
