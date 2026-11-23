@@ -5,7 +5,7 @@ kept here so they can be reused.
 
 ## Current (Ed, Nov 2026)
 
-> I just spotted Kingfisher! :D
+> Be here now
 
 **Birdsongs**
 
@@ -15,6 +15,9 @@ natural-history books: dated, placed on the map, along with the weather of
 the day.
 
 *Each walk becomes an artwork, with its own index of species. As old as time.*
+
+Earlier taglines: "I just spotted Kingfisher! :D" (now the notification's
+words), "I wonder who has the fairest call of them all?".
 
 ## Second draft (Ed, Nov 2026)
 
