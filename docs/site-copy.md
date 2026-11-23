@@ -16,7 +16,7 @@ the day.
 
 *As old as time. Each walk becomes an artwork, with its own index of species.*
 
-*Now I wonder how many you can collect?*
+*Now I wonder how many you might collect?*
 
 Earlier taglines: "A field journal that listens now", "Be here now", "I just spotted Kingfisher! :D" (the
 notification's words, now with Northern Cardinal), "I wonder who has the fairest call of them all?".
