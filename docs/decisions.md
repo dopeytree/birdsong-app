@@ -192,3 +192,7 @@ or a small test before building it.
 - **The film large (Ed, Nov 2026):** a click on the film opens it in the popup,
   as large as the screen allows, with sound, carrying on from where it was;
   closing returns it to the page, carrying on from there. No Tap to Enter.
+- **Opens on the film (Ed, Nov 2026):** the page opens with the film large in
+  the popup, from the start, trying sound (silent if refused). When it ends
+  the popup closes itself and the page's film loops from the start; a click
+  closes it sooner. Opening the film later by a click also closes at its end.

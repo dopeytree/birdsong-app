@@ -302,16 +302,20 @@ const credits = [
       if (!boxFilm.src.endsWith(v.getAttribute('src'))) { boxFilm.src = v.currentSrc || v.src; boxFilm.poster = v.poster; }
       boxFilm.setAttribute('aria-label', v.getAttribute('aria-label'));
       boxFilm.muted = false;
+      boxFilm.loop = false;        // the film plays once, then the popup closes
       boxFilm.currentTime = t;
-      boxFilm.play().catch(() => { boxFilm.muted = true; boxFilm.play().catch(() => {}); });
+      boxFilm.play().then(() => { if (!boxFilm.muted) document.dispatchEvent(new Event('film-sound')); })
+        .catch(() => { boxFilm.muted = true; boxFilm.play().catch(() => {}); });
       box.showModal();
     }
+    boxFilm.addEventListener('ended', () => { if (stageFrom) box.close(); });
     box.addEventListener('close', () => {
       if (!stageFrom) return;
-      stageFrom.currentTime = boxFilm.currentTime;
+      stageFrom.currentTime = boxFilm.ended ? 0 : boxFilm.currentTime;   // after the end, the page's film starts again
       if (stageFrom.closest('.device').dataset.active === 'true') stageFrom.play().catch(() => {});
       stageFrom = null;
       boxFilm.muted = true;
+      boxFilm.loop = true;         // the walk film still loops
     });
     document.addEventListener('click', e => {
       const t = e.target instanceof Element && e.target.closest('.to-index, .to-map');
@@ -581,13 +585,14 @@ const credits = [
     const stageFilm = document.querySelector('.devices .device[data-device="film"] video');
     if (gateMode === 'none') {
       gate.remove();
-      // The film tries to play with sound, as the old veil's video did; the
-      // browser decides (it allows it on sites a visitor often plays sound on).
-      // If it refuses, the film plays silently and a click turns sound on.
+      // The page opens with the film large in the popup, from the start
+      // (Ed, Nov 2026); it closes itself when the film ends. It tries to play
+      // with sound, silent if the browser refuses; with sound, the page may
+      // sound from then on.
+      document.addEventListener('film-sound', () => { soundOK = true; song.muted = false; }, { once: true });
       if (stageFilm.closest('.device').dataset.active === 'true') {
-        stageFilm.muted = false;
-        stageFilm.play().then(() => { soundOK = true; song.muted = false; })
-          .catch(() => { stageFilm.muted = true; stageFilm.play().catch(() => {}); });
+        stageFilm.currentTime = 0;
+        stageFilm.closest('.frame').click();
       }
       startPulse();
       startCredits(credits);
