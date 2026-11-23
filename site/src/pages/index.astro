@@ -103,14 +103,6 @@ const credits = [
         I wonder how many you can collect?
       </p>
 
-      <div class="pill" role="tablist" aria-label="Show the app on">
-        {devices.map((d, i) => (
-          <button role="tab" class="seg" data-device={d.id} aria-selected={i === 0 ? 'true' : 'false'}>
-            {d.label}
-          </button>
-        ))}
-      </div>
-
       <!-- Official store badges (Apple, Google; unaltered). Not links until the
            app is listed: both companies ask that a badge link to the app. -->
       <div class="badges">
@@ -146,6 +138,14 @@ const credits = [
         <span class="rule"></span>
         <button class="step next" aria-label="Next">›</button>
       </nav>
+      <!-- The device switch sits under the device (Ed, Nov 2026). -->
+      <div class="pill" role="tablist" aria-label="Show the app on">
+        {devices.map((d, i) => (
+          <button role="tab" class="seg" data-device={d.id} aria-selected={i === 0 ? 'true' : 'false'}>
+            {d.label}
+          </button>
+        ))}
+      </div>
       <p class="hint"><em>Tap the screen to see it full size.</em></p>
     </section>
   </main>
@@ -489,11 +489,11 @@ const credits = [
   }
 
   /* The app's mic / listen pill, reused as the device switch. */
-  /* Centred in the text column (Ed, Nov 2026). */
+  /* Centred under the device (Ed, Nov 2026). */
   .pill {
     display: flex;
     width: fit-content;
-    margin: 1.4rem auto 1.2rem;
+    margin: 1.8rem auto 0;
     border: 1.5px solid var(--madder);
     border-radius: 999px;
     overflow: hidden;
@@ -513,8 +513,9 @@ const credits = [
   .seg[aria-selected='true'] { background: var(--madder); color: var(--paper); }
   .seg:focus-visible, .frame:focus-visible, .step:focus-visible { outline: 2px solid var(--madder); outline-offset: 4px; }
   .soon { color: var(--sepia); margin: 0; font-size: 1.1rem; text-align: center; }
-  .badges { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin: 0 0 .6rem; }
-  .badges img { height: 40px; width: auto; }
+  .badges { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin: 1.8rem 0 .6rem; }
+  /* Faded to 30% (70% transparent), Ed's choice. */
+  .badges img { height: 40px; width: auto; opacity: .3; }
 
   /* ---- Stage ---- */
   .stage { display: flex; flex-direction: column; align-items: center; }
@@ -602,7 +603,7 @@ const credits = [
   .index[hidden] { display: none; }
   .rule { display: inline-block; width: 3rem; height: 1px; background: var(--rule); }
   .step { border: 0; background: none; color: var(--sepia); cursor: pointer; font-size: 1.3rem; padding: 0 .3rem; }
-  .hint { color: var(--sepia); margin: 1.6rem 0 0; font-size: 1rem; }
+  .hint { color: var(--sepia); margin: 1rem 0 0; font-size: 1rem; }
 
   footer {
     display: flex; align-items: center; justify-content: center; gap: .8rem;
