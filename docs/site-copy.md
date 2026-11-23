@@ -7,7 +7,7 @@ kept here so they can be reused.
 
 > A field journal that listens here & now
 
-**Birdsongs**
+**Birdsongs.ai** (was "Birdsongs"; on trial)
 
 Take it on a walk. It listens as you go. Trusty private local AI.
 Every bird it hears is lovingly illustrated in the manner of the old

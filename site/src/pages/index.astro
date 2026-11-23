@@ -89,7 +89,7 @@ const credits = [
     <section class="text">
       <!-- Wording, and earlier versions: docs/site-copy.md -->
       <p class="kicker"><span class="dot" aria-hidden="true"></span> <em>A field journal that listens here &amp; now</em></p>
-      <h1>Birdsongs</h1>
+      <h1>Birdsongs.ai</h1>
       <p class="lede">
         Take it on a walk. It listens as you go. Trusty private local AI.
         Every bird it hears is lovingly illustrated in the manner of the old
@@ -327,9 +327,13 @@ const credits = [
       setTimeout(() => flip(() => n.remove()), 350);
     }
 
-    // How the notifications play. Three modes, cycled by the shuffle button
-    // (bottom right) or picked with ?rhythm=single|round|random:
-    //   single (default, on trial): every species of walk #20 in the order
+    // How the notifications play. Four modes, cycled by the shuffle button
+    // (bottom right) or picked with ?rhythm=intro|single|round|random:
+    //   intro (default, on trial): 5 s after the page opens, a burst of three
+    //     (the cardinal and the walk's first two), 5 s of clear screen, then
+    //     every other species one at a time with 5 s clear between; then
+    //     again from the burst.
+    //   single: every species of walk #20 in the order
     //     first heard, after the opening Northern Cardinal; one at a time,
     //     then 3 s of clear screen before the next.
     //   round: five (the cardinal and the walk's first four), as three, a
@@ -345,12 +349,18 @@ const credits = [
     const CARDINAL = { common: 'Northern Cardinal', points: 50, at: 0 };
     const ALL = [CARDINAL, ...walk.species.map(s => ({ common: s.common, points: 10 + 10 * s.calls, at: s.firstHeardSeconds }))];
     const ROUND = ALL.slice(0, 5);
-    const MODES = ['single', 'round', 'random'];
-    const NAMES = { single: 'one at a time', round: 'a round of five', random: 'random gaps' };
-    let rhythm = MODES.includes(new URLSearchParams(location.search).get('rhythm')) ? new URLSearchParams(location.search).get('rhythm') : 'single';
+    const MODES = ['intro', 'single', 'round', 'random'];
+    const NAMES = { intro: 'three, then one at a time', single: 'one at a time', round: 'a round of five', random: 'random gaps' };
+    let rhythm = MODES.includes(new URLSearchParams(location.search).get('rhythm')) ? new URLSearchParams(location.search).get('rhythm') : 'intro';
     let k = -1, timer = null, playing = true;
-    const list = () => rhythm === 'single' ? ALL : ROUND;
+    const list = () => rhythm === 'intro' || rhythm === 'single' ? ALL : ROUND;
+    const INTRO_WAIT = 5000, INTRO_BETWEEN = GONE + 5000;
     function gap(from) {
+      if (rhythm === 'intro') {
+        if (from === 0) return 1300;               // the burst of three
+        if (from === 1) return 1300;
+        return INTRO_BETWEEN;                      // then 5 s clear between each
+      }
       if (rhythm === 'single') return BETWEEN;
       if (from === 2) return REST;                 // after the third
       if (from === 4) return LONG_REST;            // after the fifth
@@ -367,7 +377,7 @@ const credits = [
         schedule(gap(k));
       }, wait);
     }
-    schedule(OPENING);
+    schedule(rhythm === 'intro' ? INTRO_WAIT : OPENING);
 
     // Bell: pause or resume.
     const bell = document.querySelector('.test-notice');
@@ -382,7 +392,7 @@ const credits = [
     const shuffle = document.querySelector('.rhythm');
     const showRhythm = () => {
       const next = MODES[(MODES.indexOf(rhythm) + 1) % MODES.length];
-      shuffle.setAttribute('aria-pressed', String(rhythm !== 'single'));
+      shuffle.setAttribute('aria-pressed', String(rhythm !== 'intro'));
       shuffle.title = `Notifications: ${NAMES[rhythm]} (click for ${NAMES[next]})`;
       shuffle.setAttribute('aria-label', shuffle.title);
     };
@@ -391,7 +401,7 @@ const credits = [
       rhythm = MODES[(MODES.indexOf(rhythm) + 1) % MODES.length];
       showRhythm();
       k = -1;
-      if (playing) schedule(GONE);
+      if (playing) schedule(rhythm === 'intro' ? INTRO_WAIT : GONE);
     });
     // Don't let a hidden tab pile them up.
     document.addEventListener('visibilitychange', () => {

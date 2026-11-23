@@ -70,9 +70,12 @@ or a small test before building it.
 - **Notifications name the full species (Ed, Nov 2026):** e.g. "Northern
   Cardinal", not "cardinal", matching the species index. An iPhone banner
   shows about four lines (~160 characters), so even the longest names fit.
-- **Splash notifications (Ed, Nov 2026):** three modes, on trial; the shuffle
-  button (bottom right) cycles them, or `?rhythm=single|round|random`.
-  *One at a time* (default): the opening Northern Cardinal (50 points), then
+- **Splash notifications (Ed, Nov 2026):** four modes, on trial; the shuffle
+  button (bottom right) cycles them, or `?rhythm=intro|single|round|random`.
+  *Three, then one at a time* (default): 5 s after the page opens, a burst of
+  three (cardinal, Eastern and Spotted Towhee), 5 s clear, then each other
+  species alone with 5 s clear between; then again from the burst.
+  *One at a time*: the opening Northern Cardinal (50 points), then
   all 42 species of walk #20 (Fri 25 Dec 2026) in the order first heard, each
   shown alone for ~5 s, then 3 s of clear screen (about 6 minutes a loop).
   *Round of five*: the cardinal and the walk's first four, as three, 5 s
