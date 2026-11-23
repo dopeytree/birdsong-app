@@ -82,7 +82,14 @@ function split(el, letters) {
   while (words[0]?.t === ' ') words.shift();
   while (words.at(-1)?.t === ' ') words.pop();
   words.forEach(({ t: tok, cls }, i) => {
-    if (tok === ' ') { if (words[i - 1]?.t !== ' ') shown.append(' '); return; }
+    if (tok === ' ') {
+      if (words[i - 1]?.t === ' ') return;
+      // A space inside a picked-out phrase keeps its class (an underline runs on).
+      const same = words[i - 1]?.cls && words[i - 1].cls === words[i + 1]?.cls;
+      if (same) { const sp = document.createElement('span'); sp.className = words[i - 1].cls; sp.textContent = ' '; shown.append(sp); }
+      else shown.append(' ');
+      return;
+    }
     const w = document.createElement('span');
     w.className = cls ? `fx-word ${cls}` : 'fx-word';
     if (letters) {
