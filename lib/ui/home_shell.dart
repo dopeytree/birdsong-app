@@ -139,16 +139,15 @@ class _ModelNotice extends StatelessWidget {
           'A newer ${offer.spec.name} is ready (${offer.label}, $mb MB).',
           [
             _act('Download', madder, () => unawaited(updates.accept(offer))),
-            _act('Not now', sepia, () => updates.snooze(offer)),
-            _act('Skip this version', sepia, () => updates.skip(offer)),
+            _act('Skip', sepia, () => updates.skip(offer)),
           ],
         );
       },
     );
   }
 
-  /// The sentence is one line inside the 600-wide strip. Three buttons will
-  /// not sit beside it at that width, so they take the line under it.
+  /// The sentence is one line inside the 600-wide strip; Download and Skip
+  /// take the line under it, set well apart.
   Widget _strip(String text, List<Widget> actions) {
     final message = Text(
       text,
@@ -172,7 +171,7 @@ class _ModelNotice extends StatelessWidget {
             shadowColor: const Color(0x553C280A),
             shape: const RoundedRectangleBorder(side: BorderSide(color: rule)),
             child: Padding(
-              padding: EdgeInsets.fromLTRB(14, 6, actions.isEmpty ? 14 : 6, 6),
+              padding: EdgeInsets.fromLTRB(14, 6, actions.length == 1 ? 6 : 14, 6),
               child: actions.isEmpty
                   ? message
                   : actions.length == 1
@@ -187,7 +186,9 @@ class _ModelNotice extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             message,
+                            const SizedBox(height: 4),
                             Wrap(
+                              spacing: 40,
                               alignment: WrapAlignment.center,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: actions,
@@ -205,7 +206,7 @@ class _ModelNotice extends StatelessWidget {
     return TextButton(
       style: TextButton.styleFrom(
         foregroundColor: color,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         minimumSize: const Size(0, 32),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         textStyle: const TextStyle(
