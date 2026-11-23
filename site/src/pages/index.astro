@@ -33,7 +33,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   <!-- Page mode: ?bg= in the address, else the visitor's last choice, else black. -->
   <script is:inline>
     (() => {
-      const modes = ['black', 'paper', 'white'];
+      const modes = ['black', 'white'];
       const pick = [new URLSearchParams(location.search).get('bg'), localStorage.getItem('bg')].find(m => modes.includes(m));
       document.documentElement.dataset.bg = pick || 'black';
     })();
@@ -49,7 +49,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   <link rel="preload" href={`${base}/fonts/IMFeENsc28P.ttf`} as="font" type="font/ttf" crossorigin />
 </head>
 <body>
-  <!-- Light / dark: cycles black → paper → white. -->
+  <!-- Light / dark: switches black and white. -->
   <button class="mode" type="button" aria-label="Change background" title="Change background">
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
       <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5" />
@@ -209,7 +209,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     import { startTextFx } from '../scripts/text-fx.js';
     startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur');
 
-    const modes = ['black', 'paper', 'white'];
+    const modes = ['black', 'white'];
     const modeButton = document.querySelector('.mode');
     const label = () => modeButton.title = `Background: ${document.documentElement.dataset.bg} (click to change)`;
     label();
@@ -252,8 +252,9 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     --vignette: rgba(188, 171, 134, .35);
   }
 
-  /* Page modes: black (the default), paper, white. The button at the
-     top right cycles them; ?bg=paper etc. in the address picks one. Only the
+  /* Page modes: black (the default) and white. The button at the top right
+     switches them; ?bg=white in the address picks one. (The darker paper,
+     #C8B68C, is still the base below if a mode is ever dropped.) Only the
      page changes: in black, ink and paper swap; the app's screens stay as they are. */
   html[data-bg='black'] {
     --page: #0E0D0C;
