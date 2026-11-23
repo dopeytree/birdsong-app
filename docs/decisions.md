@@ -85,6 +85,8 @@ or a small test before building it.
   later; the bell plays both at once. Browsers allow sound only after the
   visitor's first click, tap or key press, so the first visit is silent until
   then.
+  Easter egg: clicking the murmuration text (tagline, title, paragraphs)
+  also brings the song and the notification, at most once every 4 s.
 - **Splash "Coming soon" (Ed, Nov 2026):** the App Store and Google Play
   badges were tried and removed (with their trademark lines in the credits).
   "Coming Soon" sits in a thin rounded outline in the pill's red-orange (madder, #8C3B2A, both modes), a label

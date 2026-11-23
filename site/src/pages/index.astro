@@ -371,6 +371,20 @@ const credits = [
     start(FIRST);
 
     // Bell: the cardinal notification, straight away (Ed, Nov 2026).
+    // Easter egg (Ed, Nov 2026): clicking the murmuration text (tagline,
+    // title, paragraphs) also brings the song and the notification, at most
+    // once every 4 s so clicks don't pile birds up.
+    let lastEgg = 0;
+    addEventListener('click', e => {
+      if (!e.target.closest('h1, .lede, .kicker em')) return;
+      if (Date.now() - lastEgg < 4000) return;
+      lastEgg = Date.now();
+      soundOK = true;            // a click, so sound is allowed now
+      song.muted = false;
+      sing();
+      notify(CARDINAL_TEXT);
+    });
+
     // The bell: the song and the notification together.
     document.querySelector('.test-notice').addEventListener('click', () => {
       soundOK = true;            // a click, so sound is allowed now
