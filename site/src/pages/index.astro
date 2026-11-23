@@ -613,6 +613,11 @@ const credits = [
     display: flex; flex-direction: column; gap: 8px;
     pointer-events: none;
   }
+  /* On wider screens the stack lines up with the heading's left edge (the
+     page's width and padding, as in .page); phones keep it centred. */
+  @media (min-width: 821px) {
+    .notices { left: calc(max(0px, (100vw - 1240px) / 2) + clamp(20px, 5vw, 64px)); transform: none; }
+  }
   .notice {
     pointer-events: auto;
     display: flex; align-items: center; gap: 11px;
