@@ -117,3 +117,25 @@ So a station's plate now counts a single day from the raw detections
 (`speciesOfCalls` in `station_feed.dart`), and keeps the summary only for a
 week, a month or all time. The kept day (`detections.jsonl`) was already the
 raw list.
+
+## Bat plates on Commons (measured 23 Nov 2026)
+
+The app asks Commons for `Category:<scientific name> (illustrations)`, then
+the genus, then the family. Those species categories do not exist for the
+bats the station hears. The plates are filed under the family, and under
+the old scientific names.
+
+- **Vespertilionidae illustrations:** 138 files. Usable old-name plates:
+  Noctule (`Vespertilio noctula`, `Vesperugo noctula`), Leisler's
+  (`Vesperugo leisleri`), common pipistrelle (`Vespertilio pipistrellus`),
+  barbastelle (`Synotus barbastellus`), Daubenton's (`Vespertilio
+  daubentonii`), serotine (`Vespertilio serotinus`). The app's scorer looks
+  for the modern name, so it misses these and can pick another bat.
+- **Greater horseshoe:** 17 files in its own category, including *A history
+  of British mammals* (1910) and *British mammals*.
+- **Rhinolophidae illustrations:** 17, including one file named for the
+  lesser horseshoe.
+- **Nothing whole for:** soprano and Nathusius' pipistrelles, both
+  long-eared bats, Alcathoe (skulls only), European free-tailed bat.
+  Molossidae illustrations (43) are other free-tailed bats, not *Tadarida
+  teniotis*.
