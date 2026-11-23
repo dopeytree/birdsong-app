@@ -272,7 +272,11 @@ const credits = [
   <!-- Text effect: murmuration (Ed's choice). ?fx=ink or ?fx=none to compare. -->
   <script>
     import { startTextFx } from '../scripts/text-fx.js';
-    startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur');
+    // The whole page murmurs (Ed, Nov 2026): letters scatter, and these sway
+    // and drift as whole pieces. Only the text brings the notification.
+    startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur', {
+      wholes: '.mode, .seg, .soon span, .maker, .kicker .dot, .devices .device .frame, footer .credit, footer .rule, .notices',
+    });
 
     import { startCredits } from '../scripts/credits.js';
     startCredits(document.querySelector('footer .credit'));
@@ -371,18 +375,25 @@ const credits = [
     start(FIRST);
 
     // Bell: the cardinal notification, straight away (Ed, Nov 2026).
-    // Easter egg (Ed, Nov 2026): clicking the murmuration text (tagline,
-    // title, paragraphs) also brings the song and the notification, at most
-    // once every 4 s so clicks don't pile birds up.
+    // Easter egg (Ed, Nov 2026): stirring the murmuration text (tagline,
+    // title, paragraphs) brings the song and the notification, by moving the
+    // pointer over it or clicking it; then a 10 s rest before it can again.
+    // A move isn't a click, so the song only plays once sound is allowed.
+    const EGG_REST = 10000;
     let lastEgg = 0;
-    addEventListener('click', e => {
-      if (!e.target.closest('h1, .lede, .kicker em')) return;
-      if (Date.now() - lastEgg < 4000) return;
+    const onText = t => t instanceof Element && t.closest('h1, .lede, .kicker em');
+    const egg = () => {
+      if (Date.now() - lastEgg < EGG_REST) return;
       lastEgg = Date.now();
-      soundOK = true;            // a click, so sound is allowed now
-      song.muted = false;
       sing();
       notify(CARDINAL_TEXT);
+    };
+    addEventListener('pointermove', e => { if (onText(e.target)) egg(); }, { passive: true });
+    addEventListener('click', e => {
+      if (!onText(e.target)) return;
+      soundOK = true;            // a click, so sound is allowed now
+      song.muted = false;
+      egg();
     });
 
     // The bell: the song and the notification together.

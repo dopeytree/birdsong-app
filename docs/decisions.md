@@ -85,8 +85,10 @@ or a small test before building it.
   later; the bell plays both at once. Browsers allow sound only after the
   visitor's first click, tap or key press, so the first visit is silent until
   then.
-  Easter egg: clicking the murmuration text (tagline, title, paragraphs)
-  also brings the song and the notification, at most once every 4 s.
+  Easter egg: stirring the murmuration text (tagline, title, paragraphs),
+  by moving the pointer over it or clicking it, brings the song and the
+  notification; then a 10 s rest. Moving alone sings only once sound is
+  allowed (after a click).
 - **Splash "Coming soon" (Ed, Nov 2026):** the App Store and Google Play
   badges were tried and removed (with their trademark lines in the credits).
   "Coming Soon" sits in a thin rounded outline in the pill's red-orange (madder, #8C3B2A, both modes), a label
@@ -115,3 +117,8 @@ or a small test before building it.
   PolyForm Noncommercial 1.0.0 (it lets charities, schools and public bodies
   use it). Earlier copies keep MIT. Others' work keeps its own licence; the
   README lists them under "Credits and licences".
+- **Splash page murmurs throughout (Ed, Nov 2026):** besides the letters, the
+  round buttons, the pill, Coming Soon, the devices, the lion, the credits line
+  and its rules, the dot and the notifications sway and drift as whole pieces
+  (CSS translate/rotate, turning less the bigger they are). Only the text
+  brings the notification.

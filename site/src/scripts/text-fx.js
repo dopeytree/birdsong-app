@@ -11,19 +11,28 @@
 
 const TARGETS = 'h1, .lede, .kicker em';
 
-export function startTextFx(mode) {
+// wholes: for murmur, a selector for other things that are stirred as one
+// piece (buttons, images, the credits line...): they sway and drift, turning
+// less the bigger they are (Ed, Nov 2026: the whole page murmurs).
+export function startTextFx(mode, { wholes = '' } = {}) {
   if (!['murmur', 'ink'].includes(mode)) return;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const els = [...document.querySelectorAll(TARGETS)];
   const parts = els.flatMap(el => split(el, mode === 'murmur'));
+  if (mode === 'murmur' && wholes) document.querySelectorAll(wholes).forEach(el =>
+    parts.push({ el, whole: true, x: 0, y: 0, vx: 0, vy: 0 }));
   const fx = mode === 'murmur' ? murmur(parts) : ink(parts);
 
-  // Rest positions, in page coordinates. Measured at rest, so again after the
-  // fonts arrive and on resize.
+  // Rest positions, in page coordinates (and half sizes, for whole pieces).
+  // Measured at rest: at the start, after the fonts arrive, on resize, and
+  // whenever stirring begins (things move, appear and switch meanwhile).
   const measure = () => parts.forEach(p => {
+    if (p.moved) return;
     const r = p.el.getBoundingClientRect();
     p.cx = r.left + scrollX + r.width / 2;
     p.cy = r.top + scrollY + r.height / 2;
+    p.hw = r.width / 2;
+    p.hh = r.height / 2;
   });
   measure();
   document.fonts?.ready.then(measure);
@@ -34,12 +43,14 @@ export function startTextFx(mode) {
   const wake = () => { if (!running) { running = true; requestAnimationFrame(frame); } };
 
   addEventListener('pointermove', e => {
+    if (!running) measure();
     const p = { x: e.pageX, y: e.pageY };
     if (last) fx.stir(p, Math.min(Math.hypot(p.x - last.x, p.y - last.y), 40), p.x - last.x, p.y - last.y);
     last = p;
     wake();
   }, { passive: true });
   addEventListener('pointerdown', e => {
+    if (!running) measure();
     ripples.push({ x: e.pageX, y: e.pageY, t0: performance.now(), hit: new Set() });
     wake();
   }, { passive: true });
@@ -52,7 +63,7 @@ export function startTextFx(mode) {
       const strength = Math.exp(-radius / 320);
       parts.forEach(p => {
         if (r.hit.has(p)) return;
-        const d = Math.hypot(p.cx - r.x, p.cy - r.y);
+        const d = gap(p, r.x, r.y);
         if (d < radius) { r.hit.add(p); fx.pulse(p, (p.cx - r.x) / (d || 1), (p.cy - r.y) / (d || 1), strength); }
       });
     }
@@ -110,17 +121,25 @@ function split(el, letters) {
   return parts;
 }
 
+// How far a point is from a part: from a letter's centre, or from the edge
+// of a whole piece (0 when the point is over it).
+function gap(q, x, y) {
+  if (!q.whole) return Math.hypot(q.cx - x, q.cy - y);
+  return Math.hypot(Math.max(0, Math.abs(q.cx - x) - q.hw), Math.max(0, Math.abs(q.cy - y) - q.hh));
+}
+
 function murmur(parts) {
   const R = 90, MAX = 9;
   return {
     stir(p, speed, mx, my) {
       parts.forEach(q => {
-        const dx = q.cx - p.x, dy = q.cy - p.y, d = Math.hypot(dx, dy);
+        const d = gap(q, p.x, p.y);
         if (d > R) return;
+        const dx = q.cx - p.x, dy = q.cy - p.y, c = Math.hypot(dx, dy) || 1;
         const f = (1 - d / R) ** 2 * speed * 0.05;
         // Away from the pointer, and carried a little along its path.
-        q.vx += (dx / (d || 1)) * f + mx * f * 0.03;
-        q.vy += (dy / (d || 1)) * f + my * f * 0.03;
+        q.vx += (dx / c) * f + mx * f * 0.03;
+        q.vy += (dy / c) * f + my * f * 0.03;
       });
     },
     pulse(q, ux, uy, s) { q.vx += ux * 2.2 * s; q.vy += uy * 2.2 * s; },
@@ -132,11 +151,25 @@ function murmur(parts) {
         q.x = Math.max(-MAX, Math.min(MAX, q.x + q.vx));
         q.y = Math.max(-MAX, Math.min(MAX, q.y + q.vy));
         const still = Math.abs(q.x) + Math.abs(q.y) + Math.abs(q.vx) + Math.abs(q.vy) < 0.05;
-        if (still) { if (q.moved) { q.el.style.transform = ''; q.moved = false; } q.x = q.y = q.vx = q.vy = 0; return; }
+        if (still) {
+          if (q.moved) {
+            if (q.whole) { q.el.style.translate = ''; q.el.style.rotate = ''; }
+            else q.el.style.transform = '';
+            q.moved = false;
+          }
+          q.x = q.y = q.vx = q.vy = 0;
+          return;
+        }
         busy = true;
         q.moved = true;
-        const turn = Math.max(-14, Math.min(14, q.vx * 3));
-        q.el.style.transform = `translate(${q.x.toFixed(2)}px, ${q.y.toFixed(2)}px) rotate(${turn.toFixed(1)}deg)`;
+        // Whole pieces use the separate translate/rotate properties, so they
+        // add to the transforms those pieces already have (hover, flights).
+        const size = q.whole ? Math.max(2 * q.hw, 2 * q.hh, 1) : 1;
+        const turn = Math.max(-14, Math.min(14, q.vx * 3)) * (q.whole ? Math.min(1, 40 / size) : 1);
+        if (q.whole) {
+          q.el.style.translate = `${q.x.toFixed(2)}px ${q.y.toFixed(2)}px`;
+          q.el.style.rotate = `${turn.toFixed(2)}deg`;
+        } else q.el.style.transform = `translate(${q.x.toFixed(2)}px, ${q.y.toFixed(2)}px) rotate(${turn.toFixed(1)}deg)`;
       });
       return busy;
     },
