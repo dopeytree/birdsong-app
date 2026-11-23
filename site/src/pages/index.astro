@@ -338,8 +338,9 @@ const credits = [
 
     // How the notifications play. Five modes, cycled by the shuffle button
     // (bottom right) or picked with ?rhythm=cardinal|intro|single|round|random:
-    //   cardinal (default, Ed, Nov 2026): only the Northern Cardinal, 10 s
-    //     after the page opens, then again every 60 s.
+    //   cardinal (default, Ed, Nov 2026): only the Northern Cardinal, first
+    //     as "Powered by BirdNET" starts in the footer's credits (about 11 s
+    //     in), then again every 60 s.
     //   intro: 5 s after the page opens, a burst of three
     //     (the cardinal and the walk's first two), 5 s of clear screen, then
     //     every other species one at a time with 5 s clear between; then
@@ -391,7 +392,17 @@ const credits = [
       }, wait);
     }
     const firstWait = () => rhythm === 'cardinal' ? CARDINAL_WAIT : rhythm === 'intro' ? INTRO_WAIT : OPENING;
-    schedule(firstWait());
+    const CUE = 'Powered by BirdNET';
+    const credits = document.querySelector('footer .credit');
+    if (rhythm === 'cardinal' && JSON.parse(credits.dataset.credits || '[]').includes(CUE)) {
+      // Arrive with the BirdNET credit, the first time it shows.
+      const cue = e => {
+        if (e.detail !== CUE) return;
+        credits.removeEventListener('credit', cue);
+        if (rhythm === 'cardinal' && playing && k < 0) schedule(0);
+      };
+      credits.addEventListener('credit', cue);
+    } else schedule(firstWait());
 
     // Bell: pause or resume.
     const bell = document.querySelector('.test-notice');

@@ -22,6 +22,8 @@ export function startCredits(el) {
   };
 
   function show(text) {
+    // Tell the page which credit is starting (the notifications time to it).
+    el.dispatchEvent(new CustomEvent('credit', { detail: text, bubbles: true }));
     if (still) { el.textContent = text; return; }
     const letters = [...text].map(ch => {
       const s = document.createElement('span');
