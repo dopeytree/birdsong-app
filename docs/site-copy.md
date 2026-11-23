@@ -5,7 +5,7 @@ kept here so they can be reused.
 
 ## Current (Ed, Nov 2026)
 
-> A field journal that listens here & now
+> A field journal that listens here & now ("here" and "now" underlined)
 
 **Birdsongs.ai** (was "Birdsongs"; on trial)
 
