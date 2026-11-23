@@ -329,9 +329,9 @@ const credits = [
 
     // How the notifications play. Five modes, cycled by the shuffle button
     // (bottom right) or picked with ?rhythm=cardinal|intro|single|round|random:
-    //   cardinal (default, Ed, Nov 2026): only the Northern Cardinal, first
-    //     as "Powered by BirdNET" starts in the footer's credits (about 11 s
-    //     in), then again every 60 s.
+    //   cardinal (default, Ed, Nov 2026): only the Northern Cardinal, each
+    //     time "Powered by BirdNET" flies into the footer's credits (first at
+    //     about 11 s, then once per round of the credits).
     //   intro: 5 s after the page opens, a burst of three
     //     (the cardinal and the walk's first two), 5 s of clear screen, then
     //     every other species one at a time with 5 s clear between; then
@@ -383,17 +383,19 @@ const credits = [
       }, wait);
     }
     const firstWait = () => rhythm === 'cardinal' ? CARDINAL_WAIT : rhythm === 'intro' ? INTRO_WAIT : OPENING;
+    // The cardinal mode has no timer: the cardinal arrives each time "Powered
+    // by BirdNET" flies into the footer credits, so the two stay in step for
+    // as long as the page is open. (Without that credit, it falls back to a
+    // timer: 10 s, then every 60 s.)
     const CUE = 'Powered by BirdNET';
     const credits = document.querySelector('footer .credit');
-    if (rhythm === 'cardinal' && JSON.parse(credits.dataset.credits || '[]').includes(CUE)) {
-      // Arrive with the BirdNET credit, the first time it shows.
-      const cue = e => {
-        if (e.detail !== CUE) return;
-        credits.removeEventListener('credit', cue);
-        if (rhythm === 'cardinal' && playing && k < 0) schedule(0);
-      };
-      credits.addEventListener('credit', cue);
-    } else schedule(firstWait());
+    const cued = () => rhythm === 'cardinal' && JSON.parse(credits.dataset.credits || '[]').includes(CUE);
+    credits.addEventListener('credit', e => {
+      if (e.detail === CUE && cued() && playing && !document.hidden) notify(`I just spotted ${CARDINAL.common}! ❤️‍🔥 ${CARDINAL.points} points`);
+    });
+    // Start the timer, unless the credits are doing the timing.
+    const start = wait => { if (!cued()) schedule(wait); };
+    start(firstWait());
 
     // Bell: pause or resume.
     const bell = document.querySelector('.test-notice');
@@ -402,7 +404,7 @@ const credits = [
       bell.setAttribute('aria-pressed', String(playing));
       bell.title = playing ? 'Pause notifications' : 'Resume notifications';
       bell.setAttribute('aria-label', bell.title);
-      if (playing) schedule(600); else clearTimeout(timer);
+      if (playing) start(600); else clearTimeout(timer);
     });
     // Shuffle (test): the next mode, starting it afresh.
     const shuffle = document.querySelector('.rhythm');
@@ -417,12 +419,13 @@ const credits = [
       rhythm = MODES[(MODES.indexOf(rhythm) + 1) % MODES.length];
       showRhythm();
       k = -1;
-      if (playing) schedule(rhythm === 'cardinal' ? CARDINAL_WAIT : rhythm === 'intro' ? INTRO_WAIT : GONE);
+      clearTimeout(timer);
+      if (playing) start(rhythm === 'cardinal' ? CARDINAL_WAIT : rhythm === 'intro' ? INTRO_WAIT : GONE);
     });
     // Don't let a hidden tab pile them up.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) clearTimeout(timer);
-      else if (playing) schedule(800);
+      else if (playing) start(800);
     });
   </script>
 </body>

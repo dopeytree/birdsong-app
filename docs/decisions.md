@@ -72,9 +72,10 @@ or a small test before building it.
   shows about four lines (~160 characters), so even the longest names fit.
 - **Splash notifications (Ed, Nov 2026):** five modes; the shuffle button
   (bottom right) cycles them, or `?rhythm=cardinal|intro|single|round|random`.
-  *The cardinal alone* (default): only the Northern Cardinal, first as
-  "Powered by BirdNET" flies into the footer credits (about 11 s in), then
-  again every 60 s.
+  *The cardinal alone* (default): only the Northern Cardinal, each time
+  "Powered by BirdNET" flies into the footer credits (about 11 s in, then
+  once a round of the credits, about every 85 s). No timer, so they stay in
+  step.
   *Three, then one at a time*: 5 s after the page opens, a burst of
   three (cardinal, Eastern and Spotted Towhee), 5 s clear, then each other
   species alone with 5 s clear between; then again from the burst.
