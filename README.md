@@ -207,21 +207,20 @@ GitHub, as it does without a local copy.
 
 ## Licence
 
-Birdsongs.ai, by Ed Stone, is licensed under the
-[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0).
-See `LICENSE`.
+Copyright © 2026 Ed Stone. **All rights reserved.** Personal use only; see
+`LICENSE`.
 
-You may use, copy, change and share it for noncommercial purposes: personal
-use, study, research and hobby projects, and use by charities, schools,
-public research, public health and safety, environmental and government
-bodies. Anyone you pass it on to must get the licence and this notice:
-
-> Required Notice: Copyright Ed Stone (https://www.ed-stone.co.uk)
-
-**No commercial use.** You may not sell it or anything made from it, use it
-in or for anything that is sold or earns money (apps, services, advertising,
-paid products), or use it for any other commercial purpose, without written
-permission from Ed Stone.
+- You may read, download and run Birdsongs.ai, and change it, for your own
+  **personal, noncommercial** use.
+- **No sharing:** you may not copy, publish or share it, or a changed
+  version, except by linking here.
+- **No commercial use:** you may not sell it or anything made from it, or
+  use it in or for anything that is sold or earns money (apps, services,
+  advertising, paid products).
+- **No use by organisations:** companies, charities, schools, universities,
+  public and government bodies included, however funded.
+- Anything else needs Ed Stone's written permission:
+  [ed-stone.co.uk](https://www.ed-stone.co.uk).
 
 This covers Ed Stone's own code, words and artwork. The work of others below
 keeps its own licence. Versions published before 23 November 2026 were under
