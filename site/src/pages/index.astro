@@ -241,6 +241,13 @@ const credits = [
     </div>
   </template>
 
+  <!-- Clears every notification. Lucide "x" icon (ISC). -->
+  <button class="mode clear-notices" type="button" aria-label="Clear all notifications" title="Clear all notifications">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+    </svg>
+  </button>
+
   <!-- Test: each press sends the next species heard on walk #20. -->
   <button class="mode test-notice" type="button" aria-label="Send a test notification" title="Next bird from walk #20">
     <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -297,11 +304,16 @@ const credits = [
       n.querySelector('.notice-text').textContent = text;
       flip(() => stack.prepend(n));
       requestAnimationFrame(() => requestAnimationFrame(() => n.classList.add('show')));
-      n.addEventListener('pointerdown', () => {
-        n.classList.remove('show');
-        setTimeout(() => flip(() => n.remove()), 350);
-      }, { once: true });
+      n.addEventListener('pointerdown', () => dismiss(n), { once: true });
     }
+    function dismiss(n) {
+      if (!n.classList.contains('show')) return;
+      n.classList.remove('show');
+      setTimeout(() => flip(() => n.remove()), 350);
+    }
+    // Clear all: each goes in turn, top first.
+    document.querySelector('.clear-notices').addEventListener('click', () =>
+      [...stack.children].forEach((n, i) => setTimeout(() => dismiss(n), i * 70)));
     setTimeout(() => notify('I just spotted Northern Cardinal! ❤️‍🔥 50 points'), 1200);
     // Test bell: steps through walk #20's species (Fri 25 Dec, 42 species),
     // in the order they were first heard; src/data/walk-20.json, made by
@@ -602,6 +614,7 @@ const credits = [
   html[data-bg='black'] .mode .moon,
   html:not([data-bg='black']) .mode .sun { opacity: 0; transform: rotate(-90deg) scale(.5); }
   .test-notice { top: 66px; }
+  .clear-notices { top: auto; bottom: 18px; }
   .test-notice:hover { transform: rotate(-12deg); }
   .mode:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
   body { transition: background-color .5s ease, color .5s ease; }
