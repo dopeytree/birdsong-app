@@ -1,5 +1,5 @@
 // The footer's credits, one at a time. Each line flocks in: its letters fly
-// from scattered places and settle into line, hold, then scatter away for the
+// from scattered places and settle into line, hold, then fade out for the
 // next. With Reduce Motion on, the lines simply change in place.
 //
 // The list itself is in index.astro (`credits`); screen readers get it whole.
@@ -7,6 +7,7 @@
 const HOLD = 3200;      // ms a settled line stays
 const STAGGER = 16;     // ms between letters arriving
 const FLIGHT = 900;     // ms for a letter's flight (matches the CSS)
+const FADE = 750;       // ms for the line to fade out (opacity .7s in the CSS)
 
 export function startCredits(el) {
   const list = JSON.parse(el.dataset.credits || '[]');
@@ -37,11 +38,12 @@ export function startCredits(el) {
       s.style.opacity = '1';
     })));
     const settled = letters.length * STAGGER + 140 + FLIGHT;
+    // Leaving: the whole line fades out together, letters staying in place.
     setTimeout(() => letters.forEach(s => {
-      s.style.transitionDelay = `${Math.random() * 260}ms`;
-      scatter(s);
+      s.style.transitionDelay = '0ms';
+      s.style.opacity = '0';
     }), settled + HOLD);
-    return settled + HOLD + 260 + FLIGHT;
+    return settled + HOLD + FADE;
   }
 
   function next() {
