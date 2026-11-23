@@ -53,4 +53,5 @@ or a small test before building it.
   Motion). Chosen over "ink in water", still there with `?fx=ink`. An
   iPhone-style notification slides down 1.2 s after load for 6 s:
   "Birdsongs / I just spotted Kingfisher! :D ✨ [50pts]". iOS look (frosted
-  glass, system font); its icon is a stand-in red "B" until the app has one.
+  glass, system font); its icon is the
+  cardinal from the app's loading screen (`assets/app/cardinal.png`) on paper.

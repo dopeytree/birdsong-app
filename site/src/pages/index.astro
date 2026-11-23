@@ -178,7 +178,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 
   <!-- An iPhone-style notification slides down from the top, then goes. -->
   <div class="notice" role="status" aria-live="polite" title="Dismiss">
-    <span class="notice-icon" aria-hidden="true">B</span>
+    <img class="notice-icon" src={`${base}/notice-icon.png`} alt="" />
     <span class="notice-body">
       <span class="notice-head"><strong>Birdsongs</strong><span class="notice-time">now</span></span>
       <span class="notice-text">I just spotted Kingfisher! :D ✨ [50pts]</span>
@@ -387,7 +387,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   }
 
   /* iPhone-style notification: frosted glass and the system font, as on iOS.
-     The icon is a stand-in until the app has one. */
+     Icon: the cardinal from the app's loading screen, on paper. */
   .notice {
     position: fixed; z-index: 50;
     top: 12px; left: 50%;
@@ -411,14 +411,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     flex: none;
     width: 38px; height: 38px;
     border-radius: 9px;
-    background: var(--paper);
-    box-shadow: inset 0 0 0 .5px rgba(42, 36, 28, .25);
-    color: var(--madder);
-    font-family: var(--fell-sc);
-    font-size: 25px;
-    display: grid; place-items: center;
-    line-height: 1;
-    padding-bottom: 2px;
+    box-shadow: 0 0 0 .5px rgba(42, 36, 28, .25);
   }
   .notice-body { flex: 1; min-width: 0; }
   .notice-head { display: flex; justify-content: space-between; align-items: baseline; }
