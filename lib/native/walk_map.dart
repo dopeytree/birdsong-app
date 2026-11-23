@@ -1028,11 +1028,11 @@ class _WalkMapState extends State<WalkMap> {
               label: '${b.common}: open its card',
               child: GestureDetector(
                 onTap: () => widget.onBird(b.sci, b.common),
-                // A small heart on fire for each bird (Ed, Nov 2026; was a
+                // A small red heart for each bird (Ed, Nov 2026; was a
                 // madder cross), larger for a species' first.
                 child: SizedBox.square(
                   dimension: size + 8,
-                  child: Center(child: Text('❤️‍🔥', style: TextStyle(fontSize: first ? 15 : 11, height: 1))),
+                  child: Center(child: Text('❤️', style: TextStyle(fontSize: first ? 15 : 11, height: 1))),
                 ),
               ),
             ),

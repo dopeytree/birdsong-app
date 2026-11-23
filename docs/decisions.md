@@ -154,7 +154,7 @@ or a small test before building it.
   (its index) full size; "walk" opens a map screenshot from
   `site/public/shots/walk-map.jpg` once that file exists (until then it does
   nothing). These clicks don't also bring the cardinal.
-- **Walk map marks (Ed, Nov 2026):** each bird is a small ❤️‍🔥 (larger for a
-  species' first sighting; was a madder hand-drawn ✕), the start a hand-drawn
+- **Walk map marks (Ed, Nov 2026):** each bird is a small ❤️ (larger for a
+  species' first sighting; was a madder hand-drawn ✕, then ❤️‍🔥), the start a hand-drawn
   + and the finish a ✕, both in ink on a paper halo. A listening station keeps
   its ring. (`walk_map.dart`: `_birds`, `_ends`, `_StartFinishPainter`.)
