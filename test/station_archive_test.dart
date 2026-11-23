@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:birdsong_app/native/station_archive.dart';
 import 'package:birdsong_app/native/station_feed.dart';
 import 'package:birdsong_app/settings.dart';
@@ -24,6 +26,27 @@ void main() {
 
   test("a station's id as a folder name", () {
     expect(StationArchive.safeName('s1/x:y'), 's1_x_y');
+  });
+
+  test('a day counted from its raw detections keeps every species, most heard first', () {
+    // BirdNET-Go's daily summary drops bat species the detections list has;
+    // the plate counts the kept calls instead, so none are lost.
+    final jsonl = [
+      for (final c in [
+        ...calls,
+        StationCall(id: 1, at: DateTime(2026, 11, 23, 20, 32), sci: 'Tadarida teniotis', common: 'European Free-tailed Bat', confidence: .82),
+        StationCall(id: 2, at: DateTime(2026, 11, 23, 20, 29), sci: 'Nyctalus noctula', common: 'Noctule bat', confidence: .51),
+        StationCall(id: 3, at: DateTime(2026, 11, 23, 20, 4), sci: 'Tadarida teniotis', common: 'European Free-tailed Bat', confidence: .98),
+      ])
+        jsonEncode(stationCallJson(go, c))
+    ].join('\n');
+    final rows = speciesFromCalls(jsonl);
+    expect(rows.map((r) => r.common), ['Tawny Owl', 'European Free-tailed Bat', 'Robin', 'Noctule bat']);
+    expect(rows.first.count, 2);
+    expect(rows[1].maxConf, .98);
+    // a line that won't parse is skipped, not fatal
+    expect(speciesFromCalls('$jsonl\nnot json\n').length, rows.length);
+    expect(speciesFromCalls(''), isEmpty);
   });
 
   test("a station's day as Listen's session.json, with the station and the day", () {

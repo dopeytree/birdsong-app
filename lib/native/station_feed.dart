@@ -529,15 +529,18 @@ class StationFeed extends ChangeNotifier {
   Future<List<StationSpecies>> _speciesGo() async {
     final (from, to) = _range;
     final today = _dayOf(DateTime.now());
-    final Object? j;
+    // One day is counted from the raw detections: BirdNET-Go's daily summary
+    // leaves out bat species the detections list has (its own page shows
+    // them). A range keeps the summary, which is small enough to ask for whole.
+    final List<StationSpecies> rows;
     if (from == to) {
-      j = await _get('/api/v2/analytics/species/daily?date=${ymd(from)}');
-    } else if (day == null && span == Span.all) {
-      j = await _get('/api/v2/analytics/species/summary');
+      rows = await _dayFromDetections(from);
     } else {
-      j = await _get('/api/v2/analytics/species/summary?start_date=${ymd(from)}&end_date=${ymd(to)}');
+      final j = await _get(day == null && span == Span.all
+          ? '/api/v2/analytics/species/summary'
+          : '/api/v2/analytics/species/summary?start_date=${ymd(from)}&end_date=${ymd(to)}');
+      rows = birdnetRows(j, today);
     }
-    final rows = birdnetRows(j, from == to ? from : today);
     // how far back the station goes: its longest-known species
     if (since == null && rows.isNotEmpty) {
       final known = rows.map((r) => r.daysKnown).reduce((a, b) => a > b ? a : b);
@@ -615,6 +618,18 @@ class StationFeed extends ChangeNotifier {
   }
 
   // ---- a day's every call, and the calendar's days ------------------------------
+
+  /// One day's species, counted from the raw detections rather than the
+  /// summary. Falls back to the day's summary if the station won't list its
+  /// calls.
+  Future<List<StationSpecies>> _dayFromDetections(DateTime d) async {
+    try {
+      return speciesOfCalls(await _callsGo(d));
+    } catch (e) {
+      debugPrint('station day from detections: $e');
+      return birdnetRows(await _get('/api/v2/analytics/species/daily?date=${ymd(d)}'), d);
+    }
+  }
 
   /// BirdNET-Go's address, for links to its recordings.
   String get goBase => _base;
