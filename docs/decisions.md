@@ -163,3 +163,5 @@ or a small test before building it.
   (deeper paper, rounded, soft shadow, no ring); tapping the same thing again,
   or the label, closes it. Bird names on the map are in ink, apart from the red
   hearts.
+- **Corner icons (Ed, Nov 2026):** the bell (top right) and sun/moon (bottom
+  right) are filled icons on their own, no circle round them.

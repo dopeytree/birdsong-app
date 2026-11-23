@@ -82,10 +82,10 @@ const credits = [
   <!-- Light / dark: switches black and white. Sun and moon icons from
        Lucide (lucide.dev, ISC licence); the sun shows in dark, the moon in light. -->
   <button class="mode theme" type="button" aria-label="Switch light and dark" title="Switch light and dark">
-    <svg class="sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
+    <svg class="sun" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <circle cx="12" cy="12" r="4.6" stroke="none" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
     </svg>
-    <svg class="moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <svg class="moon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="currentColor">
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
     </svg>
   </button>
@@ -97,8 +97,8 @@ const credits = [
 
   <!-- Bell: sends the cardinal notification now, top right. Lucide-style bell (ISC). -->
   <button class="mode test-notice" type="button" aria-label="Show a notification" title="Show a notification">
-    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" />
+    <svg viewBox="0 0 24 24" width="23" height="23" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M9.8 20a2.2 2.2 0 0 0 4.4 0z" />
     </svg>
   </button>
 
@@ -793,14 +793,14 @@ const credits = [
     top: 18px; right: 18px;
     width: 40px; height: 40px;
     display: grid; place-items: center;
-    border: 1.5px solid var(--ink);
-    border-radius: 50%;
+    border: 0;                     /* no circle: filled icons on their own (Ed, Nov 2026) */
     background: transparent;
     color: var(--ink);
+    opacity: .85;
     cursor: pointer;
-    transition: color .4s, border-color .4s, transform .3s;
+    transition: color .4s, opacity .3s, transform .3s;
   }
-  .mode:hover { transform: rotate(15deg); }
+  .mode:hover { transform: rotate(15deg); opacity: 1; }
   /* Sun in dark, moon in light; they swap with a turn and a fade. */
   .mode svg { grid-area: 1 / 1; transition: opacity .35s ease, transform .5s cubic-bezier(.2, .8, .2, 1); }
   html[data-bg='black'] .mode .moon,
@@ -811,7 +811,7 @@ const credits = [
   .maker { position: fixed; z-index: 40; left: 18px; bottom: 18px; line-height: 0; }
   .maker img { width: 70px; height: auto; }
   .test-notice:hover { transform: rotate(-12deg); }
-  .mode:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+  .mode:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 50%; }
   body { transition: background-color .5s ease, color .5s ease; }
   /* The cardinal's spectrogram, faint along the foot of the page (Ed, Nov
      2026), as on the Tap to Enter veil. Drawn in the ink colour, so it reads
@@ -969,7 +969,7 @@ const credits = [
 
     /* Round buttons smaller. */
     .mode { width: 34px; height: 34px; top: 10px; right: 10px; }
-    .mode svg { width: 16px; height: 16px; }
+    .mode svg { width: 20px; height: 20px; }
     .theme { top: auto; bottom: 10px; }
     .maker { left: 10px; bottom: 10px; }
     .maker img { width: 56px; }
