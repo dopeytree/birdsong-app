@@ -767,6 +767,21 @@ const credits = [
   .test-notice:hover { transform: rotate(-12deg); }
   .mode:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
   body { transition: background-color .5s ease, color .5s ease; }
+  /* The cardinal's spectrogram, faint along the foot of the page (Ed, Nov
+     2026), as on the Tap to Enter veil. Drawn in the ink colour, so it reads
+     in both modes: pale on black, dark on white. Fixed behind everything. */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-color: var(--ink);
+    -webkit-mask: url(/media/cardinal-spectrogram.png) center bottom / min(1400px, 140vw) auto no-repeat;
+            mask: url(/media/cardinal-spectrogram.png) center bottom / min(1400px, 140vw) auto no-repeat;
+    opacity: var(--spectro, .07);
+  }
+  html[data-bg='white'] { --spectro: .09; }
+
   /* The plain arrow over text, not the text-selection I-beam (Ed, Nov 2026).
      Buttons and the screen keep their own pointers. */
   body { cursor: default; }

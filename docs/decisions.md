@@ -142,3 +142,6 @@ or a small test before building it.
   well apart (Ed). It sits outside the share capture. Settings →
   Models shows "Newer build ready" and Check now. Downloads are checked by
   sha256; the old files go once the new ones check out.
+- **Page spectrogram (Ed, Nov 2026):** the cardinal's spectrogram from the
+  veil also lies faint along the foot of the main page, fixed behind
+  everything, in the ink colour (7% on black, 9% on white).
