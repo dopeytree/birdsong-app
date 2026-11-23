@@ -279,13 +279,13 @@ const credits = [
   <!-- Text effect: murmuration (Ed's choice). ?fx=ink or ?fx=none to compare. -->
   <script>
     import { startTextFx } from '../scripts/text-fx.js';
-    // The whole page murmurs (Ed, Nov 2026): letters scatter, and these sway
-    // and drift as whole pieces. Only the text brings the notification.
+    // Murmuration (Ed, Nov 2026): the text, Coming Soon and the credits. The
+    // buttons, icons, pill, pictures, lion and notifications stay still.
+    // Only the text brings the notification.
     startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur', {
-      letters: '.seg, .soon em',                    // the pill's and Coming Soon's words, letter by letter
-      dynamicLetters: '.notice-head strong, .notice-text',   // the notifications' words, as they come
+      letters: '.soon em',                          // Coming Soon, letter by letter
       dynamic: 'footer .cr-ch',                     // the credits' letters, as they come
-      wholes: '.mode, .pill, .soon > span, .maker, .kicker .dot, .devices .device .frame, footer .rule, .notices',
+      wholes: '.soon > span, .kicker .dot, footer .rule',   // Coming Soon's outline, the dot, the credit rules
     });
 
     import { startCredits } from '../scripts/credits.js';

@@ -118,13 +118,12 @@ or a small test before building it.
   PolyForm Noncommercial 1.0.0 (it lets charities, schools and public bodies
   use it). Earlier copies keep MIT. Others' work keeps its own licence; the
   README lists them under "Credits and licences".
-- **Splash page murmurs throughout (Ed, Nov 2026):** the text's letter-by-letter
-  murmur also runs on the text inside things: the pill's words, Coming Soon,
-  the notifications' words and the credits. The other pieces (the round
-  buttons with their icons, the pill and Coming Soon outlines, the devices,
-  the lion, the dot, the credit rules, the notifications' boxes) sway and
-  drift gently as whole pieces. (Scattering icon strokes was tried and
-  dropped.) Only the text brings the notification.
+- **Splash murmuration's reach (Ed, Nov 2026):** the text, Coming Soon (its
+  letters, and its outline swaying as one) and the credits (their letters,
+  and the side rules). The round buttons and icons, the pill, the device
+  pictures, the lion and the notifications stay still: murmuring them was
+  tried and dropped, as was scattering icon strokes. Only the text brings the
+  notification.
 - **Splash gate (Ed, Nov 2026):** the site opens under a veil, the page faded
   (85% of the page colour, no blur) behind a breathing "Tap to Enter" pill.
   A click, tap, Enter or Space lifts it with a fade; that tap also lets the page
