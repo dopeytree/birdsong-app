@@ -781,6 +781,8 @@ const credits = [
     .kicker::after { display: none; }
     h1 { font-size: clamp(1.9rem, 8.5vw, 3.2rem); margin-bottom: .5rem; }
     .lede { font-size: clamp(.86rem, 3.5vw, 1.1rem); line-height: 1.42; margin: 0 auto .45rem; }
+    /* The paragraphs sit centred as a block, their lines set left. */
+    .lede:not(.attribution) { text-align: left; }
     .badges { margin: .6rem 0 .25rem; gap: 10px; }
     .badges img { height: 30px; }
     .soon { font-size: .9rem; }
