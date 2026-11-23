@@ -102,6 +102,12 @@ const credits = [
   <main class="page">
     <section class="text">
       <!-- Wording, and earlier versions: docs/site-copy.md -->
+      <!-- Bell: sends the cardinal notification now; centred above the tagline (on trial, Ed, Nov 2026). Lucide-style bell (ISC). -->
+      <button class="mode test-notice" type="button" aria-label="Show a notification" title="Show a notification">
+        <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" />
+        </svg>
+      </button>
       <p class="kicker"><span class="dot" aria-hidden="true"></span> <em>A field journal that listens <span class="underline">here</span> &amp; <span class="underline">now</span></em></p>
       <h1>Birdsongs.ai</h1>
       <p class="lede">
@@ -267,12 +273,6 @@ const credits = [
     </div>
   </template>
 
-  <!-- Bell: sends the cardinal notification now. Lucide-style bell (ISC). -->
-  <button class="mode test-notice" type="button" aria-label="Show a notification" title="Show a notification">
-    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" />
-    </svg>
-  </button>
 
 
   <!-- Text effect: murmuration (Ed's choice). ?fx=ink or ?fx=none to compare. -->
@@ -739,6 +739,8 @@ const credits = [
   html:not([data-bg='black']) .mode .sun { opacity: 0; transform: rotate(-90deg) scale(.5); }
   /* The bell (a notification now) top right; light/dark bottom right. */
   .theme { top: auto; bottom: 18px; }
+  /* The bell sits in the page, centred above the tagline (on trial). */
+  .mode.test-notice { position: relative; top: auto; right: auto; margin: 0 auto 2.4rem; z-index: auto; }
   /* Ed's lion, bottom left (Ed, Nov 2026). */
   .maker { position: fixed; z-index: 40; left: 18px; bottom: 18px; line-height: 0; }
   .maker img { width: 70px; height: auto; }
@@ -851,6 +853,7 @@ const credits = [
     .mode { width: 34px; height: 34px; top: 10px; right: 10px; }
     .mode svg { width: 16px; height: 16px; }
     .theme { top: auto; bottom: 10px; }
+    .mode.test-notice { top: auto; right: auto; order: 0; margin: 0 auto 1.2rem; }
     .maker { left: 10px; bottom: 10px; }
     .maker img { width: 56px; }
   }
