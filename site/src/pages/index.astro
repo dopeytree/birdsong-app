@@ -281,7 +281,7 @@ const credits = [
     // The whole page murmurs (Ed, Nov 2026): letters scatter, and these sway
     // and drift as whole pieces. Only the text brings the notification.
     startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur', {
-      wholes: '.mode, .seg, .soon span, .maker, .kicker .dot, .devices .device .frame, footer .credit, footer .rule, .notices',
+      wholes: '.mode, .pill, .soon span, .maker, .kicker .dot, .devices .device .frame, footer .credit, footer .rule, .notices',
     });
 
     import { startCredits } from '../scripts/credits.js';
@@ -754,7 +754,7 @@ const credits = [
   .gate {
     position: fixed; inset: 0; z-index: 100;
     display: grid; place-items: center;
-    background: color-mix(in srgb, var(--page) 65%, transparent);   /* faded, not blurred: the page shows through */
+    background: color-mix(in srgb, var(--page) 85%, transparent);   /* faded, not blurred: the page shows through */
     cursor: pointer;
     transition: opacity .8s ease;
   }

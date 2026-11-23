@@ -118,12 +118,12 @@ or a small test before building it.
   use it). Earlier copies keep MIT. Others' work keeps its own licence; the
   README lists them under "Credits and licences".
 - **Splash page murmurs throughout (Ed, Nov 2026):** besides the letters, the
-  round buttons, the pill, Coming Soon, the devices, the lion, the credits line
+  round buttons, the iPhone | iPad pill (as one piece), Coming Soon, the devices, the lion, the credits line
   and its rules, the dot and the notifications sway and drift as whole pieces
   (CSS translate/rotate, turning less the bigger they are). Only the text
   brings the notification.
 - **Splash gate (Ed, Nov 2026):** the site opens under a veil, the page faded
-  (65% of the page colour, no blur) behind a breathing "Tap to Enter" pill.
+  (85% of the page colour, no blur) behind a breathing "Tap to Enter" pill.
   A click, tap, Enter or Space lifts it with a fade; that tap also lets the page
   play sound, and the credits (and so the first cardinal, with its song) start
   then.
