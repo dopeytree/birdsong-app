@@ -817,20 +817,20 @@ const credits = [
     cursor: pointer;
   }
   .gate-sound[hidden] { display: none; }
+  /* Tap to Enter: styled exactly as Coming Soon (Ed, Nov 2026): italic, in
+     madder, in a thin rounded outline. */
   .gate-btn {
-    font-family: var(--fell-sc);
-    font-size: clamp(1.4rem, 4vw, 2rem);
-    letter-spacing: .08em;
-    color: var(--ink);
+    font-family: var(--fell);
+    font-style: italic;
+    font-size: 1.1rem;
+    color: var(--madder);
     background: none;
     border: 1px solid currentColor;
     border-radius: 999px;
-    padding: .45em 1.5em .5em;
+    padding: .35em 1.3em .4em;
     cursor: pointer;
-    animation: breathe 3s ease-in-out infinite;
   }
   .gate-btn:focus, .gate-btn:focus-visible { outline: none; }   /* no focus ring (Ed, Nov 2026); Enter and Space work anyway */
-  @keyframes breathe { 50% { opacity: .55; } }
 
   /* Text effect (src/scripts/text-fx.js): words and letters it moves. */
   .fx-word { display: inline-block; white-space: nowrap; }
