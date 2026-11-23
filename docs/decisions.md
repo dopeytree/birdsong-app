@@ -92,7 +92,7 @@ or a small test before building it.
   thumbnail is allowed).
 - **Splash "Coming soon" (Ed, Nov 2026):** the App Store and Google Play
   badges were tried and removed (with their trademark lines in the credits).
-  "Coming Soon" sits in a thin rounded outline in the text's colour, a label
+  "Coming Soon" sits in a thin rounded outline in the pill's red, a label
   rather than a button. The badges (official, from developer.apple.com and
   play.google.com) can come back at launch, linking to the listings.
 - **Splash page on phones and iPads (Ed, Nov 2026):** two layouts only.

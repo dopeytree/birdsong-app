@@ -557,10 +557,11 @@ const credits = [
   .seg + .seg { border-left: 1.5px solid var(--madder); }
   .seg[aria-selected='true'] { background: var(--madder); color: var(--paper); }
   .seg:focus-visible, .frame:focus-visible, .step:focus-visible { outline: 2px solid var(--madder); outline-offset: 4px; }
-  /* "Coming soon." in a thin rounded outline (Ed, Nov 2026): a label, not a
-     button, in the text's own colour. */
+  /* "Coming Soon" in a thin rounded outline (Ed, Nov 2026): a label, not a
+     button, in the pill's red. */
   .soon { color: var(--sepia); margin: 1.8rem 0 0; font-size: 1.1rem; text-align: center; }
   .soon span {
+    color: var(--seg-ink);              /* the pill's red: madder, lighter in black mode */
     display: inline-block;
     padding: .35em 1.3em .4em;
     border: 1px solid currentColor;
