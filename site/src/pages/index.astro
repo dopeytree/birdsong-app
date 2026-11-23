@@ -175,6 +175,12 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     show(location.hash === '#ipad' ? firstOn('ipad') : 0);
     requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("ready")));
   </script>
+
+  <!-- Text effect on trial: add ?fx=murmur or ?fx=ink to the address. -->
+  <script>
+    import { startTextFx } from '../scripts/text-fx.js';
+    startTextFx(new URLSearchParams(location.search).get('fx'));
+  </script>
 </body>
 </html>
 
@@ -364,6 +370,11 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     font-size: .9rem;
     font-style: italic;
   }
+
+  /* Text effect (src/scripts/text-fx.js): words and letters it moves. */
+  .fx-word { display: inline-block; white-space: nowrap; }
+  .fx-ch { display: inline-block; will-change: transform; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
   /* Full-size popup for a sideways shot, over the page faded to black. */
   .lightbox {
