@@ -655,7 +655,9 @@ const credits = [
       // with sound, silent if the browser refuses; with sound, the page may
       // sound from then on.
       document.addEventListener('film-sound', () => { soundOK = true; song.muted = false; }, { once: true });
-      if (stageFilm.closest('.device').dataset.active === 'true') {
+      // Not on phones and tablets (Ed, Nov 2026): they never allow sound
+      // before a tap, so the film waits small on the page for one.
+      if (!matchMedia('(pointer: coarse)').matches && stageFilm.closest('.device').dataset.active === 'true') {
         stageFilm.currentTime = 0;
         stageFilm.closest('.frame').click();
       }

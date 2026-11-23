@@ -219,3 +219,7 @@ or a small test before building it.
   1820×1460, 60 fps, 13.7 MB; picture rows 143–1358, cropped by the page).
   Browsers that can't play HEVC get v2 (`coming-soon-v2.mp4`, H.264) via
   <source>, with its own crop (`html[data-film='v2']`, set in the head).
+- **No film popup on touch screens (Ed, Nov 2026):** phones and tablets never
+  allow sound before a tap, so there the page opens without the popup; the
+  film plays small and silent, and a tap opens it large with sound. Desktop
+  still opens on the film.
