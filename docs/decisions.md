@@ -151,9 +151,10 @@ or a small test before building it.
   links yet. Apple's rules don't allow its logo on its own in others'
   marketing; revisit (or use the official badge) at launch.
 - **Text links (Ed, Nov 2026):** "Index of Species" opens the sideways iPad
-  (its index) full size; "walk" opens a map screenshot from
-  `site/public/shots/walk-map.jpg` once that file exists (until then it does
-  nothing). These clicks don't also bring the cardinal.
+  (its index) full size; "walk" opens the sideways iPad playing a walk (the
+  map, then a bird's card): `site/public/media/walk.mp4`, 8 s, silent,
+  looping, 2.7 MB, made from Ed's screen recording. These clicks don't also
+  bring the cardinal.
 - **Walk map marks (Ed, Nov 2026):** each bird is a small ❤️ (larger for a
   species' first sighting; was a madder hand-drawn ✕, then ❤️‍🔥), the start a hand-drawn
   + and the finish a ✕, both in ink on a paper halo. A listening station keeps

@@ -190,7 +190,7 @@ const credits = [
     <div class="device iphone" data-landscape="false" data-active="true">
       <span class="frame">
         <span class="btn b1"></span><span class="btn b2"></span><span class="btn b3"></span><span class="btn b4"></span>
-        <span class="screen"><img class="shot" data-active="true" alt="" /><span class="island" aria-hidden="true"></span></span>
+        <span class="screen"><img class="shot" data-active="true" alt="" /><video class="shot box-film" data-active="true" muted loop playsinline preload="none" hidden></video><span class="island" aria-hidden="true"></span></span>
       </span>
     </div>
     <p class="close-hint"><em>Click anywhere to close.</em></p>
@@ -242,6 +242,8 @@ const credits = [
       if (s.tagName !== 'IMG') return;
       boxDev.className = `device ${d.dataset.device}`;
       boxDev.dataset.landscape = sideways ? 'true' : 'false';
+      boxImg.hidden = false;
+      boxFilm.hidden = true;
       boxImg.src = s.src;
       boxImg.alt = s.alt;
       box.showModal();
@@ -249,29 +251,36 @@ const credits = [
     box.addEventListener('click', () => box.close());
 
     // Links in the text (Ed, Nov 2026): "Index of Species" opens the sideways
-    // iPad (its index) full size; "walk" opens the map screenshot, once
-    // public/shots/walk-map.jpg exists (until then it does nothing).
+    // iPad (its index) full size; "walk" opens the sideways iPad playing a
+    // walk: the map, then a bird's card (public/media/walk.mp4, silent, looping).
     const shot = name => `${base}/shots/${name}`;
-    const showShot = (device, sideways, src, alt) => {
+    const boxFilm = box.querySelector('.box-film');
+    const showShot = (device, sideways, src, alt, film) => {
       boxDev.className = `device ${device}`;
       boxDev.dataset.landscape = sideways ? 'true' : 'false';
-      boxImg.src = src;
-      boxImg.alt = alt;
+      boxImg.hidden = !!film;
+      boxFilm.hidden = !film;
+      if (film) {
+        if (!boxFilm.src.endsWith(film)) { boxFilm.src = film; boxFilm.poster = src; }
+        boxFilm.setAttribute('aria-label', alt);
+        boxFilm.currentTime = 0;
+        boxFilm.play().catch(() => {});
+      } else {
+        boxImg.src = src;
+        boxImg.alt = alt;
+      }
       box.showModal();
     };
-    let mapReady = false;
-    const probe = new Image();
-    probe.onload = () => { mapReady = true; document.documentElement.dataset.map = 'ready'; };
-    probe.src = shot('walk-map.jpg');
+    box.addEventListener('close', () => boxFilm.pause());
     document.addEventListener('click', e => {
       const t = e.target instanceof Element && e.target.closest('.to-index, .to-map');
       if (!t) return;
       if (t.classList.contains('to-index')) {
         e.stopPropagation();      // not the cardinal too
         showShot('ipad', true, shot('ipad-landscape.jpg'), 'The Index of Species, on iPad');
-      } else if (mapReady) {
+      } else {
         e.stopPropagation();
-        showShot('iphone', false, shot('walk-map.jpg'), 'The map of a walk');
+        showShot('ipad', true, `${base}/media/walk-poster.jpg`, 'A walk on iPad: the map, then a bird\'s card', `${base}/media/walk.mp4`);
       }
     });
     // Closing hands focus back to the screen, which would show its focus ring.
@@ -612,7 +621,7 @@ const credits = [
   .soon { color: var(--sepia); margin: 3.2rem 0 0; font-size: 1.1rem; text-align: center; }
   /* Words picked out in madder, the colour of "Coming Soon". */
   .madder { color: var(--madder); }
-  .to-index, html[data-map='ready'] .to-map { cursor: pointer; }
+  .to-index, .to-map { cursor: pointer; }
   .underline, .underline .fx-ch { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
   .soon { display: flex; justify-content: center; align-items: center; flex-wrap: nowrap; gap: .6rem; }
   .soon > span.os { color: var(--sepia); cursor: default; }   /* the colour of "Now I wonder…" */
