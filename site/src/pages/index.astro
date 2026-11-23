@@ -123,13 +123,13 @@ const credits = [
       <p class="kicker"><span class="dot" aria-hidden="true"></span> <em>A field journal that listens <span class="underline">here</span> &amp; <span class="underline">now</span></em></p>
       <h1>Birdsongs.ai</h1>
       <p class="lede">
-        Take it on a <span class="underline">walk</span>. It listens as you go. Trusty private local AI.
+        Take it on a <span class="underline to-map">walk</span>. It listens as you go. Trusty private local AI.
         Every bird it hears. Lovingly illustrated in the manner of the old
         natural-history books. Dated. Placed on the map. Along with the weather of
         the day!
       </p>
       <p class="lede second">
-        <span class="madder">Aye Old as Time.</span> Each <span class="underline">walk</span> becomes an artwork, with its own <span class="underline">Index of Species</span>.
+        <span class="madder">Aye Old as Time.</span> Each <span class="underline to-map">walk</span> becomes an artwork, with its own <span class="underline to-index">Index of Species</span>.
       </p>
       <p class="lede second attribution">
         Now I wonder how many you can <span class="underline">collect</span>?
@@ -196,7 +196,7 @@ const credits = [
     <p class="close-hint"><em>Click anywhere to close.</em></p>
   </dialog>
 
-  <script is:inline define:vars={{ roman }}>
+  <script is:inline define:vars={{ roman, base }}>
     // The pill buttons choose the device; a tap on the screen opens the shot
     // full size in the popup. ‹ › step through a device's shots, if it has more than one.
     const devices = [...document.querySelectorAll('.devices .device')];
@@ -247,6 +247,33 @@ const credits = [
       box.showModal();
     }
     box.addEventListener('click', () => box.close());
+
+    // Links in the text (Ed, Nov 2026): "Index of Species" opens the sideways
+    // iPad (its index) full size; "walk" opens the map screenshot, once
+    // public/shots/walk-map.jpg exists (until then it does nothing).
+    const shot = name => `${base}/shots/${name}`;
+    const showShot = (device, sideways, src, alt) => {
+      boxDev.className = `device ${device}`;
+      boxDev.dataset.landscape = sideways ? 'true' : 'false';
+      boxImg.src = src;
+      boxImg.alt = alt;
+      box.showModal();
+    };
+    let mapReady = false;
+    const probe = new Image();
+    probe.onload = () => { mapReady = true; document.documentElement.dataset.map = 'ready'; };
+    probe.src = shot('walk-map.jpg');
+    document.addEventListener('click', e => {
+      const t = e.target instanceof Element && e.target.closest('.to-index, .to-map');
+      if (!t) return;
+      if (t.classList.contains('to-index')) {
+        e.stopPropagation();      // not the cardinal too
+        showShot('ipad', true, shot('ipad-landscape.jpg'), 'The Index of Species, on iPad');
+      } else if (mapReady) {
+        e.stopPropagation();
+        showShot('iphone', false, shot('walk-map.jpg'), 'The map of a walk');
+      }
+    });
     // Closing hands focus back to the screen, which would show its focus ring.
     // Keep that for keyboard users only: after a click or tap, let it go.
     let byPointer = false;
@@ -585,6 +612,7 @@ const credits = [
   .soon { color: var(--sepia); margin: 3.2rem 0 0; font-size: 1.1rem; text-align: center; }
   /* Words picked out in madder, the colour of "Coming Soon". */
   .madder { color: var(--madder); }
+  .to-index, html[data-map='ready'] .to-map { cursor: pointer; }
   .underline, .underline .fx-ch { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
   .soon { display: flex; justify-content: center; align-items: center; flex-wrap: nowrap; gap: .6rem; }
   .soon > span.os { color: var(--sepia); cursor: default; }   /* the colour of "Now I wonder…" */

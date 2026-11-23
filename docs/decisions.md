@@ -150,3 +150,7 @@ or a small test before building it.
   Simple Icons). Plain-word versions were tried and dropped. Labels only, no
   links yet. Apple's rules don't allow its logo on its own in others'
   marketing; revisit (or use the official badge) at launch.
+- **Text links (Ed, Nov 2026):** "Index of Species" opens the sideways iPad
+  (its index) full size; "walk" opens a map screenshot from
+  `site/public/shots/walk-map.jpg` once that file exists (until then it does
+  nothing). These clicks don't also bring the cardinal.
