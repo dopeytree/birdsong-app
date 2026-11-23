@@ -158,3 +158,7 @@ or a small test before building it.
   species' first sighting; was a madder hand-drawn ✕, then ❤️‍🔥), the start a hand-drawn
   + and the finish a ✕, both in ink on a paper halo. A listening station keeps
   its ring. (`walk_map.dart`: `_birds`, `_ends`, `_StartFinishPainter`.)
+- **Map labels (Ed, Nov 2026):** a place's label takes the app's dialog look
+  (deeper paper, rounded, soft shadow, no ring); tapping the same thing again,
+  or the label, closes it. Bird names on the map are in ink, apart from the red
+  hearts.
