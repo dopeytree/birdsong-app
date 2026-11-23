@@ -583,16 +583,16 @@ const credits = [
   .notice-time { font-size: 13px; color: rgba(60, 60, 67, .6); }
   .notice-text { display: block; font-size: 15px; line-height: 1.3; letter-spacing: -.01em; }
 
-  /* The light / dark button, top right, in the pill's red. */
+  /* The light / dark button, top right, in the headline's ink. */
   .mode {
     position: fixed; z-index: 40;
     top: 18px; right: 18px;
     width: 40px; height: 40px;
     display: grid; place-items: center;
-    border: 1.5px solid var(--seg-ink);
+    border: 1.5px solid var(--ink);
     border-radius: 50%;
     background: transparent;
-    color: var(--seg-ink);
+    color: var(--ink);
     cursor: pointer;
     transition: color .4s, border-color .4s, transform .3s;
   }
@@ -603,7 +603,7 @@ const credits = [
   html:not([data-bg='black']) .mode .sun { opacity: 0; transform: rotate(-90deg) scale(.5); }
   .test-notice { top: 66px; }
   .test-notice:hover { transform: rotate(-12deg); }
-  .mode:focus-visible { outline: 2px solid var(--seg-ink); outline-offset: 3px; }
+  .mode:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
   body { transition: background-color .5s ease, color .5s ease; }
 
   /* Text effect (src/scripts/text-fx.js): words and letters it moves. */
