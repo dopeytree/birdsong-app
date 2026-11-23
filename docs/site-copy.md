@@ -20,7 +20,7 @@ of the day.")
 
 *As old as time.* (in madder) *Each walk becomes an artwork, with its own Index of Species.* ("walk" and "Index of Species" underlined; "walk" in the first paragraph too)
 
-*Now I wonder how many you can collect?*
+*Now I wonder how many you can collect?* ("collect" underlined)
 
 Earlier taglines: "A field journal that listens now", "Be here now", "I just spotted Kingfisher! :D" (the
 notification's words, now with Northern Cardinal), "I wonder who has the fairest call of them all?".
