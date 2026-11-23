@@ -5,7 +5,7 @@ kept here so they can be reused.
 
 ## Current (Ed, Nov 2026)
 
-> I wonder who has the fairest call of them all?
+> I just spotted Kingfisher! :D
 
 **Birdsongs**
 
@@ -14,7 +14,12 @@ Every bird it hears is lovingly illustrated in the manner of the old
 natural-history books: dated, placed on the map, along with the weather of
 the day.
 
-*Each walk becomes an artwork, with its own index of species. A moment in time.*
+*Each walk becomes an artwork, with its own index of species. As old as time.*
+
+## Second draft (Ed, Nov 2026)
+
+Same as current, except the tagline was "I wonder who has the fairest call of
+them all?" and the last line ended "A moment in time."
 
 ## First draft (Claude, Nov 2026)
 
