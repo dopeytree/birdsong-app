@@ -480,9 +480,11 @@ const credits = [
   }
 
   /* The app's mic / listen pill, reused as the device switch. */
+  /* Centred in the text column (Ed, Nov 2026). */
   .pill {
-    display: inline-flex;
-    margin: 1.4rem 0 1.2rem;
+    display: flex;
+    width: fit-content;
+    margin: 1.4rem auto 1.2rem;
     border: 1.5px solid var(--madder);
     border-radius: 999px;
     overflow: hidden;
