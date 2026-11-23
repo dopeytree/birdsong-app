@@ -1,5 +1,7 @@
 # Birdsong app (test build)
 
+**Coming soon:** [▶ watch the 22-second preview](docs/media/Coming_soon_compressed.mp4)
+
 Birdsong for iPhone, iPad, Mac and Android. The plate is
 [Birdsong](https://github.com/dopeytree/birdsong)'s own `index.html`, shown in
 a native web view and fed by a small web server inside the app. That server
