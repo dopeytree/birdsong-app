@@ -125,5 +125,6 @@ or a small test before building it.
 - **Gate video (on trial, Ed, Nov 2026):** the 22 s preview
   (`site/public/media/coming-soon.mp4`, black bands cropped) plays on a loop
   above Tap to Enter. It tries to play with sound; browsers mostly refuse
-  before a tap, so it plays silently with a "Sound on" label, and clicking the
-  video restarts it with sound without entering. Entering stops it.
+  before a tap, so it plays silently with a "Sound on" label (sound on, from
+  where it is). It has the browser's controls (pause, scrub, volume); clicks
+  on it never enter. Entering stops it.

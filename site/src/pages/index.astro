@@ -104,11 +104,11 @@ const credits = [
        tap lifts it and, being a tap, lets the page play sound. -->
   <div class="gate" role="dialog" aria-modal="true" aria-label="Birdsongs.ai">
     <div class="gate-inner">
-      <!-- On trial (Ed, Nov 2026): the preview video above Tap to Enter. It
-           tries to play with sound; browsers mostly refuse before a tap, so
-           then it plays silently, and clicking it gives the sound. -->
+      <!-- On trial (Ed, Nov 2026): the preview video above Tap to Enter, with
+           the browser's controls. It tries to play with sound; browsers mostly
+           refuse before a tap, so then it plays silently until "Sound on". -->
       <div class="gate-film">
-        <video class="gate-video" src={`${base}/media/coming-soon.mp4`} poster={`${base}/media/coming-soon-poster.jpg`} muted loop playsinline aria-label="A preview of Birdsongs.ai"></video>
+        <video class="gate-video" src={`${base}/media/coming-soon.mp4`} poster={`${base}/media/coming-soon-poster.jpg`} muted loop playsinline controls aria-label="A preview of Birdsongs.ai"></video>
         <button class="gate-sound" type="button" aria-label="Play the video with sound">Sound on</button>
       </div>
       <button class="gate-btn" type="button">Tap to Enter</button>
@@ -393,22 +393,21 @@ const credits = [
     gate.addEventListener('click', enter);
 
     // The preview video: try with sound; if the browser refuses, silently.
-    // Clicking the video (or "Sound on") restarts it with sound, without
-    // entering.
+    // It has the browser's own controls (pause, scrub, volume); clicks on it
+    // never enter the site. "Sound on" turns the sound on where it is.
     const film = gate.querySelector('.gate-video');
     const soundBtn = gate.querySelector('.gate-sound');
     film.muted = false;
     film.play().then(() => { soundBtn.hidden = true; })
       .catch(() => { film.muted = true; film.play().catch(() => {}); });
-    const withSound = e => {
+    film.addEventListener('click', e => e.stopPropagation());
+    film.addEventListener('volumechange', () => { if (!film.muted) soundBtn.hidden = true; });
+    soundBtn.addEventListener('click', e => {
       e.stopPropagation();
       film.muted = false;
-      film.currentTime = 0;
-      film.play().catch(() => {});
+      if (film.paused) film.play().catch(() => {});
       soundBtn.hidden = true;
-    };
-    film.addEventListener('click', withSound);
-    soundBtn.addEventListener('click', withSound);
+    });
     addEventListener('keydown', e => { if (!entered && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); } });
 
 
@@ -790,10 +789,10 @@ const credits = [
     object-fit: cover;
     border-radius: 14px;
     box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .7);
-    cursor: pointer;
+    cursor: default;
   }
   .gate-sound {
-    position: absolute; right: 10px; bottom: 10px;
+    position: absolute; right: 10px; top: 10px;   /* top corner, clear of the controls */
     font-family: var(--fell); font-style: italic; font-size: .9rem;
     color: #EEE5CE; background: rgba(0, 0, 0, .55);
     border: 1px solid rgba(238, 229, 206, .5); border-radius: 999px;
