@@ -421,6 +421,14 @@ const credits = [
       egg();
     });
 
+    // Coming Soon: a click brings the song and the notification, like the bell.
+    document.querySelector('.soon > span').addEventListener('click', () => {
+      soundOK = true;            // a click, so sound is allowed now
+      song.muted = false;
+      sing();
+      notify(CARDINAL_TEXT);
+    });
+
     // The bell: the song and the notification together.
     document.querySelector('.test-notice').addEventListener('click', () => {
       soundOK = true;            // a click, so sound is allowed now
