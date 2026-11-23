@@ -231,9 +231,18 @@ const credits = [
     nav.querySelector('.prev').addEventListener('click', () => step(-1));
     nav.querySelector('.next').addEventListener('click', () => step(1));
     const firstOn = id => stops.findIndex(t => t.d.dataset.device === id);
-    segs.forEach(s => s.addEventListener('click', () => show(firstOn(s.dataset.device))));
-    // #ipad opens on the iPad.
-    show(location.hash === '#ipad' ? firstOn('ipad') : 0);
+    let picked = false;   // once the visitor uses the pill, leave their choice alone
+    segs.forEach(s => s.addEventListener('click', () => { picked = true; show(firstOn(s.dataset.device)); }));
+    // Which device to show first. On touch screens (phones, iPads), the
+    // opposite shape to the screen, so the shot fills it best (Ed, Nov 2026):
+    // held upright, the sideways iPad; held sideways, the upright iPhone.
+    // Turning the device switches it, until the pill is used. #ipad in the
+    // address opens on the iPad; desktops open on the iPhone.
+    const touch = matchMedia('(pointer: coarse)');
+    const upright = matchMedia('(orientation: portrait)');
+    const byShape = () => touch.matches ? (upright.matches ? 'ipad' : 'iphone') : 'iphone';
+    show(firstOn(location.hash === '#ipad' ? 'ipad' : byShape()));
+    upright.addEventListener('change', () => { if (!picked && touch.matches) show(firstOn(byShape())); });
     requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("ready")));
   </script>
 
@@ -800,6 +809,8 @@ const credits = [
     h1 { order: 2; margin-bottom: .6rem; }
     .stage { order: 3; flex: none; margin-bottom: 1.2rem; }
     .devices { flex: none; height: 56svh; }
+    /* The sideways iPad is as wide as the screen and no taller than it needs. */
+    .devices:has(.ipad[data-active='true'][data-landscape='true']) { height: calc((100vw - 32px) / 1.46); }
     .lede, .badges, .soon { order: 4; }
   }
   /* Phones held sideways: too short to fit, so the page scrolls and the

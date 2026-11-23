@@ -100,3 +100,7 @@ or a small test before building it.
   below, a short scroll away. The shuffle test button goes top left on these.
   Phones held sideways scroll, with the device at about 82% of the screen
   height, below the text.
+  On touch screens the first shot is the opposite shape to the screen: held
+  upright, the sideways iPad; held sideways, the upright iPhone. Turning the
+  device switches it, until the visitor uses the pill. Desktops open on the
+  iPhone.
