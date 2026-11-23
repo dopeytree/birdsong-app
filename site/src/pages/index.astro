@@ -216,14 +216,26 @@ const credits = [
     requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("ready")));
   </script>
 
-  <!-- An iPhone-style notification slides down from the top; a click dismisses it. -->
-  <div class="notice" role="status" aria-live="polite" title="Dismiss">
-    <img class="notice-icon" src={`${base}/notice-icon.png`} alt="" />
-    <span class="notice-body">
-      <span class="notice-head"><strong>Birdsongs</strong><span class="notice-time">now</span></span>
-      <span class="notice-text">I just spotted Northern Cardinal! ❤️‍🔥 50 points</span>
-    </span>
-  </div>
+  <!-- iPhone-style notifications slide down from the top and stack, newest
+       on top; a click dismisses one. Built from the template below. -->
+  <div class="notices" aria-live="polite"></div>
+  <template id="notice">
+    <div class="notice" role="status" title="Dismiss">
+      <img class="notice-icon" src={`${base}/notice-icon.png`} alt="" />
+      <span class="notice-body">
+        <span class="notice-head"><strong>Birdsongs</strong><span class="notice-time">now</span></span>
+        <span class="notice-text"></span>
+      </span>
+    </div>
+  </template>
+
+  <!-- Test: sends a second notification. -->
+  <button class="mode test-notice" type="button" aria-label="Send a test notification" title="Send a test notification">
+    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
+    </svg>
+  </button>
 
   <!-- Text effect: murmuration (Ed's choice). ?fx=ink or ?fx=none to compare. -->
   <script>
@@ -244,11 +256,33 @@ const credits = [
       label();
     });
 
-    const notice = document.querySelector('.notice');
-    const hide = () => notice.classList.remove('show');
-    // Stays until clicked or tapped.
-    setTimeout(() => notice.classList.add('show'), 1200);
-    notice.addEventListener('pointerdown', hide);
+    // Notifications: each stays until clicked or tapped.
+    const stack = document.querySelector('.notices');
+    const template = document.querySelector('#notice');
+    // Moves the others smoothly when one arrives or goes.
+    function flip(change) {
+      const els = [...stack.children];
+      const before = new Map(els.map(e => [e, e.getBoundingClientRect().top]));
+      change();
+      els.forEach(e => {
+        if (!e.isConnected) return;
+        const dy = before.get(e) - e.getBoundingClientRect().top;
+        if (dy) e.animate([{ translate: `0 ${dy}px` }, { translate: '0 0' }], { duration: 450, easing: 'cubic-bezier(.2, .9, .25, 1)' });
+      });
+    }
+    function notify(text) {
+      const n = template.content.firstElementChild.cloneNode(true);
+      n.querySelector('.notice-text').textContent = text;
+      flip(() => stack.prepend(n));
+      requestAnimationFrame(() => requestAnimationFrame(() => n.classList.add('show')));
+      n.addEventListener('pointerdown', () => {
+        n.classList.remove('show');
+        setTimeout(() => flip(() => n.remove()), 350);
+      }, { once: true });
+    }
+    setTimeout(() => notify('I just spotted Northern Cardinal! ❤️‍🔥 50 points'), 1200);
+    document.querySelector('.test-notice').addEventListener('click', () =>
+      notify('I just spotted Black-bellied Whistling Duck! ❤️‍🔥 20 points'));
   </script>
 </body>
 </html>
@@ -469,10 +503,16 @@ const credits = [
 
   /* iPhone-style notification: frosted glass and the system font, as on iOS.
      Icon: the cardinal from the app's loading screen, on paper. */
-  .notice {
+  .notices {
     position: fixed; z-index: 50;
     top: 12px; left: 50%;
+    transform: translateX(-50%);
     width: min(calc(100vw - 16px), 400px);
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none;
+  }
+  .notice {
+    pointer-events: auto;
     display: flex; align-items: center; gap: 11px;
     padding: 11px 14px 12px 11px;
     border-radius: 22px;
@@ -484,10 +524,10 @@ const credits = [
     color: #1c1c1e;
     cursor: pointer;
     opacity: 0;
-    transform: translate(-50%, calc(-100% - 24px)) scale(.96);
+    transform: translateY(calc(-100% - 24px)) scale(.96);
     transition: transform .65s cubic-bezier(.2, .9, .25, 1.04), opacity .35s ease;
   }
-  .notice.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  .notice.show { opacity: 1; transform: none; }
   .notice-icon {
     flex: none;
     width: 38px; height: 38px;
@@ -514,6 +554,8 @@ const credits = [
     transition: color .4s, border-color .4s, transform .3s;
   }
   .mode:hover { transform: rotate(180deg); }
+  .test-notice { top: 66px; }
+  .test-notice:hover { transform: rotate(-12deg); }
   .mode:focus-visible { outline: 2px solid var(--seg-ink); outline-offset: 3px; }
   body { transition: background-color .5s ease, color .5s ease; }
 
