@@ -151,9 +151,10 @@ or a small test before building it.
   links yet. Apple's rules don't allow its logo on its own in others'
   marketing; revisit (or use the official badge) at launch.
 - **Text links (Ed, Nov 2026):** "Index of Species" opens the sideways iPad
-  (its index) full size; "walk" opens a map screenshot from
-  `site/public/shots/walk-map.jpg` once that file exists (until then it does
-  nothing). These clicks don't also bring the cardinal.
+  (its index) full size; "walk" opens the sideways iPad playing a walk (the
+  map, then a bird's card): `site/public/media/walk.mp4`, 8 s, silent,
+  looping, 2.7 MB, made from Ed's screen recording. These clicks don't also
+  bring the cardinal.
 - **Walk map marks (Ed, Nov 2026):** each bird is a small ❤️ (larger for a
   species' first sighting; was a madder hand-drawn ✕, then ❤️‍🔥), the start a hand-drawn
   + and the finish a ✕, both in ink on a paper halo. A listening station keeps
@@ -162,3 +163,63 @@ or a small test before building it.
   (deeper paper, rounded, soft shadow, no ring); tapping the same thing again,
   or the label, closes it. Bird names on the map are in ink, apart from the red
   hearts.
+- **Corner icons (Ed, Nov 2026):** the bell (top right) and sun/moon (bottom
+  right) are filled icons on their own, no circle round them.
+- **Heartbeat (Ed, Nov 2026):** once the visitor has entered, "Time" (in "Aye
+  Old as Time.") beats on its own: the strong lub-dub of ripples a click gives, through the
+  murmuring page at about 70 a minute, resting while the tab is hidden. A
+  click on it gives four strong beats; it doesn't also bring the cardinal.
+- **Button icons (Ed, Nov 2026):** Coming Soon carries a filled heart and Tap
+  to Enter a tapping hand, both Phosphor (MIT); a bird and a speaker were tried. Tap to
+  Enter is in the iOS/Android colour (sepia), not madder.
+- **Intro video v2 (Ed, Nov 2026):** `site/public/media/coming-soon.mp4` is now
+  Ed's v2 file as is (21 s, 1920×1460, 60 fps, 8 MB; the black bands are cropped
+  off by the page), shown as large as the screen allows with Tap to Enter below.
+- **Glass notifications (Ed, Nov 2026):** more see-through, a strong blur (44 px) with colour lift (saturate 2.4), a
+  light sheen and bright hairline edge; on the black page dark glass with light
+  text, as iOS in dark mode.
+- **Three dots and the film (Ed, Nov 2026):** the iphone | ipad pill became
+  three dots under the device: the film, iPhone, iPad. The film is the first
+  dot and opens first, on a loop, the size of the sideways iPad but with no
+  frame (rounded corners, soft shadow), trying to play
+  with sound (as the old veil video did) and silent if the browser refuses;
+  a click on it turns the sound on, then pauses and plays. No gate by default:
+  straight in, credits and heartbeat start at once. On trial: `?gate=play` (a
+  play button over the page faded to 75%; a click anywhere plays the film with
+  sound) and `?gate=video` (the earlier film with Tap to Enter).
+- **Leaving the film (Ed, Nov 2026):** choosing another dot stops the film
+  and sends it back to the start.
+- **The film large (Ed, Nov 2026):** a click on the film opens it in the popup,
+  as large as the screen allows, with sound, carrying on from where it was;
+  closing returns it to the page, carrying on from there. No Tap to Enter.
+- **Opens on the film (Ed, Nov 2026):** the page opens with the film large in
+  the popup, from the start, trying sound (silent if refused). When it ends
+  the popup closes itself and the page's film loops from the start; a click
+  closes it sooner. Opening the film later by a click also closes at its end.
+- **Popup (Ed, Nov 2026):** an ✕ top right instead of "Click anywhere to close"
+  (a click anywhere still closes). ‹ › at the sides and the arrow keys step
+  through the film, iPhone and iPad full size; the page's dots follow. The film
+  always opens from the beginning, with sound; small on the page it is muted.
+  The film's soft picture edges are trimmed (rows 113–1388 of Ed's 1460) and
+  its corners sit on the film's own dark, so no pale rim.
+- **Popup fade (Ed, Nov 2026):** black at 96% (was 90%), the same for the film
+  and the shots.
+- **Dots go round (Ed, Nov 2026):** when the film popup closes, the page moves
+  to the next dot, then the dots go round by themselves every 3 s (film,
+  iPhone, iPad). They wait while the popup is open and stop for good once the
+  visitor picks a dot.
+- **Popup fade, light mode (Ed, Nov 2026):** white at 97%, with the ✕ and ‹ ›
+  in ink; dark mode stays black at 96%.
+- **The map dot, and the round (Ed, Nov 2026):** a fourth dot, the map: the
+  walk film (map, then a bird's card) in the sideways iPad, silent and
+  looping, full size in the popup too. The dots now go round from page load
+  (waiting while the popup is open); a dot tapped by hand holds the round for
+  10 s instead of stopping it for good.
+- **Intro video v3 (Ed, Nov 2026):** `coming-soon.mp4` is Ed's v3 as is (HEVC,
+  1820×1460, 60 fps, 13.7 MB; picture rows 143–1358, cropped by the page).
+  Browsers that can't play HEVC get v2 (`coming-soon-v2.mp4`, H.264) via
+  <source>, with its own crop (`html[data-film='v2']`, set in the head).
+- **No film popup on touch screens (Ed, Nov 2026):** phones and tablets never
+  allow sound before a tap, so there the page opens without the popup; the
+  film plays small and silent, and a tap opens it large with sound. Desktop
+  still opens on the film.

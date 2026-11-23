@@ -80,16 +80,24 @@ export function startTextFx(mode, { letters = '', dynamicLetters = '', dynamic =
   }, { passive: true });
   addEventListener('pointerdown', e => {
     if (!running) measure();
-    ripples.push({ x: e.pageX, y: e.pageY, t0: performance.now(), hit: new Set() });
+    ripples.push({ x: e.pageX, y: e.pageY, t0: performance.now(), hit: new Set(), k: 1 });
     wake();
   }, { passive: true });
+  // A ripple sent by the page: dispatch 'fx-ripple' with { x, y } (page
+  // coordinates) and k, its strength (1 = a tap's).
+  addEventListener('fx-ripple', e => {
+    if (!running) measure();
+    const { x, y, k = 1 } = e.detail || {};
+    ripples.push({ x, y, t0: performance.now(), hit: new Set(), k });
+    wake();
+  });
 
   function frame(now) {
     // A ring travels outward from each tap; parts it passes get a nudge.
     for (let i = ripples.length - 1; i >= 0; i--) {
       const r = ripples[i], radius = (now - r.t0) * 0.55;
       if (radius > 700) { ripples.splice(i, 1); continue; }
-      const strength = Math.exp(-radius / 320);
+      const strength = Math.exp(-radius / 320) * (r.k ?? 1);
       parts.forEach(p => {
         if (r.hit.has(p)) return;
         const d = gap(p, r.x, r.y);
@@ -116,14 +124,16 @@ function split(el, letters) {
   const tokens = [];
   el.childNodes.forEach(n => {
     const cls = n.nodeType === 1 ? n.className : '';
+    if (n.nodeName === 'BR') { tokens.push({ t: '\n', cls }); return; }   // line breaks are kept
     n.textContent.split(/(\s+)/).forEach(t => tokens.push({ t: /^\s+$/.test(t) ? ' ' : t, cls }));
   });
   const words = tokens.filter(x => x.t);
   while (words[0]?.t === ' ') words.shift();
   while (words.at(-1)?.t === ' ') words.pop();
   words.forEach(({ t: tok, cls }, i) => {
+    if (tok === '\n') { const b = document.createElement('br'); if (cls) b.className = cls; shown.append(b); return; }
     if (tok === ' ') {
-      if (words[i - 1]?.t === ' ') return;
+      if (words[i - 1]?.t === ' ' || words[i - 1]?.t === '\n' || words[i + 1]?.t === '\n') return;
       // A space inside a picked-out phrase keeps its class (an underline runs on).
       const same = words[i - 1]?.cls && words[i - 1].cls === words[i + 1]?.cls;
       if (same) { const sp = document.createElement('span'); sp.className = words[i - 1].cls; sp.textContent = ' '; shown.append(sp); }

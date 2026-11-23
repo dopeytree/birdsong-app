@@ -1,4 +1,6 @@
 ---
+// The film's v3 file is HEVC, Main 10, level 5 (Ed, Nov 2026).
+const HEVC = 'video/mp4; codecs="hvc1.2.4.L150.B0"';
 // Birdsongs splash page. One page, no framework on the client: a few lines of
 // script swap the device and open the popup.
 //
@@ -11,6 +13,12 @@
 // for a device, a "‹ Plate i of ii ›" line appears to step through them.
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const shots = {
+  // The film (Ed, Nov 2026): the first dot, playing in the sideways iPad.
+  film: [
+    // v3 is HEVC; browsers that can't play it get v2 (H.264), cropped to suit
+    // (html[data-film], set in the head).
+    { type: 'video', src: 'media/coming-soon.mp4', old: 'media/coming-soon-v2.mp4', alt: 'A short film of Birdsongs.ai', landscape: true },
+  ],
   iphone: [
     { type: 'image', src: 'shots/iphone-plate.jpg', alt: 'A plate of the birds heard on one walk, on iPhone' },
   ],
@@ -19,10 +27,18 @@ const shots = {
     // { type: 'image', src: 'shots/ipad-plate.jpg', alt: 'The same plate on iPad, with its index of species' },
     { type: 'image', src: 'shots/ipad-landscape.jpg', alt: 'The plate on iPad, turned sideways', landscape: true },
   ],
+  // The map (Ed, Nov 2026): the fourth dot, the walk film in the sideways iPad.
+  map: [
+    { type: 'video', src: 'media/walk.mp4', poster: 'media/walk-poster.jpg', alt: "A walk on iPad: the map, then a bird's card", landscape: true },
+  ],
 };
+// The pill is three dots (Ed, Nov 2026): the film, iPhone, iPad. frame: which
+// device is drawn round it.
 const devices = [
-  { id: 'iphone', label: 'iphone', other: 'iPad' },
-  { id: 'ipad', label: 'ipad', other: 'iPhone' },
+  { id: 'film', label: 'The film', frame: 'ipad film' },   // sized as the sideways iPad, drawn without its frame
+  { id: 'iphone', label: 'iPhone' },
+  { id: 'ipad', label: 'iPad' },
+  { id: 'map', label: 'The map', frame: 'ipad' },
 ];
 const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 // The footer's credits, shown one at a time (src/scripts/credits.js).
@@ -58,6 +74,13 @@ const credits = [
       const system = matchMedia('(prefers-color-scheme: dark)').matches ? 'black' : 'white';
       const pick = [new URLSearchParams(location.search).get('bg'), localStorage.getItem('bg')].find(m => modes.includes(m));
       document.documentElement.dataset.bg = pick || system;
+      // The film: v3 (HEVC) where the browser can play it, else v2 (H.264).
+      document.documentElement.dataset.film = document.createElement('video').canPlayType('video/mp4; codecs="hvc1.2.4.L150.B0"') ? 'v3' : 'v2';
+      // The way in (Ed, Nov 2026): none (straight in, the film playing in the
+      // stage), or on trial ?gate=play (a play button over the faded page) or
+      // ?gate=video (the earlier film with Tap to Enter).
+      const g = new URLSearchParams(location.search).get('gate');
+      document.documentElement.dataset.gate = ['play', 'video'].includes(g) ? g : 'none';
       const veil = new URLSearchParams(location.search).get('veil');
       if (['grain', 'song', 'both'].includes(veil)) document.documentElement.dataset.veil = veil;
     })();
@@ -82,10 +105,10 @@ const credits = [
   <!-- Light / dark: switches black and white. Sun and moon icons from
        Lucide (lucide.dev, ISC licence); the sun shows in dark, the moon in light. -->
   <button class="mode theme" type="button" aria-label="Switch light and dark" title="Switch light and dark">
-    <svg class="sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
+    <svg class="sun" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <circle cx="12" cy="12" r="4.6" stroke="none" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
     </svg>
-    <svg class="moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <svg class="moon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="currentColor">
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
     </svg>
   </button>
@@ -97,8 +120,8 @@ const credits = [
 
   <!-- Bell: sends the cardinal notification now, top right. Lucide-style bell (ISC). -->
   <button class="mode test-notice" type="button" aria-label="Show a notification" title="Show a notification">
-    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" />
+    <svg viewBox="0 0 24 24" width="23" height="23" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M9.8 20a2.2 2.2 0 0 0 4.4 0z" />
     </svg>
   </button>
 
@@ -110,11 +133,17 @@ const credits = [
            the browser's controls. It tries to play with sound; browsers mostly
            refuse before a tap, so then it plays silently until "Sound on". -->
       <div class="gate-film">
-        <video class="gate-video" src={`${base}/media/coming-soon.mp4`} poster={`${base}/media/coming-soon-poster.jpg`} muted playsinline controls aria-label="A preview of Birdsongs.ai"></video>
+        <video class="gate-video" poster={`${base}/media/coming-soon-poster.jpg`} muted playsinline controls aria-label="A preview of Birdsongs.ai"><source src={`${base}/media/coming-soon.mp4`} type={HEVC} /><source src={`${base}/media/coming-soon-v2.mp4`} type="video/mp4" /></video>
         <button class="gate-sound" type="button" aria-label="Play the video with sound">Sound on</button>
       </div>
-      <button class="gate-btn" type="button">Tap to Enter</button>
+      <button class="gate-btn" type="button"><svg class="ico" viewBox="0 0 256 256" aria-hidden="true"><path d="M64,64a48,48,0,0,1,96,0,8,8,0,0,1-16,0,32,32,0,0,0-64,0,8,8,0,0,1-16,0Zm143.23,56c-8.61.4-15.23,7.82-15.23,16.43v7.28a8.17,8.17,0,0,1-7.47,8.25,8,8,0,0,1-8.53-8V120.45c0-8.61-6.62-16-15.23-16.43A16,16,0,0,0,144,120v15.73a8.17,8.17,0,0,1-7.47,8.25,8,8,0,0,1-8.53-8V64.45c0-8.61-6.62-16-15.23-16.43A16,16,0,0,0,96,64V183.74a8.19,8.19,0,0,1-6.72,8.16l-.12,0a6.09,6.09,0,0,1-6-3.09l-21-36.44c-4.3-7.46-13.74-10.57-21.4-6.62A16,16,0,0,0,34.15,168L65.1,228.05A8,8,0,0,0,72,232H208a8,8,0,0,0,7.16-4.42c.36-.72,8.84-15.06,8.84-40.65V136A16,16,0,0,0,207.23,120Z"/></svg>Tap to Enter</button>
     </div>
+  </div>
+
+  <!-- On trial, ?gate=play (Ed, Nov 2026): a play button over the page faded
+       to 75%; a click anywhere starts the film, with sound. -->
+  <div class="playgate" role="button" tabindex="0" aria-label="Play the film">
+    <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z"/></svg>
   </div>
 
   <main class="page">
@@ -129,7 +158,7 @@ const credits = [
         the day!
       </p>
       <p class="lede second">
-        <span class="madder">Aye Old as Time.</span> Each <span class="underline to-map">walk</span> becomes an artwork, with its own <span class="underline to-index">Index of Species</span>.
+        <span class="madder">Aye Old as </span><span class="madder to-beat">Time</span><span class="madder">.</span> Each <span class="underline to-map">walk</span> becomes an<br class="desk-br" /> artwork, with its own <span class="underline to-index">Index of Species</span>.
       </p>
       <p class="lede second attribution">
         Now I wonder how many you can <span class="underline">collect</span>?
@@ -137,19 +166,19 @@ const credits = [
 
       <!-- iOS, Coming Soon, Android on one line, with logos (Ed, Nov 2026). Logos from Simple
            Icons (CC0); the marks are Apple's and Google's trademarks. -->
-      <p class="soon"><span class="os"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><em>iOS</em></span><span class="cs"><em>Coming Soon</em></span><span class="os"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.4395 5.5586c-.675 1.1664-1.352 2.3318-2.0274 3.498-.0366-.0155-.0742-.0286-.1113-.043-1.8249-.6957-3.484-.8-4.42-.787-1.8551.0185-3.3544.4643-4.2597.8203-.084-.1494-1.7526-3.021-2.0215-3.4864a1.1451 1.1451 0 0 0-.1406-.1914c-.3312-.364-.9054-.4859-1.379-.203-.475.282-.7136.9361-.3886 1.5019 1.9466 3.3696-.0966-.2158 1.9473 3.3593.0172.031-.4946.2642-1.3926 1.0177C2.8987 12.176.452 14.772 0 18.9902h24c-.119-1.1108-.3686-2.099-.7461-3.0683-.7438-1.9118-1.8435-3.2928-2.7402-4.1836a12.1048 12.1048 0 0 0-2.1309-1.6875c.6594-1.122 1.312-2.2559 1.9649-3.3848.2077-.3615.1886-.7956-.0079-1.1191a1.1001 1.1001 0 0 0-.8515-.5332c-.5225-.0536-.9392.3128-1.0488.5449zm-.0391 8.461c.3944.5926.324 1.3306-.1563 1.6503-.4799.3197-1.188.0985-1.582-.4941-.3944-.5927-.324-1.3307.1563-1.6504.4727-.315 1.1812-.1086 1.582.4941zM7.207 13.5273c.4803.3197.5506 1.0577.1563 1.6504-.394.5926-1.1038.8138-1.584.4941-.48-.3197-.5503-1.0577-.1563-1.6504.4008-.6021 1.1087-.8106 1.584-.4941z"/></svg><em>Android</em></span></p>
+      <p class="soon"><span class="os"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><em>iOS</em></span><span class="cs"><svg class="ico" viewBox="0 0 256 256" aria-hidden="true"><path d="M240,102c0,70-103.79,126.66-108.21,129a8,8,0,0,1-7.58,0C119.79,228.66,16,172,16,102A62.07,62.07,0,0,1,78,40c20.65,0,38.73,8.88,50,23.89C139.27,48.88,157.35,40,178,40A62.07,62.07,0,0,1,240,102Z"/></svg><em>Coming Soon</em></span><span class="os"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.4395 5.5586c-.675 1.1664-1.352 2.3318-2.0274 3.498-.0366-.0155-.0742-.0286-.1113-.043-1.8249-.6957-3.484-.8-4.42-.787-1.8551.0185-3.3544.4643-4.2597.8203-.084-.1494-1.7526-3.021-2.0215-3.4864a1.1451 1.1451 0 0 0-.1406-.1914c-.3312-.364-.9054-.4859-1.379-.203-.475.282-.7136.9361-.3886 1.5019 1.9466 3.3696-.0966-.2158 1.9473 3.3593.0172.031-.4946.2642-1.3926 1.0177C2.8987 12.176.452 14.772 0 18.9902h24c-.119-1.1108-.3686-2.099-.7461-3.0683-.7438-1.9118-1.8435-3.2928-2.7402-4.1836a12.1048 12.1048 0 0 0-2.1309-1.6875c.6594-1.122 1.312-2.2559 1.9649-3.3848.2077-.3615.1886-.7956-.0079-1.1191a1.1001 1.1001 0 0 0-.8515-.5332c-.5225-.0536-.9392.3128-1.0488.5449zm-.0391 8.461c.3944.5926.324 1.3306-.1563 1.6503-.4799.3197-1.188.0985-1.582-.4941-.3944-.5927-.324-1.3307.1563-1.6504.4727-.315 1.1812-.1086 1.582.4941zM7.207 13.5273c.4803.3197.5506 1.0577.1563 1.6504-.394.5926-1.1038.8138-1.584.4941-.48-.3197-.5503-1.0577-.1563-1.6504.4008-.6021 1.1087-.8106 1.584-.4941z"/></svg><em>Android</em></span></p>
     </section>
 
     <section class="stage" aria-label="The app">
       <div class="devices">
         {devices.map((d, i) => (
-          <figure class={`device ${d.id}`} data-device={d.id} data-active={i === 0 ? 'true' : 'false'} data-landscape={shots[d.id][0]?.landscape ? 'true' : 'false'} aria-hidden={i === 0 ? 'false' : 'true'}>
+          <figure class={`device ${d.frame ?? d.id}`} data-device={d.id} data-active={i === 0 ? 'true' : 'false'} data-landscape={shots[d.id][0]?.landscape ? 'true' : 'false'} aria-hidden={i === 0 ? 'false' : 'true'}>
             <button class="frame" title="See it full size" aria-label="See it full size" tabindex={i === 0 ? 0 : -1}>
               {d.id === 'iphone' && <><span class="btn b1"></span><span class="btn b2"></span><span class="btn b3"></span><span class="btn b4"></span></>}
               <span class="screen">
                 {shots[d.id].map((s, j) => (
                   s.type === 'video'
-                    ? <video class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={`${base}/${s.src}`} muted loop playsinline autoplay aria-label={s.alt}></video>
+                    ? <video class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={s.old ? undefined : `${base}/${s.src}`} poster={`${base}/${s.poster ?? 'media/coming-soon-poster.jpg'}`} muted loop playsinline autoplay preload="auto" aria-label={s.alt}>{s.old && <><source src={`${base}/${s.src}`} type={HEVC} /><source src={`${base}/${s.old}`} type="video/mp4" /></>}</video>
                     : <img class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={`${base}/${s.src}`} alt={s.alt} loading={i === 0 && j === 0 ? 'eager' : 'lazy'} />
                 ))}
                 {d.id === 'iphone' && <span class="island" aria-hidden="true"></span>}
@@ -167,11 +196,9 @@ const credits = [
         <button class="step next" aria-label="Next">›</button>
       </nav>
       <!-- The device switch sits under the device (Ed, Nov 2026). -->
-      <div class="pill" role="tablist" aria-label="Show the app on">
+      <div class="pill" role="tablist" aria-label="Show">
         {devices.map((d, i) => (
-          <button role="tab" class="seg" data-device={d.id} aria-selected={i === 0 ? 'true' : 'false'}>
-            {d.label}
-          </button>
+          <button role="tab" class="seg" data-device={d.id} aria-selected={i === 0 ? 'true' : 'false'} aria-label={d.label} title={d.label}></button>
         ))}
       </div>
       <p class="hint"><em>Tap the screen to see it full size.</em></p>
@@ -190,10 +217,15 @@ const credits = [
     <div class="device iphone" data-landscape="false" data-active="true">
       <span class="frame">
         <span class="btn b1"></span><span class="btn b2"></span><span class="btn b3"></span><span class="btn b4"></span>
-        <span class="screen"><img class="shot" data-active="true" alt="" /><span class="island" aria-hidden="true"></span></span>
+        <span class="screen"><img class="shot" data-active="true" alt="" /><video class="shot box-film" data-active="true" muted loop playsinline preload="none" hidden></video><span class="island" aria-hidden="true"></span></span>
       </span>
     </div>
-    <p class="close-hint"><em>Click anywhere to close.</em></p>
+    <!-- Ed, Nov 2026: an ✕ top right instead of "Click anywhere to close."
+         (a click anywhere still closes). -->
+    <button class="box-close" type="button" aria-label="Close"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg></button>
+    <!-- Ed, Nov 2026: step through the film, iPhone and iPad full size. -->
+    <button class="box-step box-prev" type="button" aria-label="Previous">‹</button>
+    <button class="box-step box-next" type="button" aria-label="Next">›</button>
   </dialog>
 
   <script is:inline define:vars={{ roman, base }}>
@@ -220,8 +252,10 @@ const credits = [
       });
       d.querySelectorAll('.shot').forEach((s, j) => {
         s.dataset.active = j === i ? 'true' : 'false';
-        if (s.tagName === 'VIDEO') j === i ? s.play() : s.pause();
+        if (s.tagName === 'VIDEO') j === i ? s.play().catch(() => {}) : s.pause();
       });
+      // Leaving the film stops it and sends it back to the start (Ed, Nov 2026).
+      devices.forEach(dev => { if (dev !== d) dev.querySelectorAll('video').forEach(v => { v.pause(); v.currentTime = 0; }); });
       d.dataset.landscape = stops[k].sideways ? 'true' : 'false';
       segs.forEach(s => s.setAttribute('aria-selected', s.dataset.device === d.dataset.device ? 'true' : 'false'));
       const own = stops.filter(t => t.d === d);
@@ -242,36 +276,120 @@ const credits = [
       if (s.tagName !== 'IMG') return;
       boxDev.className = `device ${d.dataset.device}`;
       boxDev.dataset.landscape = sideways ? 'true' : 'false';
+      boxImg.hidden = false;
+      boxFilm.hidden = true;
       boxImg.src = s.src;
       boxImg.alt = s.alt;
-      box.showModal();
+      if (!box.open) box.showModal();
     }
     box.addEventListener('click', () => box.close());
 
     // Links in the text (Ed, Nov 2026): "Index of Species" opens the sideways
-    // iPad (its index) full size; "walk" opens the map screenshot, once
-    // public/shots/walk-map.jpg exists (until then it does nothing).
+    // iPad (its index) full size; "walk" opens the sideways iPad playing a
+    // walk: the map, then a bird's card (public/media/walk.mp4, silent, looping).
     const shot = name => `${base}/shots/${name}`;
-    const showShot = (device, sideways, src, alt) => {
+    const boxFilm = box.querySelector('.box-film');
+    const showShot = (device, sideways, src, alt, film) => {
       boxDev.className = `device ${device}`;
       boxDev.dataset.landscape = sideways ? 'true' : 'false';
-      boxImg.src = src;
-      boxImg.alt = alt;
-      box.showModal();
+      boxImg.hidden = !!film;
+      boxFilm.hidden = !film;
+      if (film) {
+        if (!boxFilm.src.endsWith(film)) { boxFilm.src = film; boxFilm.poster = src; }
+        boxFilm.setAttribute('aria-label', alt);
+        boxFilm.currentTime = 0;
+        boxFilm.play().catch(() => {});
+      } else {
+        boxImg.src = src;
+        boxImg.alt = alt;
+      }
+      if (!box.open) box.showModal();
     };
-    let mapReady = false;
-    const probe = new Image();
-    probe.onload = () => { mapReady = true; document.documentElement.dataset.map = 'ready'; };
-    probe.src = shot('walk-map.jpg');
+    box.addEventListener('close', () => boxFilm.pause());
+    let stageFrom = null;   // the page's film while it plays large
+    function openFilm(v) {
+      stageFrom = v;
+      const t = 0;                 // always from the beginning (Ed, Nov 2026)
+      v.pause();
+      boxDev.className = 'device ipad film';
+      boxDev.dataset.landscape = 'true';
+      boxImg.hidden = true;
+      boxFilm.hidden = false;
+      // The file the page's film chose (v3 or the v2 fallback).
+      const src = v.currentSrc || v.src || [...v.querySelectorAll('source')].find(o => !o.type.includes('hvc1') || document.documentElement.dataset.film === 'v3')?.src;
+      if (boxFilm.src !== src) { boxFilm.src = src; boxFilm.poster = v.poster; }
+      boxFilm.setAttribute('aria-label', v.getAttribute('aria-label'));
+      boxFilm.muted = false;
+      boxFilm.loop = false;        // the film plays once, then the popup closes
+      boxFilm.currentTime = t;
+      boxFilm.play().then(() => { if (!boxFilm.muted) document.dispatchEvent(new Event('film-sound')); })
+        .catch(() => { boxFilm.muted = true; boxFilm.play().catch(() => {}); });
+      if (!box.open) box.showModal();
+    }
+    boxFilm.addEventListener('ended', () => { if (stageFrom) box.close(); });
+
+    // In the popup, ‹ › and the arrow keys step through everything the dots
+    // show (Ed, Nov 2026): the film, iPhone, iPad. The page follows along.
+    function boxStep(dir) {
+      show((k + dir + stops.length) % stops.length);
+      const v = stops[k].s;
+      if (stops[k].d.dataset.device === 'film') { openFilm(v); return; }
+      if (stageFrom) {             // leaving the film: silence it
+        boxFilm.pause();
+        boxFilm.muted = true;
+        boxFilm.loop = true;
+        stageFrom = null;
+      }
+      openStop();
+    }
+    // A shot full size; the map's walk film plays silently on a loop.
+    function openStop() {
+      const v = stops[k].s;
+      if (v.tagName === 'VIDEO') showShot('ipad', true, v.poster, v.getAttribute('aria-label'), v.currentSrc || v.src);
+      else openBox();
+    }
+    // The dots go round every 3 s (film, iPhone, iPad, map) while the popup
+    // is shut and until the visitor picks a dot themselves.
+    // It starts on load (waiting while the film is open); a dot picked by
+    // hand holds it for 10 s (Ed, Nov 2026).
+    let cycle = null;
+    let holdUntil = 0;
+    function startCycle() {
+      clearInterval(cycle);
+      cycle = setInterval(() => {
+        if (Date.now() < holdUntil) return;
+        if (box.open || document.hidden) return;
+        show((k + 1) % stops.length);
+      }, 3000);
+    }
+    box.querySelector('.box-prev').addEventListener('click', e => { e.stopPropagation(); boxStep(-1); });
+    box.querySelector('.box-next').addEventListener('click', e => { e.stopPropagation(); boxStep(1); });
+    addEventListener('keydown', e => {
+      if (!box.open) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); boxStep(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); boxStep(1); }
+    });
+    box.addEventListener('close', () => {
+      if (!stageFrom) return;
+      stageFrom.currentTime = boxFilm.ended ? 0 : boxFilm.currentTime;   // after the end, the page's film starts again
+      stageFrom.muted = true;      // small again, silent (Ed, Nov 2026)
+      if (stageFrom.closest('.device').dataset.active === 'true') stageFrom.play().catch(() => {});
+      stageFrom = null;
+      boxFilm.muted = true;
+      boxFilm.loop = true;         // the walk film still loops
+      // Then the next dot, and the dots go round by themselves (Ed, Nov 2026).
+      show((k + 1) % stops.length);
+      startCycle();
+    });
     document.addEventListener('click', e => {
       const t = e.target instanceof Element && e.target.closest('.to-index, .to-map');
       if (!t) return;
       if (t.classList.contains('to-index')) {
         e.stopPropagation();      // not the cardinal too
         showShot('ipad', true, shot('ipad-landscape.jpg'), 'The Index of Species, on iPad');
-      } else if (mapReady) {
+      } else {
         e.stopPropagation();
-        showShot('iphone', false, shot('walk-map.jpg'), 'The map of a walk');
+        showShot('ipad', true, `${base}/media/walk-poster.jpg`, 'A walk on iPad: the map, then a bird\'s card', `${base}/media/walk.mp4`);
       }
     });
     // Closing hands focus back to the screen, which would show its focus ring.
@@ -281,13 +399,17 @@ const credits = [
 
     devices.forEach(d => d.querySelector('.frame').addEventListener('click', e => {
       byPointer = e.detail > 0;   // 0 when opened from the keyboard
-      openBox();
+      const v = stops[k].s;
+      // The film (Ed, Nov 2026): a click opens it large in the popup, with
+      // sound, carrying on from where it was; closing hands it back.
+      if (d.dataset.device === 'film') { openFilm(v); return; }
+      openStop();
     }));
     nav.querySelector('.prev').addEventListener('click', () => step(-1));
     nav.querySelector('.next').addEventListener('click', () => step(1));
     const firstOn = id => stops.findIndex(t => t.d.dataset.device === id);
     let picked = false;   // once the visitor uses the pill, leave their choice alone
-    segs.forEach(s => s.addEventListener('click', () => { picked = true; show(firstOn(s.dataset.device)); }));
+    segs.forEach(s => s.addEventListener('click', () => { picked = true; holdUntil = Date.now() + 10000; show(firstOn(s.dataset.device)); }));
     // Which device to show first. On touch screens (phones, iPads), the
     // opposite shape to the screen, so the shot fills it best (Ed, Nov 2026):
     // held upright, the sideways iPad; held sideways, the upright iPhone.
@@ -296,8 +418,13 @@ const credits = [
     const touch = matchMedia('(pointer: coarse)');
     const upright = matchMedia('(orientation: portrait)');
     const byShape = () => touch.matches ? (upright.matches ? 'ipad' : 'iphone') : 'iphone';
-    show(firstOn(location.hash === '#ipad' ? 'ipad' : byShape()));
-    upright.addEventListener('change', () => { if (!picked && touch.matches) show(firstOn(byShape())); });
+    // The film is the first dot and opens first (Ed, Nov 2026); #iphone or
+    // #ipad in the address opens on that. byShape picks between iPhone and iPad
+    // when the device turns, unless the film is showing or the pill was used.
+    const hashDev = location.hash.slice(1);
+    show(firstOn(['iphone', 'ipad', 'map'].includes(hashDev) ? hashDev : 'film'));
+    startCycle();
+    upright.addEventListener('change', () => { if (!picked && touch.matches && stops[k].d.dataset.device !== 'film') show(firstOn(byShape())); });
     requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("ready")));
   </script>
 
@@ -418,6 +545,7 @@ const credits = [
       sing();                    // and the cardinal greets them (Ed, Nov 2026)
       notify(CARDINAL_TEXT);
       gate.classList.add('gone');
+      startPulse();               // the heartbeat begins
       setTimeout(() => gate.remove(), 900);
       startCredits(credits);
     };
@@ -428,9 +556,11 @@ const credits = [
     // never enter the site. "Sound on" turns the sound on where it is.
     const film = gate.querySelector('.gate-video');
     const soundBtn = gate.querySelector('.gate-sound');
-    film.muted = false;
-    film.play().then(() => { soundBtn.hidden = true; })
-      .catch(() => { film.muted = true; film.play().catch(() => {}); });
+    if (document.documentElement.dataset.gate === 'video') {
+      film.muted = false;
+      film.play().then(() => { soundBtn.hidden = true; })
+        .catch(() => { film.muted = true; film.play().catch(() => {}); });
+    }
     film.addEventListener('click', e => e.stopPropagation());
     film.addEventListener('volumechange', () => { if (!film.muted) soundBtn.hidden = true; });
     soundBtn.addEventListener('click', e => {
@@ -439,7 +569,7 @@ const credits = [
       if (film.paused) film.play().catch(() => {});
       soundBtn.hidden = true;
     });
-    addEventListener('keydown', e => { if (!entered && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); } });
+    addEventListener('keydown', e => { if (!entered && document.documentElement.dataset.gate === 'video' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); } });
 
 
     // Bell: the cardinal notification, straight away (Ed, Nov 2026).
@@ -464,6 +594,40 @@ const credits = [
       egg();
     });
 
+    // "Now I wonder…" stays on one line: if it doesn't fit, its type shrinks.
+    const quote = document.querySelector('.lede.attribution');
+    const fitQuote = () => {
+      quote.style.fontSize = '';
+      const need = quote.scrollWidth, room = quote.clientWidth;
+      if (need > room) quote.style.fontSize = `${parseFloat(getComputedStyle(quote).fontSize) * room / need * 0.98}px`;
+    };
+    fitQuote();
+    document.fonts?.ready.then(fitQuote);
+    addEventListener('resize', fitQuote);
+
+    // A heartbeat from "Time" (Ed, Nov 2026): once the visitor has entered,
+    // the word sends a soft lub-dub of ripples through the page, on its own,
+    // at about 70 beats a minute; it rests while the tab is hidden. A click
+    // on it gives four strong beats, and doesn't also bring the cardinal.
+    const timeWord = document.querySelector('.to-beat');
+    const beatFrom = k => {
+      const r = timeWord.getBoundingClientRect();
+      dispatchEvent(new CustomEvent('fx-ripple', { detail: { x: r.left + scrollX + r.width / 2, y: r.top + scrollY + r.height / 2, k } }));
+    };
+    const BEAT = 850, DUB = 210;
+    const heartbeat = (lub, dub) => { beatFrom(lub); setTimeout(() => beatFrom(dub), DUB); };
+    let pulse = null;
+    const startPulse = () => { if (!pulse) pulse = setInterval(() => { if (!document.hidden) heartbeat(1.6, 1.0); }, BEAT); };   // the same strong beat as a click on Time, looping
+    let strong = false;
+    document.addEventListener('click', e => {
+      if (!(e.target instanceof Element && e.target.closest('.to-beat'))) return;
+      e.stopPropagation();          // the heartbeat alone, not the cardinal too
+      if (strong) return;
+      strong = true;
+      for (let i = 0; i < 4; i++) setTimeout(() => heartbeat(1.6, 1.0), i * BEAT);
+      setTimeout(() => { strong = false; }, 4 * BEAT);
+    }, true);
+
     // Coming Soon: a click brings the song and the notification, like the bell.
     document.querySelector('.soon > .cs').addEventListener('click', () => {
       soundOK = true;            // a click, so sound is allowed now
@@ -480,6 +644,46 @@ const credits = [
       notify(CARDINAL_TEXT);
     });
 
+
+    // How the visitor comes in (see the head): straight in, or by a gate.
+    const gateMode = document.documentElement.dataset.gate;
+    const stageFilm = document.querySelector('.devices .device[data-device="film"] video');
+    if (gateMode === 'none') {
+      gate.remove();
+      // The page opens with the film large in the popup, from the start
+      // (Ed, Nov 2026); it closes itself when the film ends. It tries to play
+      // with sound, silent if the browser refuses; with sound, the page may
+      // sound from then on.
+      document.addEventListener('film-sound', () => { soundOK = true; song.muted = false; }, { once: true });
+      // Not on phones and tablets (Ed, Nov 2026): they never allow sound
+      // before a tap, so the film waits small on the page for one.
+      if (!matchMedia('(pointer: coarse)').matches && stageFilm.closest('.device').dataset.active === 'true') {
+        stageFilm.currentTime = 0;
+        stageFilm.closest('.frame').click();
+      }
+      startPulse();
+      startCredits(credits);
+    }
+    // ?gate=play: a click anywhere starts the film from the beginning, with
+    // sound, and lets the page sound from then on.
+    const playgate = document.querySelector('.playgate');
+    if (gateMode === 'play') {
+      gate.remove();
+      const go = () => {
+        playgate.classList.add('gone');
+        setTimeout(() => playgate.remove(), 900);
+        soundOK = true;
+        song.muted = false;
+        document.querySelector('.seg[data-device="film"]').click();
+        stageFilm.muted = false;
+        stageFilm.currentTime = 0;
+        stageFilm.play().catch(() => {});
+        startPulse();
+        startCredits(credits);
+      };
+      playgate.addEventListener('click', go, { once: true });
+      playgate.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    } else playgate.remove();
   </script>
 </body>
 </html>
@@ -573,6 +777,8 @@ const credits = [
   .lede.second { color: var(--sepia); font-style: italic; }
   /* Set like a quotation's author: to the right, after a short ruled line. */
   .attribution { text-align: right; }
+  /* "Now I wonder…" always on one line (Ed, Nov 2026): it shrinks to fit. */
+  .lede.attribution { white-space: nowrap; }
   .attribution::before {
     content: '';
     display: inline-block;
@@ -585,37 +791,42 @@ const credits = [
 
   /* The app's mic / listen pill, reused as the device switch. */
   /* Centred under the device (Ed, Nov 2026). */
+  /* The switch is three dots (Ed, Nov 2026): the film, iPhone, iPad. */
   .pill {
     display: flex;
+    gap: 14px;
     width: fit-content;
     margin: 1.8rem auto 0;
-    border: 1.5px solid var(--madder);
-    border-radius: 999px;
-    overflow: hidden;
   }
   .seg {
-    border: 0;
+    width: 12px; height: 12px;
+    padding: 0;
+    border: 1.5px solid var(--madder);
+    border-radius: 50%;
     background: transparent;
-    color: var(--seg-ink);
-    font-family: var(--fell-sc);
-    font-size: 1.1rem;
-    letter-spacing: .05em;
-    padding: .45em 1.3em .5em;
     cursor: pointer;
-    transition: background .25s, color .25s;
+    transition: background .25s, transform .25s;
   }
-  .seg + .seg { border-left: 1.5px solid var(--madder); }
-  .seg[aria-selected='true'] { background: var(--madder); color: var(--paper); }
+  .seg:hover { transform: scale(1.2); }
+  .seg[aria-selected='true'] { background: var(--madder); }
   .seg:focus-visible, .frame:focus-visible, .step:focus-visible { outline: 2px solid var(--madder); outline-offset: 4px; }
   /* "Coming Soon" in a thin rounded outline (Ed, Nov 2026): a label, not a
      button, in the pill's red. */
   .soon { color: var(--sepia); margin: 3.2rem 0 0; font-size: 1.1rem; text-align: center; }
   /* Words picked out in madder, the colour of "Coming Soon". */
   .madder { color: var(--madder); }
-  .to-index, html[data-map='ready'] .to-map { cursor: pointer; }
+  .to-index, .to-map, .to-beat { cursor: pointer; }
   .underline, .underline .fx-ch { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
   .soon { display: flex; justify-content: center; align-items: center; flex-wrap: nowrap; gap: .6rem; }
+  /* The three buttons never wrap inside themselves; in a narrower column
+     they shrink a little to keep on one line (the column is a size container). */
+  .soon > span { white-space: nowrap; font-size: clamp(.85rem, 4.4cqw, 1.1rem); }
+  .soon > span.os { font-size: clamp(.544rem, 2.816cqw, .704rem); }   /* iOS and Android 36% smaller than Coming Soon (Ed, Nov 2026: 20%, then 20% more) */
+  .soon .os { display: inline-flex; align-items: center; }
   .soon > span.os { color: var(--sepia); cursor: default; }   /* the colour of "Now I wonder…" */
+  /* Heart (Coming Soon) and tapping hand (Tap to Enter) icons: Phosphor, fill (MIT). */
+  .ico { width: 1em; height: 1em; fill: currentColor; vertical-align: -.12em; margin-right: .4em; }
+  .soon .cs { display: inline-flex; align-items: center; }
   .soon .os svg { width: .95em; height: .95em; fill: currentColor; vertical-align: -.12em; margin-right: .4em; }
   .soon > span {
     color: var(--madder);          /* the filled pill's red-orange, in both modes */
@@ -683,6 +894,16 @@ const credits = [
   /* Size changes animate only once the page has loaded (.ready). */
   .ready .frame { transition: transform .3s ease, padding .6s ease, border-radius .6s ease; }
   .ready .screen { transition: height .6s ease, aspect-ratio .6s ease, border-radius .6s ease; }
+  /* The film: no device frame, just the picture with rounded corners and a
+     soft shadow (Ed, Nov 2026). Its file has black bands, cropped off here. */
+  .device.film { --bezel: 0px; --ar: 1820 / 1216; --r-outer: 12px; --r-inner: 12px; }
+  .device.film .screen { background: #131311; }   /* the film's own dark, so no pale rim at the corners */
+  .device.film .frame, .device.film .frame:hover { background: none; box-shadow: 0 30px 60px -12px rgba(0, 0, 0, .5); }
+  .device.film video { object-position: 50% 58.6%; }
+  /* The v2 fallback, 1920×1460: picture rows 113–1388. */
+  html[data-film='v2'] .device.film { --ar: 1920 / 1276; }
+  html[data-film='v2'] .device.film video, html[data-film='v2'] .gate-video { object-position: 50% 61.4%; }
+  html[data-film='v2'] .gate-video { aspect-ratio: 1920 / 1276; }   /* Ed's v3 file, 1820×1460: picture rows 143–1358; its bands and soft edges trimmed */
   .ipad .frame { box-shadow:
       0 0 0 1.5px #6a6761, 0 0 0 3px #3a3936,
       0 2px 3px 3px rgba(42, 36, 28, .25),
@@ -750,10 +971,15 @@ const credits = [
     display: flex; align-items: center; gap: 11px;
     padding: 11px 14px 12px 11px;
     border-radius: 22px;
-    background: rgba(250, 247, 240, .72);
-    backdrop-filter: blur(24px) saturate(1.6);
-    -webkit-backdrop-filter: blur(24px) saturate(1.6);
-    box-shadow: 0 10px 34px rgba(42, 36, 28, .2), 0 0 0 .5px rgba(42, 36, 28, .1);
+    /* Glass (Ed, Nov 2026): more see-through, a stronger blur, a light sheen
+       from the top and a bright hairline edge, as on iOS. */
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, .08) 55%, rgba(255, 255, 255, .14)),
+      rgba(250, 247, 240, .38);
+    backdrop-filter: blur(44px) saturate(2.4) brightness(1.14);
+    -webkit-backdrop-filter: blur(44px) saturate(2.4) brightness(1.14);
+    border: 1px solid rgba(255, 255, 255, .45);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 -1px 0 rgba(255, 255, 255, .12);
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
     color: #1c1c1e;
     cursor: pointer;
@@ -762,6 +988,16 @@ const credits = [
     transition: transform .65s cubic-bezier(.2, .9, .25, 1.04), opacity .35s ease;
   }
   .notice.show { opacity: 1; transform: none; }
+  /* On the black page: dark glass and light text, as iOS does in dark mode. */
+  html[data-bg='black'] .notice {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .03) 55%, rgba(255, 255, 255, .06)),
+      rgba(40, 38, 36, .42);
+    border-color: rgba(255, 255, 255, .22);
+    color: #F2EEE6;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .25);
+  }
+  html[data-bg='black'] .notice-time { color: rgba(235, 235, 245, .55); }
   .notice-icon {
     flex: none;
     width: 38px; height: 38px;
@@ -780,14 +1016,14 @@ const credits = [
     top: 18px; right: 18px;
     width: 40px; height: 40px;
     display: grid; place-items: center;
-    border: 1.5px solid var(--ink);
-    border-radius: 50%;
+    border: 0;                     /* no circle: filled icons on their own (Ed, Nov 2026) */
     background: transparent;
     color: var(--ink);
+    opacity: .85;
     cursor: pointer;
-    transition: color .4s, border-color .4s, transform .3s;
+    transition: color .4s, opacity .3s, transform .3s;
   }
-  .mode:hover { transform: rotate(15deg); }
+  .mode:hover { transform: rotate(15deg); opacity: 1; }
   /* Sun in dark, moon in light; they swap with a turn and a fade. */
   .mode svg { grid-area: 1 / 1; transition: opacity .35s ease, transform .5s cubic-bezier(.2, .8, .2, 1); }
   html[data-bg='black'] .mode .moon,
@@ -798,7 +1034,7 @@ const credits = [
   .maker { position: fixed; z-index: 40; left: 18px; bottom: 18px; line-height: 0; }
   .maker img { width: 70px; height: auto; }
   .test-notice:hover { transform: rotate(-12deg); }
-  .mode:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+  .mode:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 50%; }
   body { transition: background-color .5s ease, color .5s ease; }
   /* The cardinal's spectrogram, faint along the foot of the page (Ed, Nov
      2026), as on the Tap to Enter veil. Drawn in the ink colour, so it reads
@@ -820,6 +1056,22 @@ const credits = [
   body { cursor: default; }
 
   /* The gate: the page faded behind "Tap to Enter"; it fades away on entry. */
+  /* Which way in shows (see the head): the earlier gate only at ?gate=video,
+     the play button only at ?gate=play. */
+  html:not([data-gate='video']) .gate { display: none; }
+  html:not([data-gate='play']) .playgate { display: none; }
+  .playgate {
+    position: fixed; inset: 0; z-index: 100;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--page) 75%, transparent);
+    color: var(--ink);
+    cursor: pointer;
+    transition: opacity .8s ease;
+  }
+  .playgate.gone { opacity: 0; pointer-events: none; }
+  .playgate svg { width: clamp(64px, 9vw, 110px); height: auto; fill: currentColor; opacity: .9; filter: drop-shadow(0 6px 20px rgba(0, 0, 0, .35)); }
+  .playgate:focus-visible { outline: none; }
+
   .gate {
     position: fixed; inset: 0; z-index: 100;
     display: grid; place-items: center;
@@ -843,14 +1095,15 @@ const credits = [
   }
   html[data-veil='grain'] .gate::before, html[data-veil='song'] .gate::after { display: none; }
   .gate-inner { position: relative; z-index: 1; }
-  .gate-inner { display: flex; flex-direction: column; align-items: center; gap: clamp(18px, 4vh, 36px); padding: 20px; }
+  .gate-inner { display: flex; flex-direction: column; align-items: center; gap: clamp(12px, 2.5vh, 24px); padding: 12px; }
   .gate-film { position: relative; }
-  /* The recording has black bands top and bottom; cropped off. */
+  /* The intro video (v2, Nov 2026): Ed's file as is; its black bands are cropped off here. */
   .gate-video {
     display: block;
-    width: min(640px, 86vw, calc(58vh * 1.576));
+    width: min(96vw, calc((100svh - 130px) * 1.497));   /* as large as the screen allows, Tap to Enter below (Ed, Nov 2026) */
     height: auto;
-    aspect-ratio: 1280 / 812;
+    aspect-ratio: 1820 / 1216;
+    object-position: 50% 58.6%;      /* Ed's v3 file, 1820×1460: shows just the picture, 143 px above, 101 below */
     object-fit: cover;
     border-radius: 14px;
     box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .7);
@@ -871,7 +1124,8 @@ const credits = [
     font-family: var(--fell);
     font-style: italic;
     font-size: 1.1rem;
-    color: var(--madder);
+    color: var(--sepia);          /* the colour of iOS and Android (Ed, Nov 2026) */
+    display: inline-flex; align-items: center;
     background: none;
     border: 1px solid currentColor;
     border-radius: 999px;
@@ -898,7 +1152,7 @@ const credits = [
   /* The popup takes focus when it opens (so Esc works); no browser focus ring. */
   .lightbox:focus, .lightbox:focus-visible { outline: none; }
   .lightbox::backdrop {
-    background: rgba(0, 0, 0, .9);
+    background: rgba(0, 0, 0, .96);   /* the same for the film and the shots; was .9 (Ed, Nov 2026) */
   }
   .lightbox[open], .lightbox[open]::backdrop { animation: fade-in .45s ease; }
   .lightbox[open] .device { animation: rise .5s cubic-bezier(.2, .7, .2, 1); }
@@ -909,8 +1163,29 @@ const credits = [
   .lightbox .ipad { --h: min(calc(100vh - 110px), calc((100vw - 48px) * 1.4)); }
   .lightbox .ipad .btn, .lightbox .ipad .island { display: none; }
   .lightbox .ipad[data-landscape='true'] { --h: min(calc(100vh - 110px), calc((100vw - 48px) / 1.46)); }
+  .lightbox .device.film[data-landscape='true'] { --h: min(calc(100vh - 110px), calc((100vw - 140px) / 1.497)); }   /* room for ‹ › */
   .lightbox .frame { cursor: zoom-out; }
   .lightbox .frame:hover { transform: none; }
+  /* Light mode: the popup fades to white, and its ✕ and ‹ › turn to ink (Ed, Nov 2026). */
+  html[data-bg='white'] .lightbox::backdrop { background: rgba(255, 255, 255, .97); }
+  html[data-bg='white'] .box-close, html[data-bg='white'] .box-step { color: var(--ink); }
+  .box-close {
+    position: fixed; top: clamp(10px, 2vw, 24px); right: clamp(10px, 2vw, 24px);
+    border: 0; background: none; padding: 6px; cursor: pointer;
+    color: var(--paper); opacity: .7; transition: opacity .2s;
+  }
+  .box-close svg { width: clamp(24px, 2.6vw, 32px); height: auto; display: block; fill: currentColor; }
+  .box-close:hover, .box-close:focus-visible { opacity: 1; outline: none; }
+  .box-step {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    border: 0; background: none; padding: 0 .3em;
+    font-family: var(--fell); font-size: clamp(2.6rem, 5vw, 4rem); line-height: 1;
+    color: var(--paper); opacity: .6; cursor: pointer;
+    transition: opacity .2s;
+  }
+  .box-step:hover, .box-step:focus-visible { opacity: 1; outline: none; }
+  .box-prev { left: clamp(4px, 1.5vw, 24px); }
+  .box-next { right: clamp(4px, 1.5vw, 24px); }
   .close-hint { margin: 0; color: var(--paper); opacity: .8; font-size: 1rem; }
 
   /* Mobile: phones, upright iPads and narrow windows, up to 820px wide
@@ -935,6 +1210,7 @@ const credits = [
     .stage { order: 3; flex: none; align-self: stretch; margin-bottom: 1.2rem; }
     .lede, .soon { order: 4; }
     .lede { width: 100%; font-size: clamp(.86rem, 3.5vw, 1.1rem); line-height: 1.42; margin: 0 auto .45rem; }
+    .desk-br { display: none; }   /* the "artwork" line break is for wider screens only */
     /* The paragraphs sit centred as a block, their lines set left; the quote
        keeps to the right. */
     .lede:not(.attribution) { text-align: left; }
@@ -949,14 +1225,14 @@ const credits = [
     .ipad   { --h: min(100cqh, calc(100cqw * 1.4)); }
     .ipad[data-landscape='true'] { --h: min(100cqh, calc(100cqw / 1.47)); }
     .pill { margin-top: 1.1rem; }
-    .seg { font-size: .95rem; padding: .35em 1.1em .4em; }
+    .seg { width: 11px; height: 11px; }
     .hint { display: none; }
 
     footer { padding: 4px 12px 10px; font-size: .8rem; }
 
     /* Round buttons smaller. */
     .mode { width: 34px; height: 34px; top: 10px; right: 10px; }
-    .mode svg { width: 16px; height: 16px; }
+    .mode svg { width: 20px; height: 20px; }
     .theme { top: auto; bottom: 10px; }
     .maker { left: 10px; bottom: 10px; }
     .maker img { width: 56px; }
