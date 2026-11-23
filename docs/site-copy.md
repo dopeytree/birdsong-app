@@ -14,9 +14,9 @@ Every bird it hears is lovingly illustrated in the manner of the old
 natural-history books: dated, placed on the map, along with the weather of
 the day.
 
-*I wonder how many you can collect?*
-
 *As old as time. Each walk becomes an artwork, with its own index of species.*
+
+*I wonder how many you can collect?*
 
 Earlier taglines: "A field journal that listens now", "Be here now", "I just spotted Kingfisher! :D" (the
 notification's words, now with Northern Cardinal), "I wonder who has the fairest call of them all?".
