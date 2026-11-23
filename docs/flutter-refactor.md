@@ -50,7 +50,13 @@ Ed needs to run `Build on Mac.command` and look at:
 5. The map's timing readout off by default (Settings → Map, debug builds);
    no "Passed on the way" under the full-screen map.
 
-Details of 2 to 4 are in `map.md`.
+6. (23 Nov) Ancient woods much darker; map search and buttons grey
+   engraved labels, full screen beside the search; search clears on a
+   click and favours places and nature; overlapping bird names show one,
+   a tap on a name opens the card; "Passed on the way" on the bottom of
+   the full-screen map.
+
+Details of 2 to 6 are in `map.md`; Ed's words in `decisions.md`.
 
 Also built 23 Nov: the model update strip along the top of the screen
 (Settings → Models → Check now to see it at once). Notes in `data-sources.md`

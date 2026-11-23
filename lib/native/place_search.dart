@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:latlong2/latlong.dart' hide Path;
 
-import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
+import '../main.dart' show ink, paper, paperDeep, sepia, serif;
 
 /// A place found by the map's search: its name, a line saying where it is,
 /// its point, and its extent when it has one.
@@ -24,16 +24,72 @@ class FoundPlace {
   bool get hasExtent => south != null && west != null && north != null && east != null && north! > south! && east! > west!;
 }
 
+/// Shops, streets and other built things. Not a place to walk to.
+const _builtKeys = {
+  'amenity',
+  'shop',
+  'office',
+  'craft',
+  'healthcare',
+  'building',
+  'highway',
+  'railway',
+  'public_transport',
+  'aeroway',
+  'emergency',
+  'man_made',
+  'power',
+  'club',
+};
+
+/// Nature and land, shown after a named place and before the rest.
+const _natureKeys = {
+  'natural',
+  'water',
+  'waterway',
+  'leisure',
+  'boundary',
+  'landuse',
+  'historic',
+  'mountain_pass',
+};
+
+/// 0 a named place, 1 nature (including a viewpoint), 2 anything else kept.
+/// -1 is a shop, a street, a house number, or other built thing, dropped.
+int _rankOf(Map<String, dynamic> p) {
+  if (p.containsKey('housenumber')) return -1;
+  final key = p['osm_key'];
+  if (key is! String) return 2;
+  if (key == 'place') return 0;
+  if (key == 'tourism') return p['osm_value'] == 'viewpoint' ? 1 : -1;
+  if (_natureKeys.contains(key)) return 1;
+  if (_builtKeys.contains(key)) return -1;
+  return 2;
+}
+
 /// Photon's answer as places. Its extent is two corners, in no stated
 /// order, so it is read as the smallest and largest of each. One place of
 /// each name and where: Photon gives a town's point, its boundary and its
 /// parish separately, which read the same; the first (its best) is kept.
+///
+/// Results are nature and places, not shops. Dropped: an `osm_key` of
+/// amenity, shop, office, craft, healthcare, building, highway, railway,
+/// public_transport, aeroway, emergency, man_made, power, club, or tourism
+/// (except tourism=viewpoint), and any feature with a house number. What
+/// remains is ranked, Photon's own order kept within each rank: `place`
+/// first (isles, islands, towns, villages, cities, hamlets, localities —
+/// every place value), then nature (natural, water, waterway, leisure,
+/// boundary, landuse, historic, mountain_pass, a viewpoint), then anything
+/// else not dropped.
 List<FoundPlace> placesOf(Map<String, dynamic> j) {
-  final out = <FoundPlace>[];
+  // 0 named places, 1 nature, 2 the rest.
+  final bands = [<FoundPlace>[], <FoundPlace>[], <FoundPlace>[]];
   final seen = <String>{};
   for (final f in (j['features'] as List?) ?? const []) {
     final m = f as Map<String, dynamic>;
     final p = (m['properties'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final rank = _rankOf(p);
+    if (rank < 0) continue;
     final c = ((m['geometry'] as Map?)?['coordinates'] as List?)?.cast<num>();
     if (c == null || c.length < 2) continue;
     final name = (p['name'] ?? p['street'] ?? '') as String;
@@ -45,7 +101,7 @@ List<FoundPlace> placesOf(Map<String, dynamic> j) {
     }
     if (!seen.add('${name.toLowerCase()}|${parts.join(', ').toLowerCase()}')) continue;
     final e = (p['extent'] as List?)?.cast<num>();
-    out.add(FoundPlace(
+    bands[rank].add(FoundPlace(
       name,
       parts.join(', '),
       LatLng(c[1].toDouble(), c[0].toDouble()),
@@ -55,16 +111,18 @@ List<FoundPlace> placesOf(Map<String, dynamic> j) {
       north: e != null && e.length == 4 ? math.max(e[1], e[3]).toDouble() : null,
     ));
   }
-  return out;
+  return [...bands[0], ...bands[1], ...bands[2]];
 }
 
 /// Ask Photon (komoot, OpenStreetMap data) for [q], nearest [near] first.
+/// Twenty-five are asked for, so dropping shops still leaves enough; the
+/// list shows 6.
 Future<List<FoundPlace>> searchPlaces(String q, LatLng near) async {
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
   try {
     final req = await client.getUrl(Uri.https('photon.komoot.io', '/api', {
       'q': q,
-      'limit': '10',
+      'limit': '25',
       'lang': 'en',
       'lat': near.latitude.toStringAsFixed(4),
       'lon': near.longitude.toStringAsFixed(4),
@@ -166,7 +224,18 @@ class _PlaceSearchState extends State<PlaceSearch> {
 
   @override
   Widget build(BuildContext context) {
-    const box = BoxDecoration(color: paper, border: Border.fromBorderSide(BorderSide(color: paperDeep)));
+    // Engraved label: warm grey, a paper hairline inset, no hard outer border.
+    // The list below stays paper, with the same slight radius.
+    const bar = BoxDecoration(
+      color: Color(0xFF8C877D),
+      borderRadius: BorderRadius.all(Radius.circular(4)),
+      boxShadow: [BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10)],
+    );
+    const box = BoxDecoration(
+      color: paper,
+      borderRadius: BorderRadius.all(Radius.circular(4)),
+      border: Border.fromBorderSide(BorderSide(color: paperDeep)),
+    );
     // TextFieldTapRegion: a click on a suggestion counts as inside the field,
     // so the field keeps its focus (and the list stays) until the tap lands.
     return TextFieldTapRegion(
@@ -178,11 +247,12 @@ class _PlaceSearchState extends State<PlaceSearch> {
         children: [
           Container(
             height: 31,
-            decoration: box,
-            child: Row(children: [
+            decoration: bar,
+            child: Stack(fit: StackFit.expand, children: [
+            Row(children: [
               const Padding(
                 padding: EdgeInsetsDirectional.only(start: 7, end: 4),
-                child: Icon(Icons.search, size: 16, color: sepia),
+                child: Icon(Icons.search, size: 16, color: paper),
               ),
               Expanded(
                 child: CallbackShortcuts(
@@ -190,19 +260,31 @@ class _PlaceSearchState extends State<PlaceSearch> {
                   child: TextField(
                     controller: _text,
                     focusNode: _focus,
+                    // A tap that focuses the field clears the last place, so
+                    // typing starts fresh. A tap while it already has focus
+                    // (moving the cursor) leaves the text.
+                    onTap: () {
+                      if (!_focus.hasFocus) _clear();
+                    },
                     onChanged: _typed,
                     onSubmitted: (_) {
                       if (_found.isNotEmpty) _pick(_found.first);
                     },
                     textInputAction: TextInputAction.search,
-                    style: const TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2),
-                    cursorColor: madder,
-                    decoration: const InputDecoration(
+                    style: const TextStyle(fontFamily: serif, fontSize: 15, color: paper, height: 1.2),
+                    cursorColor: paper,
+                    decoration: InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
                       hintText: 'Search for a place',
-                      hintStyle: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia),
-                      contentPadding: EdgeInsets.symmetric(vertical: 7),
+                      hintStyle: TextStyle(
+                        fontFamily: serif,
+                        fontStyle: FontStyle.italic,
+                        fontSize: 15,
+                        letterSpacing: 0.3,
+                        color: paper.withValues(alpha: 0.85),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 7),
                     ),
                   ),
                 ),
@@ -216,14 +298,30 @@ class _PlaceSearchState extends State<PlaceSearch> {
                     onTap: _clear,
                     child: const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('×', style: TextStyle(fontSize: 18, height: 1, color: sepia)),
+                      child: Text('×', style: TextStyle(fontSize: 18, height: 1, color: paper)),
                     ),
                   ),
                 ),
             ]),
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: Padding(
+                  padding: EdgeInsets.all(2),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.all(Radius.circular(3)),
+                      border: Border.fromBorderSide(BorderSide(color: Color(0x8CEEE5CE), width: 0.8)),
+                    ),
+                    child: SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ),
+            ]),
           ),
           if (_found.isNotEmpty || (_note != null && _focus.hasFocus))
             Container(
+              clipBehavior: Clip.antiAlias,
               decoration: box.copyWith(boxShadow: const [BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 6), blurRadius: 18)]),
               margin: const EdgeInsets.only(top: 2),
               child: Column(

@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show compute, consolidateHttpClientResponseBytes, kDebugMode;
+import 'package:flutter/foundation.dart' show compute, consolidateHttpClientResponseBytes, kDebugMode, visibleForTesting;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -178,12 +178,38 @@ class _Kit {
   }
 }
 
+/// Approximate box of a bird's name, centred under the heart. Width is
+/// about 6.2 px a letter plus 6; height about 15. The name sits 15 px
+/// below the marker's centre (Ed, 23 Nov).
+@visibleForTesting
+Rect birdNameBox(Offset heart, String name) {
+  const height = 15.0;
+  final width = name.length * 6.2 + 6;
+  return Rect.fromLTWH(heart.dx - width / 2, heart.dy + 15, width, height);
+}
+
+/// Which names to keep when their boxes may overlap. [boxes] are in order
+/// (earliest heard first): the first of a cluster is kept, and a later
+/// name is dropped only when it overlaps one already kept (Ed, 23 Nov).
+@visibleForTesting
+List<int> birdNamesToKeep(List<Rect> boxes) {
+  final keep = <int>[];
+  final kept = <Rect>[];
+  for (var i = 0; i < boxes.length; i++) {
+    final box = boxes[i];
+    if (kept.any(box.overlaps)) continue;
+    keep.add(i);
+    kept.add(box);
+  }
+  return keep;
+}
+
 /// The walk on a map, in place of the collage: the web plate's map mode
 /// (assets/app/map-mode.js) in Flutter. A dotted trail from Start to End
-/// (or Now), a cross where each species was first heard ([allBirds]: every
+/// (or Now), a heart where each species was first heard ([allBirds]: every
 /// call), contours traced from elevation tiles, peaks with their heights,
-/// on the paper style built for it. A tap on a cross opens that bird's
-/// card ([onBird]); on a peak or an end, a label says what it is.
+/// on the paper style built for it. A tap on a heart, or on its name, opens
+/// that bird's card ([onBird]); on a peak or an end, a label says what it is.
 ///
 /// The map takes its own drags and pinches: [onHold] asks the page around
 /// it to stop scrolling while a finger is on it.
@@ -777,7 +803,7 @@ class _WalkMapState extends State<WalkMap> {
   static const _natureEdge = Color(0xFF5F7D4C), _natureWash = Color(0xFF7F9A6A);
 
   /// Over the wood's #c2cc9f and its trees: a little deeper and older.
-  static const _ancient = Color(0x2E4F6B35);
+  static const _ancient = Color(0x993F5A2A); // #3F5A2A at 60% (Ed, 23 Nov: "C very deep")
   static const _monument = Color(0xFF8A5A3A), _building = Color(0xFF6B4A33), _wiki = Color(0xFF3D5566);
 
   TextStyle _labelStyle(Color c) => TextStyle(
@@ -1012,11 +1038,34 @@ class _WalkMapState extends State<WalkMap> {
           ),
       ];
 
-  /// A cross where each species was first heard, or at every call; the
-  /// first of each named and on top.
+  /// A heart where each species was first heard, or at every call; the
+  /// first of each named and on top. Names that would overlap show only
+  /// the earliest; a tap on a name opens the card, as the heart does
+  /// (Ed, 23 Nov). Re-decided when the zoom changes ([_moved] rebuilds)
+  /// and once the camera is ready.
   List<Marker> _birds() {
-    final seen = <String>{}, firsts = <Marker>[], rest = <Marker>[];
-    for (final b in widget.walk?.birds ?? const <WalkBird>[]) {
+    final birds = widget.walk?.birds ?? const <WalkBird>[];
+    final seen = <String>{};
+    final earliest = <WalkBird>[];
+    for (final b in birds) {
+      if (seen.add(b.sci)) earliest.add(b);
+    }
+    // Screen positions are a pure translation while panning, so overlap
+    // only changes with the zoom. [_moved] rebuilds when it does.
+    final showName = <String>{};
+    if (!_ready) {
+      for (final b in earliest) {
+        showName.add(b.sci);
+      }
+    } else {
+      final boxes = [for (final b in earliest) birdNameBox(_map.camera.latLngToScreenOffset(b.at), b.common)];
+      for (final i in birdNamesToKeep(boxes)) {
+        showName.add(earliest[i].sci);
+      }
+    }
+    seen.clear();
+    final firsts = <Marker>[], rest = <Marker>[];
+    for (final b in birds) {
       final first = seen.add(b.sci);
       if (!widget.allBirds && !first) continue;
       final size = first ? 24.0 : 18.0;
@@ -1042,7 +1091,20 @@ class _WalkMapState extends State<WalkMap> {
               ),
             ),
             // Names in ink, apart from the red hearts (Ed, Nov 2026; were madder).
-            if (first) Positioned(top: 32 + 15, child: IgnorePointer(child: _Halo(b.common, 11, ink, halo: 1.6))),
+            // A tap on the name opens the card, as the heart does (Ed, 23 Nov).
+            if (first && showName.contains(b.sci))
+              Positioned(
+                top: 32 + 15,
+                child: Semantics(
+                  button: true,
+                  label: '${b.common}: open its card',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => widget.onBird(b.sci, b.common),
+                    child: _Halo(b.common, 11, ink, halo: 1.6),
+                  ),
+                ),
+              ),
           ],
         ),
       );
@@ -1179,9 +1241,13 @@ class _WalkMapState extends State<WalkMap> {
                     backgroundColor: paper,
                     interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
                     onMapReady: () {
-                      _ready = true;
-                      _fittedTo = w?.key;
-                      _zoom = _map.camera.zoom;
+                      // the camera exists: decide which bird names overlap (Ed, 23 Nov)
+                      if (!mounted) return;
+                      setState(() {
+                        _ready = true;
+                        _fittedTo = w?.key;
+                        _zoom = _map.camera.zoom;
+                      });
                       _traceContours();
                       _lookAround();
                       _findCritters();
@@ -1287,8 +1353,6 @@ class _WalkMapState extends State<WalkMap> {
                     map: _map,
                     home: w == null || (w.trail.isEmpty && w.birds.isEmpty && w.place == null) ? null : _home,
                     homeTip: w?.station != null ? 'Back to the station' : 'Back to the walk',
-                    full: widget.onFullScreen,
-                    isFull: widget.fullScreen,
                     layers: widget.settings == null ? null : () => setState(() => _layersOpen = !_layersOpen),
                   ),
                 ),
@@ -1306,10 +1370,25 @@ class _WalkMapState extends State<WalkMap> {
                 Positioned(
                   right: 10,
                   top: 10,
-                  child: PlaceSearch(
-                    width: math.min(280.0, widget.size.width - 70),
-                    near: () => _ready ? _map.camera.center : center,
-                    onPick: _goTo,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      PlaceSearch(
+                        // 70 for the zoom column and margins; 36 more (31 + a
+                        // 5 px gap) when full screen sits to the right (Ed, 23 Nov).
+                        width: math.min(
+                          280.0,
+                          math.max(0.0, widget.size.width - 70 - (widget.onFullScreen == null ? 0 : 36)),
+                        ),
+                        near: () => _ready ? _map.camera.center : center,
+                        onPick: _goTo,
+                      ),
+                      if (widget.onFullScreen != null) ...[
+                        const SizedBox(width: 5),
+                        _FullScreenButton(isFull: widget.fullScreen, onTap: widget.onFullScreen!),
+                      ],
+                    ],
                   ),
                 ),
               if (kit != null)
@@ -1647,19 +1726,22 @@ class _StartFinishPainter extends CustomPainter {
   bool shouldRepaint(_StartFinishPainter old) => old.start != start;
 }
 
-/// The map's + and − at the top left, on paper.
+/// Engraved grey for the map's controls (Ed, 23 Nov; was paper).
+const _controlFill = Color(0xFF8C877D);
+const _controlRule = Color(0x59EEE5CE);
+const _controlRadius = BorderRadius.all(Radius.circular(4));
+const _controlShadow = BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10);
+
+/// The map's + and − at the top left, one engraved grey column. Full
+/// screen sits by the search, not here (Ed, 23 Nov).
 class _ZoomButtons extends StatelessWidget {
-  const _ZoomButtons({required this.map, this.home, this.homeTip = '', this.full, this.isFull = false, this.layers});
+  const _ZoomButtons({required this.map, this.home, this.homeTip = '', this.layers});
 
   final MapController map;
 
   /// Back to the walk or the station; null when there is nowhere to go.
   final VoidCallback? home;
   final String homeTip;
-
-  /// Full screen, or back from it.
-  final VoidCallback? full;
-  final bool isFull;
 
   /// Opens the layers panel.
   final VoidCallback? layers;
@@ -1676,71 +1758,110 @@ class _ZoomButtons extends StatelessWidget {
             child: SizedBox(
               width: 29,
               height: 29,
-              child: Center(child: Text(label, style: const TextStyle(fontSize: 18, height: 1, color: ink))),
+              child: Center(child: Text(label, style: const TextStyle(fontSize: 18, height: 1, color: paper))),
             ),
           ),
         );
-    return Container(
-      decoration: BoxDecoration(color: paper, border: Border.all(color: paperDeep)),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        button('+', 'Zoom in', 1),
-        Container(width: 29, height: 1, color: paperDeep),
-        button('−', 'Zoom out', -1),
-        if (home != null) ...[
-          Container(width: 29, height: 1, color: paperDeep),
-          Tooltip(
-            message: homeTip,
-            child: Semantics(
-              button: true,
-              label: homeTip,
-              child: InkWell(
-                onTap: home,
-                child: const SizedBox(
-                  width: 29,
-                  height: 29,
-                  child: Center(child: Icon(Icons.refresh, size: 17, color: ink)),
+    const rule = SizedBox(width: 29, height: 1, child: ColoredBox(color: _controlRule));
+    return DecoratedBox(
+      decoration: const BoxDecoration(borderRadius: _controlRadius, boxShadow: [_controlShadow]),
+      child: Material(
+        color: _controlFill,
+        borderRadius: _controlRadius,
+        clipBehavior: Clip.antiAlias,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          button('+', 'Zoom in', 1),
+          rule,
+          button('−', 'Zoom out', -1),
+          if (home != null) ...[
+            rule,
+            Tooltip(
+              message: homeTip,
+              child: Semantics(
+                button: true,
+                label: homeTip,
+                child: InkWell(
+                  onTap: home,
+                  child: const SizedBox(
+                    width: 29,
+                    height: 29,
+                    child: Center(child: Icon(Icons.refresh, size: 17, color: paper)),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-        if (full != null) ...[
-          Container(width: 29, height: 1, color: paperDeep),
-          Tooltip(
-            message: isFull ? 'Close the full-screen map' : 'Full screen',
-            child: Semantics(
-              button: true,
-              label: isFull ? 'Close the full-screen map' : 'Show the map full screen',
-              child: InkWell(
-                onTap: full,
-                child: SizedBox(
-                  width: 29,
-                  height: 29,
-                  child: Center(child: Icon(isFull ? Icons.fullscreen_exit : Icons.fullscreen, size: 19, color: ink)),
+          ],
+          if (layers != null) ...[
+            rule,
+            Tooltip(
+              message: 'Layers',
+              child: Semantics(
+                button: true,
+                label: 'What the map shows',
+                child: InkWell(
+                  onTap: layers,
+                  child: const SizedBox(
+                    width: 29,
+                    height: 29,
+                    child: Center(child: Icon(Icons.layers_outlined, size: 17, color: paper)),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-        if (layers != null) ...[
-          Container(width: 29, height: 1, color: paperDeep),
-          Tooltip(
-            message: 'Layers',
-            child: Semantics(
-              button: true,
-              label: 'What the map shows',
-              child: InkWell(
-                onTap: layers,
-                child: const SizedBox(
-                  width: 29,
-                  height: 29,
-                  child: Center(child: Icon(Icons.layers_outlined, size: 17, color: ink)),
-                ),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Full screen, to the right of the search: the same engraved grey, with
+/// the search bar's paper hairline (Ed, 23 Nov).
+class _FullScreenButton extends StatelessWidget {
+  const _FullScreenButton({required this.isFull, required this.onTap});
+
+  final bool isFull;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tip = isFull ? 'Close the full-screen map' : 'Full screen';
+    final label = isFull ? 'Close the full-screen map' : 'Show the map full screen';
+    return Tooltip(
+      message: tip,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(borderRadius: _controlRadius, boxShadow: [_controlShadow]),
+          child: Material(
+            color: _controlFill,
+            borderRadius: _controlRadius,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              child: SizedBox(
+                width: 31,
+                height: 31,
+                child: Stack(alignment: Alignment.center, children: [
+                  const Positioned.fill(
+                    child: Padding(
+                      padding: EdgeInsets.all(2),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.all(Radius.circular(3)),
+                          border: Border.fromBorderSide(BorderSide(color: Color(0x8CEEE5CE), width: 0.8)),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Icon(isFull ? Icons.fullscreen_exit : Icons.fullscreen, size: 19, color: paper),
+                ]),
               ),
             ),
           ),
-        ],
-      ]),
+        ),
+      ),
     );
   }
 }
