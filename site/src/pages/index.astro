@@ -91,7 +91,7 @@ const credits = [
       <p class="lede second">
         As old as time. Each walk becomes an artwork, with its own index of species.
       </p>
-      <p class="lede second">
+      <p class="lede second attribution">
         I wonder how many you can collect?
       </p>
 
@@ -385,6 +385,17 @@ const credits = [
   }
   .lede { font-size: clamp(1.15rem, 1.6vw, 1.35rem); line-height: 1.5; margin: 0 0 1rem; max-width: 30em; }
   .lede.second { color: var(--sepia); font-style: italic; }
+  /* Set like a quotation's author: to the right, after a short ruled line. */
+  .attribution { text-align: right; }
+  .attribution::before {
+    content: '';
+    display: inline-block;
+    width: 2.5em; height: 1px;
+    margin-right: .6em;
+    vertical-align: .3em;
+    background: currentColor;
+    opacity: .6;
+  }
 
   /* The app's mic / listen pill, reused as the device switch. */
   .pill {
