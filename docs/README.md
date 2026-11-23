@@ -14,6 +14,7 @@ needs: every file read costs tokens.
 | `decisions.md` | What Ed approved and rejected, in his words | Any visual or design choice |
 | `dev-tools.md` | opencode, Grok, Locals, OMO on Ed's Mac: what's installed, a proposed mixed setup | Setting up other coding tools |
 | `upstream-whole-plate-blend.md` | A patch offered to the web page upstream | Web-page sync only |
+| `site/` | Astro splash page, shots, GitHub Pages workflow | Web page work
 
 Agents are in `.claude/agents/`, project skills in `.claude/skills/`
 (their `README.md` also lists the plugin skills we use).

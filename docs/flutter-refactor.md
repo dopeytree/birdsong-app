@@ -74,3 +74,9 @@ Details of 2 to 4 are in `map.md`.
 - A pull request for `flutter-plate-lab`; prune merged branches; remove the
   map's debug readout when done with it.
 - Delete the web plate once Ed is happy without it.
+
+## Recent work (23 Nov)
+
+- `site/`: Astro splash page with IM Fell English fonts, CSS-drawn iPhone
+  and iPad frames, shots in `site/public/shots/`. GitHub Pages workflow
+  (`site.yml`) publishes to `dopeytree.github.io/birdsong-app`.

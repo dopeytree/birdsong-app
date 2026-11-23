@@ -43,6 +43,10 @@ parts (use the `scout` agent to find the lines).
 - `test/`: one file per area, plain-sentence test names.
 - `assets/web/`: the old web page. `assets/places/os_woods.tsv.gz`: OS
   woods and heaths. `tool/os_woods.py` rebuilds it.
+- `site/`: Astro splash page (`site/src/pages/index.astro`), shots in
+  `site/public/shots/`, fonts in `site/public/fonts/`. `Preview splash
+  page.command` opens it at http://localhost:4321/birdsong-app/.
+- `site.yml`: GitHub Pages workflow (dopeytree.github.io/birdsong-app).
 - Scripts: `Build on Mac.command`, `Run plate lab.command`,
   `Update web page.command`, `Publish to GitHub.command`.
 - `tool/sync_web.py`, `tool/web_contract.json`: checks on the web page copy.

@@ -39,3 +39,8 @@ or a small test before building it.
   functions or design choices."
 - **RSPB data:** not used without their permission.
 - **No iPhone builds** until the app is complete.
+- **Astro splash page:** Ed chose Astro over plain HTML and Flutter web.
+  "Flutter web too slow to load and poor for search." Built with the app's
+  palette (paper #EEE5CE, ink, sepia, madder) and IM Fell English fonts.
+  Shows the app in a CSS-drawn iPhone frame; clicking or `#ipad` swaps to
+  an iPad frame. Shots live in `site/public/shots/`.
