@@ -188,7 +188,7 @@ class ListenEngine extends ChangeNotifier {
       names = namesOf(parseLabels(await sharedFile.readAsString()));
     }
     for (final id in settings.activeModels) {
-      final spec = specById(id);
+      final spec = effectiveById(id, settings.modelOverrides);
       if (spec == null || !models.isInstalled(spec)) continue;
       final report = reports[id] = ModelReport(spec);
       Future<LoadedModel> load(bool coreMl) => LoadedModel.load(

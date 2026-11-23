@@ -50,7 +50,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     app.models.addListener(_modelsChanged);
     // Someone coming back to the welcome keeps a model they already have.
     for (final id in _starterIds) {
-      final spec = specById(id)!;
+      final spec = _byId(id);
       if (app.models.isInstalled(spec)) {
         _model = id;
         break;
@@ -71,7 +71,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
-  ModelSpec get _spec => specById(_model)!;
+  ModelSpec _byId(String id) => effectiveById(id, s.modelOverrides)!;
+
+  ModelSpec get _spec => _byId(_model);
 
   Future<void> _askMic() async {
     final rec = AudioRecorder();
@@ -296,7 +298,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       listenable: app.models,
       builder: (context, _) {
         final m = app.models;
-        final busy = _starterIds.any((id) => m.isDownloading(specById(id)!));
+        final busy = _starterIds.any((id) => m.isDownloading(_byId(id)));
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -306,7 +308,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 'and then works offline.'),
             const SizedBox(height: 16),
             for (final id in _starterIds)
-              _modelChoice(specById(id)!, recommended: id == _starterIds.first, busy: busy),
+              _modelChoice(_byId(id), recommended: id == _starterIds.first, busy: busy),
             if (m.errors[_model] != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),

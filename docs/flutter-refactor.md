@@ -52,6 +52,10 @@ Ed needs to run `Build on Mac.command` and look at:
 
 Details of 2 to 4 are in `map.md`.
 
+Also built 23 Nov: the model update strip along the top of the screen
+(Settings → Models → Check now to see it at once). Notes in `data-sources.md`
+("Model updates") and `decisions.md`.
+
 ## Next steps
 
 **Ask Ed before starting each piece** (his rule, 22 Nov).
@@ -74,6 +78,9 @@ Details of 2 to 4 are in `map.md`.
 - A pull request for `flutter-plate-lab`; prune merged branches; remove the
   map's debug readout when done with it.
 - Delete the web plate once Ed is happy without it.
+- Bat models (need an ultrasonic mic at 192 kHz or more).
+- Rename the local folder `birdsong-app` → `birdsongs.ai` (the GitHub repo
+  already is); check `Build on Mac.command` and `.claude/` for the old path.
 
 ## Recent work (23 Nov)
 

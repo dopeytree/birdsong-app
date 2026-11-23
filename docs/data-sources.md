@@ -25,6 +25,27 @@ skill).
 **Not used: RSPB data.** Their licence is non-commercial and needs written
 permission for public maps. Reserves come from OpenStreetMap instead.
 
+## Model updates (measured 23 Nov)
+
+Each of tphakala's Hugging Face model repos carries a `models.json`
+(`https://huggingface.co/<repo>/resolve/main/models.json`; a 307 redirect,
+then 12–360 KB). Schema 2: per file `path`, `build`, `upstream_version`,
+`variant`, `region`, `legacy`, `superseded_by` (a path), `sha256`,
+`size_bytes`, `labels`, `labels_sha256`, `input`, `score_calibration`.
+`lib/engine/model_updates.dart` reads them: follow `superseded_by`, else the
+newest non-legacy file with the same region, variant and no-DFT-ness. The
+models from GitHub (BirdNET Live 10K, geomodel) aren't checked.
+
+Waiting on 23 Nov: BirdNET+ Global v3.0 → v3.0.1 (345 MB); BirdNET+ and
+Perch v2 British Isles → build 2 (adds domestic animals; Perch rest logit
+9.71 → 9.7). No Perch newer than v2. The BirdNET v3.0 preview is superseded
+by BirdNET+.
+
+Bat models (in BirdNET-Go, not here): BattyBirdNET (11 regions incl. UK;
+CC BY-NC-SA) and BSG-BAT v0.21 (21 species; CC BY 4.0). Both need an
+ultrasonic mic at 192 kHz or more. BirdNET-Go's own code is CC BY-NC-SA 4.0:
+learn from it, don't copy it.
+
 ## Naming where a walk went (measured 22 Nov)
 
 - **Map tiles (z14):** name reserves (park layer: RSPB Ham Wall, Shapwick

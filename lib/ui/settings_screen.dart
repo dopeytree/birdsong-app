@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
 import '../engine/listen_engine.dart';
 import '../engine/model_catalog.dart';
+import '../main.dart' show sepia, serif;
 import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
@@ -76,7 +77,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListenableBuilder(
-        listenable: Listenable.merge([s, app.engine, app.models, app.store]),
+        listenable: Listenable.merge([s, app.engine, app.models, app.store, app.updates]),
         builder: (context, _) {
           final listen = s.mode == AppMode.listen;
           // On a wide window (a Mac, an iPad) the settings keep to a
@@ -334,7 +335,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _models(BuildContext context) {
     final theme = Theme.of(context);
     final m = app.models;
-    final installed = [for (final spec in catalog) if (m.isInstalled(spec)) spec];
+    final specs = effectiveCatalog(s.modelOverrides);
+    final installed = [for (final spec in specs) if (m.isInstalled(spec)) spec];
     final locked = app.engine.running;
     final plateIds = ['all', for (final spec in installed) spec.id];
     return _section(
@@ -346,7 +348,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       [
         if (locked)
           Text('Stop listening to change models.', style: theme.textTheme.bodySmall),
-        for (final spec in catalog) _modelRow(context, spec),
+        for (final spec in specs) _modelRow(context, spec),
         const SizedBox(height: 8),
         if (installed.length > 1)
           Row(
@@ -358,14 +360,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 items: [
                   for (final id in plateIds)
                     DropdownMenuItem(
-                        value: id, child: Text(id == 'all' ? 'All models' : specById(id)!.family)),
+                        value: id,
+                        child: Text(id == 'all'
+                            ? 'All models'
+                            : effectiveById(id, s.modelOverrides)!.family)),
                 ],
                 onChanged: (v) => s.update((x) => x.plateModel = v ?? 'all'),
               ),
             ],
           ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: app.updates.checking ? null : () => app.updates.checkIfDue(force: true),
+            child: const Text('Check now'),
+          ),
+        ),
       ],
     );
+  }
+
+  /// The catalogue name, with the installed build's version after it.
+  String _modelTitle(ModelSpec spec) {
+    final label = s.modelOverrides[spec.id]?['label'];
+    if (label is! String || label.isEmpty) return spec.name;
+    return '${spec.name} · ${label.split(',').first.trim()}';
   }
 
   Widget _modelRow(BuildContext context, ModelSpec spec) {
@@ -375,6 +394,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final downloading = m.isDownloading(spec);
     final locked = app.engine.running;
     final active = s.activeModels.contains(spec.id);
+    final offer = app.updates.offerFor(spec.id);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Column(
@@ -403,7 +423,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(spec.name),
+                  Text(_modelTitle(spec)),
                   Text(
                       '${megabytes(spec.totalBytes)} · ${spec.licence}'
                       '${spec.releaseOk ? '' : ' · testing only'}',
@@ -437,6 +457,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Padding(
             padding: const EdgeInsets.only(left: 48),
             child: Text(m.errors[spec.id]!, style: TextStyle(color: theme.colorScheme.error)),
+          ),
+        if (offer != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 48),
+            child: Text(
+              'Newer build ready: ${offer.label}',
+              style: const TextStyle(
+                fontFamily: serif,
+                fontStyle: FontStyle.italic,
+                fontSize: 14,
+                color: sepia,
+              ),
+            ),
           ),
       ],
       ),
@@ -664,7 +697,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _credits(BuildContext context, bool listen) {
     final theme = Theme.of(context);
     final detections = listen
-        ? 'BirdNET, run on this device (${specById(s.plateModel)?.family ?? 'the chosen model'})'
+        ? 'BirdNET, run on this device (${effectiveById(s.plateModel, s.modelOverrides)?.family ?? 'the chosen model'})'
         : s.stationDigits.isNotEmpty
             ? 'BirdWeather'
             : 'BirdNET-Go';
