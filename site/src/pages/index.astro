@@ -749,14 +749,46 @@ const credits = [
   .lightbox .frame:hover { transform: none; }
   .close-hint { margin: 0; color: var(--paper); opacity: .8; font-size: 1rem; }
 
+  /* Phones and upright iPads: one column that fits the visible screen, so
+     there's nothing to scroll. The text is smaller; the device takes the
+     height that's left (tap it for full size). dvh is the height Safari
+     leaves free between its bars. */
   @media (max-width: 820px) {
-    .page { grid-template-columns: minmax(0, 1fr); text-align: center; min-height: 0; }
-    .kicker { justify-content: center; }
-    .lede { margin-left: auto; margin-right: auto; }
-    /* Size each device by the narrower of screen height and width. */
-    .iphone { --h: min(82vh, 640px, calc((100vw - 56px) * 2.1)); }
-    .ipad   { --h: min(82vh, 640px, calc((100vw - 40px) * 1.4)); }
-    .ipad[data-landscape='true'] { --h: min(50vh, 440px, calc((100vw - 40px) * .62)); }
+    .page {
+      display: flex; flex-direction: column;
+      height: calc(100dvh - 34px);           /* the footer below */
+      min-height: 0;
+      padding: 54px 16px 6px;                /* room for the round buttons */
+      gap: 10px;
+      text-align: center;
+    }
+    .text { flex: none; }
+    .kicker { justify-content: center; margin-bottom: .2rem; }
+    .kicker em { font-size: clamp(.85rem, 3.4vw, 1.05rem); }
+    .kicker::after { display: none; }
+    h1 { font-size: clamp(1.9rem, 8.5vw, 3.2rem); margin-bottom: .5rem; }
+    .lede { font-size: clamp(.86rem, 3.5vw, 1.1rem); line-height: 1.42; margin: 0 auto .45rem; }
+    .badges { margin: .6rem 0 .25rem; gap: 10px; }
+    .badges img { height: 30px; }
+    .soon { font-size: .9rem; }
+
+    /* The device fills what's left: sized from its box's height and width. */
+    .stage { flex: 1 1 auto; min-height: 0; align-self: stretch; }
+    .devices { flex: 1 1 auto; min-height: 0; width: 100%; container-type: size; }
+    .iphone { --h: min(100cqh, calc(100cqw * 2.1)); }
+    .ipad   { --h: min(100cqh, calc(100cqw * 1.4)); }
+    .ipad[data-landscape='true'] { --h: min(100cqh, calc(100cqw / 1.47)); }
+    .pill { margin-top: .6rem; }
+    .seg { font-size: .95rem; padding: .35em 1.1em .4em; }
+    .hint { margin-top: .35rem; font-size: .82rem; }
+
+    footer { padding: 4px 12px 10px; font-size: .8rem; }
+
+    /* Round buttons smaller; the shuffle test goes top left, off the device. */
+    .mode { width: 34px; height: 34px; top: 10px; right: 10px; }
+    .mode svg { width: 16px; height: 16px; }
+    .test-notice { right: 52px; }
+    .rhythm { top: 10px; bottom: auto; right: auto; left: 10px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }
