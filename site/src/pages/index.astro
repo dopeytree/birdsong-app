@@ -809,8 +809,8 @@ const credits = [
     background:
       linear-gradient(180deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, .08) 55%, rgba(255, 255, 255, .14)),
       rgba(250, 247, 240, .38);
-    backdrop-filter: blur(30px) saturate(1.9) brightness(1.08);
-    -webkit-backdrop-filter: blur(30px) saturate(1.9) brightness(1.08);
+    backdrop-filter: blur(44px) saturate(2.4) brightness(1.14);
+    -webkit-backdrop-filter: blur(44px) saturate(2.4) brightness(1.14);
     border: 1px solid rgba(255, 255, 255, .45);
     box-shadow: 0 12px 36px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 -1px 0 rgba(255, 255, 255, .12);
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
@@ -914,12 +914,13 @@ const credits = [
   .gate-inner { position: relative; z-index: 1; }
   .gate-inner { display: flex; flex-direction: column; align-items: center; gap: clamp(12px, 2.5vh, 24px); padding: 12px; }
   .gate-film { position: relative; }
-  /* The intro video (v2, Nov 2026), its black bands already cropped in the file. */
+  /* The intro video (v2, Nov 2026): Ed's file as is; its black bands are cropped off here. */
   .gate-video {
     display: block;
-    width: min(96vw, calc((100svh - 130px) * 1.5));   /* as large as the screen allows, Tap to Enter below (Ed, Nov 2026) */
+    width: min(96vw, calc((100svh - 130px) * 1.498));   /* as large as the screen allows, Tap to Enter below (Ed, Nov 2026) */
     height: auto;
-    aspect-ratio: 3 / 2;
+    aspect-ratio: 1920 / 1282;
+    object-position: 50% 61.8%;      /* Ed's original file, 1920×1460: shows just the picture, 110 px band above, 68 below */
     object-fit: cover;
     border-radius: 14px;
     box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .7);
