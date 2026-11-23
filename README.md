@@ -207,5 +207,45 @@ GitHub, as it does without a local copy.
 
 ## Licence
 
-Code: MIT. Bird cut-outs: Fugleramme, CC BY-SA 4.0. Typeface: IM Fell
-English, SIL OFL (`assets/web/fonts/OFL.txt`). Models: see the table above.
+Copyright © 2026 Ed Stone. **All rights reserved.** Personal use only; see
+`LICENSE`.
+
+- You may read, download and run Birdsongs.ai, and change it, for your own
+  **personal, noncommercial** use.
+- **No sharing:** you may not copy, publish or share it, or a changed
+  version, except by linking here.
+- **No commercial use:** you may not sell it or anything made from it, or
+  use it in or for anything that is sold or earns money (apps, services,
+  advertising, paid products).
+- **No use by organisations:** companies, charities, schools, universities,
+  public and government bodies included, however funded.
+- Anything else needs Ed Stone's written permission:
+  [ed-stone.co.uk](https://www.ed-stone.co.uk).
+
+This covers Ed Stone's own code, words and artwork. The work of others below
+keeps its own licence. Versions published before 23 November 2026 were under
+the MIT licence.
+
+## Credits and licences
+
+| Credit | Used for | Licence |
+| --- | --- | --- |
+| [BirdNET](https://birdnet.cornell.edu): K. Lisa Yang Center for Conservation Bioacoustics, Cornell Lab of Ornithology, and Chemnitz University of Technology. Powered by BirdNET | Bird detection | Per model: Apache-2.0, CC BY-SA 4.0, or CC BY-NC-SA 4.0 (see Models above) |
+| Google Perch v2 | Bird detection | Apache-2.0 |
+| BirdNET-Go's model gallery (tphakala, Hugging Face) | Where the model files are hosted | As each model |
+| [Fugleramme](https://github.com/arnegiacomo/fugleramme) by Arne Giacomo, after Gould, the von Wright brothers, Audubon and others | Bird cut-outs | CC BY-SA 4.0 |
+| *Nederlandsche Vogelen* (Nozeman & Sepp, Amsterdam, 1770–1829), digitised by the Koninklijke Bibliotheek | Plates | Public domain |
+| Public-domain works on Wikimedia Commons | Further plates | Public domain (see each file's page) |
+| Thomas Bewick, from the Wellcome Collection's scans (switched off for now) | Engravings | Public Domain Mark |
+| Wikipedia | Bird and place descriptions | CC BY-SA |
+| MET Norway Locationforecast | Weather | CC BY 4.0 |
+| OpenFreeMap, OpenMapTiles, © OpenStreetMap contributors | The map | ODbL (data); OpenMapTiles schema CC BY 4.0 |
+| Mapzen Terrain Tiles (AWS Open Data) | Contours | Open data; attribution to its sources |
+| Historic England, Natural England, NatureScot, Natural Resources Wales | Heritage and nature sites | Open Government Licence v3 |
+| Ordnance Survey OS Open Names: contains OS data © Crown copyright and database right 2026 | Woods and heaths | Open Government Licence v3 |
+| Nominatim and Photon (komoot), from OpenStreetMap data | Place names and map search | ODbL |
+| GBIF | Bird record density | Attribution; some records CC BY-NC |
+| IM Fell English by Igino Marini | Typeface | SIL Open Font Licence 1.1 (`assets/web/fonts/OFL.txt`) |
+| [Lucide](https://lucide.dev) | Icons on the website | ISC |
+| Flutter | The app's framework | BSD-3-Clause |
+| Astro | Builds the website | MIT |

@@ -1,24 +1,38 @@
-MIT License
+Birdsongs.ai Personal Use Licence
 
-Copyright (c) 2026 Ed Stone
+Copyright (c) 2026 Ed Stone (https://www.ed-stone.co.uk). All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Personal use. You may read, download and run this software, and look at
+   its code, words and artwork, for your own personal, noncommercial use.
+   You may change it for your own personal use.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. No sharing. You may not copy, publish, distribute, sublicense or share
+   this software, or any changed version or part of it, by any means,
+   except by linking to its repository. This does not limit what GitHub's
+   Terms of Service allow on GitHub itself, such as viewing and forking.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. No commercial use. You may not sell this software or anything made from
+   it, use it in or for anything that is sold or earns money (including
+   apps, services, advertising or paid products), or use it for any other
+   commercial purpose.
 
-The artwork, typeface and text this project displays are licensed separately;
-see "Credits and licences" in README.md.
+4. No use by organisations. You may not use this software by or for any
+   company, business, charity, school, university, public or government
+   body, or any other organisation, however it is funded.
+
+5. Permission. Anything not allowed above needs Ed Stone's permission in
+   writing. Ask at https://www.ed-stone.co.uk. All other rights are
+   reserved.
+
+6. Other people's work. Work by others that is included in this repository
+   or used by the software (models, artwork, typeface, data) keeps its own
+   licence. See "Credits and licences" in README.md. Nothing here limits
+   the rights those licences give you to that work.
+
+7. No warranty. The software is provided "as is", without warranty of any
+   kind. Ed Stone is not liable for any claim, damage or other liability
+   arising from it or its use.
+
+8. Earlier versions. Versions of this repository published before
+   23 November 2026 were under the MIT licence; copies taken then keep
+   that licence.

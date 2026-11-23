@@ -69,6 +69,12 @@ const credits = [
   <meta property="og:image" content={`${base}/shots/iphone-plate.jpg`} />
   <link rel="preload" href={`${base}/fonts/IMFeENrm28P.ttf`} as="font" type="font/ttf" crossorigin />
   <link rel="preload" href={`${base}/fonts/IMFeENsc28P.ttf`} as="font" type="font/ttf" crossorigin />
+  <!-- The typeface, with paths from the build's base (astro.config.mjs). -->
+  <style is:inline set:html={`
+    @font-face { font-family: 'IM Fell English'; src: url(${base}/fonts/IMFeENrm28P.ttf); font-display: swap; }
+    @font-face { font-family: 'IM Fell English'; font-style: italic; src: url(${base}/fonts/IMFeENit28P.ttf); font-display: swap; }
+    @font-face { font-family: 'IM Fell English SC'; src: url(${base}/fonts/IMFeENsc28P.ttf); font-display: swap; }
+  `}></style>
 </head>
 <body>
   <!-- Light / dark: switches black and white. Sun and moon icons from
@@ -81,6 +87,11 @@ const credits = [
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
     </svg>
   </button>
+
+  <!-- Ed's lion, from ed-stone.co.uk, bottom left; links to his site. -->
+  <a class="maker" href="https://www.ed-stone.co.uk" target="_blank" rel="noopener" title="Ed Stone">
+    <img src={`${base}/ed-stone-lion.gif`} alt="Ed Stone" width="70" height="35" />
+  </a>
 
   <main class="page">
     <section class="text">
@@ -350,12 +361,6 @@ const credits = [
 </body>
 </html>
 
-<style is:global>
-  /* Paths include the GitHub Pages base (astro.config.mjs). */
-  @font-face { font-family: 'IM Fell English'; src: url(/birdsongs.ai/fonts/IMFeENrm28P.ttf); font-display: swap; }
-  @font-face { font-family: 'IM Fell English'; font-style: italic; src: url(/birdsongs.ai/fonts/IMFeENit28P.ttf); font-display: swap; }
-  @font-face { font-family: 'IM Fell English SC'; src: url(/birdsongs.ai/fonts/IMFeENsc28P.ttf); font-display: swap; }
-</style>
 
 <style is:global>
   /* The app's palette (lib/main.dart). */
@@ -661,6 +666,9 @@ const credits = [
   html:not([data-bg='black']) .mode .sun { opacity: 0; transform: rotate(-90deg) scale(.5); }
   /* The bell (a notification now) top right; light/dark bottom right. */
   .theme { top: auto; bottom: 18px; }
+  /* Ed's lion, bottom left (Ed, Nov 2026). */
+  .maker { position: fixed; z-index: 40; left: 18px; bottom: 18px; line-height: 0; }
+  .maker img { width: 70px; height: auto; }
   .test-notice:hover { transform: rotate(-12deg); }
   .mode:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
   body { transition: background-color .5s ease, color .5s ease; }
@@ -746,6 +754,8 @@ const credits = [
     .mode { width: 34px; height: 34px; top: 10px; right: 10px; }
     .mode svg { width: 16px; height: 16px; }
     .theme { top: auto; bottom: 10px; }
+    .maker { left: 10px; bottom: 10px; }
+    .maker img { width: 56px; }
   }
   /* Mobile held sideways: the screen is short, so the device gets most of
      its height. */

@@ -97,3 +97,14 @@ or a small test before building it.
   upright, the sideways iPad; held sideways, the upright iPhone. Turning the
   device switches it, until the visitor uses the pill. Desktops open on the
   iPhone.
+- **Splash page maker's mark (Ed, Nov 2026):** Ed's animated amber lion from
+  ed-stone.co.uk, bottom left (70px; 56px on mobile), linking to his site.
+  Copied into the site at 140px wide (`site/public/ed-stone-lion.gif`).
+- **Licence (Ed, 23 Nov 2026):** all rights reserved, personal use only: a
+  short licence of our own in `LICENSE` (personal, noncommercial use and
+  changes for yourself; no sharing beyond linking; no commercial use; no use
+  by any organisation; anything else by Ed's written permission). Tried and
+  dropped the same day: CC BY-NC 4.0 (CC advise against it for code) and
+  PolyForm Noncommercial 1.0.0 (it lets charities, schools and public bodies
+  use it). Earlier copies keep MIT. Others' work keeps its own licence; the
+  README lists them under "Credits and licences".
