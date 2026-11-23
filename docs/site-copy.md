@@ -14,7 +14,8 @@ Every bird it hears is lovingly illustrated in the manner of the old
 natural-history books: dated, placed on the map, along with the weather of
 the day.
 
-*As old as time. Each walk becomes an artwork, with its own index of species.*
+*As old as time.*  
+*Each walk becomes an artwork, with its own index of species.*
 
 Earlier taglines: "A field journal that listens now", "Be here now", "I just spotted Kingfisher! :D" (now the notification's
 words), "I wonder who has the fairest call of them all?".

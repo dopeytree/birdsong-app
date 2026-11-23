@@ -72,8 +72,17 @@ function split(el, letters) {
   const shown = document.createElement('span');
   shown.setAttribute('aria-hidden', 'true');
   const parts = [];
-  text.split(/( )/).forEach(tok => {
-    if (tok === ' ') return shown.append(' ');
+  // Line breaks (<br>) are kept; other text is split into words.
+  const tokens = [...el.childNodes].flatMap(n => n.nodeName === 'BR' ? ['\n']
+    : n.textContent.replace(/\s+/g, ' ').split(/( )/)).filter(Boolean);
+  tokens.forEach((tok, i) => {
+    if (tok === '\n') return shown.append(document.createElement('br'));
+    if (tok === ' ') {
+      // Only between words: not at the start, end, or either side of a break.
+      const prev = tokens[i - 1], next = tokens[i + 1];
+      if (prev && next && prev !== '\n' && next !== '\n' && prev !== ' ') shown.append(' ');
+      return;
+    }
     const w = document.createElement('span');
     w.className = 'fx-word';
     if (letters) {
