@@ -135,7 +135,8 @@ const credits = [
         Now I wonder how many you can <span class="underline">collect</span>?
       </p>
 
-      <p class="soon"><span><em>Coming Soon</em></span></p>
+      <!-- Coming Soon, then iOS and Android in the quote's colour (Ed, Nov 2026). -->
+      <p class="soon"><span><em>Coming Soon</em></span><span class="os"><em>iOS</em></span><span class="os"><em>Android</em></span></p>
     </section>
 
     <section class="stage" aria-label="The app">
@@ -584,6 +585,8 @@ const credits = [
   /* Words picked out in madder, the colour of "Coming Soon". */
   .madder { color: var(--madder); }
   .underline, .underline .fx-ch { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
+  .soon { display: flex; justify-content: center; flex-wrap: wrap; gap: .6rem; }
+  .soon > span.os { color: var(--sepia); cursor: default; }   /* the colour of "Now I wonder…" */
   .soon > span {
     color: var(--madder);          /* the filled pill's red-orange, in both modes */
     cursor: pointer;               /* the hand, like a button (Ed, Nov 2026) */

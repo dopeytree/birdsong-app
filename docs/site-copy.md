@@ -49,5 +49,5 @@ on a plate, in the manner of the old natural-history books."
 ## Always on the page
 
 - Device switch: iPhone | iPad
-- "*Coming Soon*" in a thin rounded outline (earlier: store badges; before that "for Mac, iPhone & iPad. *Coming soon.*")
+- "*Coming Soon*", then "*iOS*" and "*Android*" in the quote's colour, each in a thin rounded outline (earlier: store badges; before that "for Mac, iPhone & iPad. *Coming soon.*")
 - Footer: "Type: IM Fell English, by Igino Marini"
