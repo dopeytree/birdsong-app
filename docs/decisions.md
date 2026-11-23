@@ -180,9 +180,12 @@ or a small test before building it.
   text, as iOS in dark mode.
 - **Three dots and the film (Ed, Nov 2026):** the iphone | ipad pill became
   three dots under the device: the film, iPhone, iPad. The film is the first
-  dot and opens first, on a loop in the sideways iPad frame, trying to play
+  dot and opens first, on a loop, the size of the sideways iPad but with no
+  frame (rounded corners, soft shadow), trying to play
   with sound (as the old veil video did) and silent if the browser refuses;
   a click on it turns the sound on, then pauses and plays. No gate by default:
   straight in, credits and heartbeat start at once. On trial: `?gate=play` (a
   play button over the page faded to 75%; a click anywhere plays the film with
   sound) and `?gate=video` (the earlier film with Tap to Enter).
+- **Leaving the film (Ed, Nov 2026):** choosing another dot stops the film
+  and sends it back to the start.

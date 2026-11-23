@@ -27,7 +27,7 @@ const shots = {
 // The pill is three dots (Ed, Nov 2026): the film, iPhone, iPad. frame: which
 // device is drawn round it.
 const devices = [
-  { id: 'film', label: 'The film', frame: 'ipad' },
+  { id: 'film', label: 'The film', frame: 'ipad film' },   // sized as the sideways iPad, drawn without its frame
   { id: 'iphone', label: 'iPhone' },
   { id: 'ipad', label: 'iPad' },
 ];
@@ -236,9 +236,10 @@ const credits = [
       });
       d.querySelectorAll('.shot').forEach((s, j) => {
         s.dataset.active = j === i ? 'true' : 'false';
-        if (s.tagName === 'VIDEO') j === i ? s.play() : s.pause();
+        if (s.tagName === 'VIDEO') j === i ? s.play().catch(() => {}) : s.pause();
       });
-      devices.forEach(dev => { if (dev !== d) dev.querySelectorAll('video').forEach(v => v.pause()); });
+      // Leaving the film stops it and sends it back to the start (Ed, Nov 2026).
+      devices.forEach(dev => { if (dev !== d) dev.querySelectorAll('video').forEach(v => { v.pause(); v.currentTime = 0; }); });
       d.dataset.landscape = stops[k].sideways ? 'true' : 'false';
       segs.forEach(s => s.setAttribute('aria-selected', s.dataset.device === d.dataset.device ? 'true' : 'false'));
       const own = stops.filter(t => t.d === d);
@@ -802,6 +803,11 @@ const credits = [
   /* Size changes animate only once the page has loaded (.ready). */
   .ready .frame { transition: transform .3s ease, padding .6s ease, border-radius .6s ease; }
   .ready .screen { transition: height .6s ease, aspect-ratio .6s ease, border-radius .6s ease; }
+  /* The film: no device frame, just the picture with rounded corners and a
+     soft shadow (Ed, Nov 2026). Its file has black bands, cropped off here. */
+  .device.film { --bezel: 0px; --ar: 1920 / 1282; --r-outer: 12px; --r-inner: 12px; }
+  .device.film .frame, .device.film .frame:hover { background: none; box-shadow: 0 30px 60px -12px rgba(0, 0, 0, .5); }
+  .device.film video.shot { object-position: 50% 61.8%; }
   .ipad .frame { box-shadow:
       0 0 0 1.5px #6a6761, 0 0 0 3px #3a3936,
       0 2px 3px 3px rgba(42, 36, 28, .25),
