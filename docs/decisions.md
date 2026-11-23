@@ -204,3 +204,7 @@ or a small test before building it.
   its corners sit on the film's own dark, so no pale rim.
 - **Popup fade (Ed, Nov 2026):** black at 96% (was 90%), the same for the film
   and the shots.
+- **Dots go round (Ed, Nov 2026):** when the film popup closes, the page moves
+  to the next dot, then the dots go round by themselves every 3 s (film,
+  iPhone, iPad). They wait while the popup is open and stop for good once the
+  visitor picks a dot.

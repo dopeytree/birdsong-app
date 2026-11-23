@@ -329,6 +329,17 @@ const credits = [
       }
       openBox();
     }
+    // The dots go round every 3 s once the film has closed, while the popup
+    // is shut and until the visitor picks a dot themselves.
+    let cycle = null;
+    function startCycle() {
+      if (cycle) return;
+      cycle = setInterval(() => {
+        if (picked) { clearInterval(cycle); return; }
+        if (box.open || document.hidden) return;
+        show((k + 1) % stops.length);
+      }, 3000);
+    }
     box.querySelector('.box-prev').addEventListener('click', e => { e.stopPropagation(); boxStep(-1); });
     box.querySelector('.box-next').addEventListener('click', e => { e.stopPropagation(); boxStep(1); });
     addEventListener('keydown', e => {
@@ -344,6 +355,9 @@ const credits = [
       stageFrom = null;
       boxFilm.muted = true;
       boxFilm.loop = true;         // the walk film still loops
+      // Then the next dot, and the dots go round by themselves (Ed, Nov 2026).
+      show((k + 1) % stops.length);
+      startCycle();
     });
     document.addEventListener('click', e => {
       const t = e.target instanceof Element && e.target.closest('.to-index, .to-map');
