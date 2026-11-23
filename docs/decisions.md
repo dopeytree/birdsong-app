@@ -98,3 +98,5 @@ or a small test before building it.
   Up to 600px (phones) the device comes first, under the tagline and title,
   at about 56% of the screen; the paragraphs, badges and Coming soon follow
   below, a short scroll away. The shuffle test button goes top left on these.
+  Phones held sideways scroll, with the device at about 82% of the screen
+  height, below the text.

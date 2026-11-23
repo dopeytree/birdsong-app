@@ -802,6 +802,13 @@ const credits = [
     .devices { flex: none; height: 56svh; }
     .lede, .badges, .soon { order: 4; }
   }
+  /* Phones held sideways: too short to fit, so the page scrolls and the
+     device gets most of a screen's height of its own. */
+  @media (max-width: 820px) and (orientation: landscape) {
+    .page { height: auto; }
+    .stage { flex: none; }
+    .devices { flex: none; height: max(240px, 82svh); }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }
   }
