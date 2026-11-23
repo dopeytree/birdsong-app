@@ -70,9 +70,11 @@ or a small test before building it.
 - **Notifications name the full species (Ed, Nov 2026):** e.g. "Northern
   Cardinal", not "cardinal", matching the species index. An iPhone banner
   shows about four lines (~160 characters), so even the longest names fit.
-- **Splash notifications (Ed, Nov 2026):** four modes, on trial; the shuffle
-  button (bottom right) cycles them, or `?rhythm=intro|single|round|random`.
-  *Three, then one at a time* (default): 5 s after the page opens, a burst of
+- **Splash notifications (Ed, Nov 2026):** five modes; the shuffle button
+  (bottom right) cycles them, or `?rhythm=cardinal|intro|single|round|random`.
+  *The cardinal alone* (default): only the Northern Cardinal, 10 s after the
+  page opens, then again every 60 s.
+  *Three, then one at a time*: 5 s after the page opens, a burst of
   three (cardinal, Eastern and Spotted Towhee), 5 s clear, then each other
   species alone with 5 s clear between; then again from the burst.
   *One at a time*: the opening Northern Cardinal (50 points), then

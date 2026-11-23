@@ -336,9 +336,11 @@ const credits = [
       setTimeout(() => flip(() => n.remove()), 350);
     }
 
-    // How the notifications play. Four modes, cycled by the shuffle button
-    // (bottom right) or picked with ?rhythm=intro|single|round|random:
-    //   intro (default, on trial): 5 s after the page opens, a burst of three
+    // How the notifications play. Five modes, cycled by the shuffle button
+    // (bottom right) or picked with ?rhythm=cardinal|intro|single|round|random:
+    //   cardinal (default, Ed, Nov 2026): only the Northern Cardinal, 10 s
+    //     after the page opens, then again every 60 s.
+    //   intro: 5 s after the page opens, a burst of three
     //     (the cardinal and the walk's first two), 5 s of clear screen, then
     //     every other species one at a time with 5 s clear between; then
     //     again from the burst.
@@ -358,13 +360,15 @@ const credits = [
     const CARDINAL = { common: 'Northern Cardinal', points: 50, at: 0 };
     const ALL = [CARDINAL, ...walk.species.map(s => ({ common: s.common, points: 10 + 10 * s.calls, at: s.firstHeardSeconds }))];
     const ROUND = ALL.slice(0, 5);
-    const MODES = ['intro', 'single', 'round', 'random'];
-    const NAMES = { intro: 'three, then one at a time', single: 'one at a time', round: 'a round of five', random: 'random gaps' };
-    let rhythm = MODES.includes(new URLSearchParams(location.search).get('rhythm')) ? new URLSearchParams(location.search).get('rhythm') : 'intro';
+    const MODES = ['cardinal', 'intro', 'single', 'round', 'random'];
+    const NAMES = { cardinal: 'the cardinal alone', intro: 'three, then one at a time', single: 'one at a time', round: 'a round of five', random: 'random gaps' };
+    let rhythm = MODES.includes(new URLSearchParams(location.search).get('rhythm')) ? new URLSearchParams(location.search).get('rhythm') : 'cardinal';
     let k = -1, timer = null, playing = true;
-    const list = () => rhythm === 'intro' || rhythm === 'single' ? ALL : ROUND;
+    const list = () => rhythm === 'cardinal' ? [CARDINAL] : rhythm === 'intro' || rhythm === 'single' ? ALL : ROUND;
+    const CARDINAL_WAIT = 10000, CARDINAL_EVERY = 60000;
     const INTRO_WAIT = 5000, INTRO_BETWEEN = GONE + 5000;
     function gap(from) {
+      if (rhythm === 'cardinal') return CARDINAL_EVERY;
       if (rhythm === 'intro') {
         if (from === 0) return 1300;               // the burst of three
         if (from === 1) return 1300;
@@ -386,7 +390,8 @@ const credits = [
         schedule(gap(k));
       }, wait);
     }
-    schedule(rhythm === 'intro' ? INTRO_WAIT : OPENING);
+    const firstWait = () => rhythm === 'cardinal' ? CARDINAL_WAIT : rhythm === 'intro' ? INTRO_WAIT : OPENING;
+    schedule(firstWait());
 
     // Bell: pause or resume.
     const bell = document.querySelector('.test-notice');
@@ -401,7 +406,7 @@ const credits = [
     const shuffle = document.querySelector('.rhythm');
     const showRhythm = () => {
       const next = MODES[(MODES.indexOf(rhythm) + 1) % MODES.length];
-      shuffle.setAttribute('aria-pressed', String(rhythm !== 'intro'));
+      shuffle.setAttribute('aria-pressed', String(rhythm !== 'cardinal'));
       shuffle.title = `Notifications: ${NAMES[rhythm]} (click for ${NAMES[next]})`;
       shuffle.setAttribute('aria-label', shuffle.title);
     };
@@ -410,7 +415,7 @@ const credits = [
       rhythm = MODES[(MODES.indexOf(rhythm) + 1) % MODES.length];
       showRhythm();
       k = -1;
-      if (playing) schedule(rhythm === 'intro' ? INTRO_WAIT : GONE);
+      if (playing) schedule(rhythm === 'cardinal' ? CARDINAL_WAIT : rhythm === 'intro' ? INTRO_WAIT : GONE);
     });
     // Don't let a hidden tab pile them up.
     document.addEventListener('visibilitychange', () => {
