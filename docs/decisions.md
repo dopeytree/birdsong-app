@@ -118,7 +118,7 @@ or a small test before building it.
   tried and dropped, as was scattering icon strokes. Only the text brings the
   notification.
 - **Splash gate (Ed, Nov 2026):** the site opens under a veil, the page faded
-  (99% of the page colour, no blur) behind a breathing "Tap to Enter" pill.
+  (97% of the page colour, no blur) behind a breathing "Tap to Enter" pill.
   A click, tap, Enter or Space lifts it with a fade; that tap also lets the page
   play sound, brings the cardinal (song and notification) at once, and starts
   the credits.
