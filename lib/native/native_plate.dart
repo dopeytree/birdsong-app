@@ -1202,7 +1202,7 @@ class _NativePlateState extends State<NativePlate> {
             TextSpan(text: 'Birdsongs', children: [
               // the session's number, small, in the lines' own style
               if (feed == null && n > 0 && i >= 0)
-                TextSpan(text: '  #${i + 1}/$n', style: sub.copyWith(height: 1)),
+                TextSpan(text: '  #${i + 1}', style: sub.copyWith(height: 1)),
               if (feed != null) TextSpan(text: '  #${feed.station.name.toLowerCase()}', style: sub.copyWith(height: 1)),
             ]),
             // a little smaller than the page's h1 (clamp(1.6rem,2.6vw,2.2rem));
