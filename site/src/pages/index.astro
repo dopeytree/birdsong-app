@@ -790,6 +790,18 @@ const credits = [
     .test-notice { right: 52px; }
     .rhythm { top: 10px; bottom: auto; right: auto; left: 10px; }
   }
+  /* Phones (Ed, Nov 2026): the device comes first, under the tagline and
+     title, filling most of the first screen; the paragraphs, badges and
+     "Coming soon" follow below, a short scroll away. */
+  @media (max-width: 600px) {
+    .page { height: auto; gap: 0; }
+    .text { display: contents; }
+    .kicker { order: 1; }
+    h1 { order: 2; margin-bottom: .6rem; }
+    .stage { order: 3; flex: none; margin-bottom: 1.2rem; }
+    .devices { flex: none; height: 56svh; }
+    .lede, .badges, .soon { order: 4; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }
   }

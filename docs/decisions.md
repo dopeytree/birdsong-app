@@ -92,3 +92,9 @@ or a small test before building it.
   clear margin trimmed), unaltered, then "Coming soon." Not links yet; at
   launch they must link to the listings. Trademark lines added to the credits.
   Apple's own Mac App Store badge exists if a Mac badge is wanted.
+- **Splash page on phones and iPads (Ed, Nov 2026):** up to 820px wide
+  (phones, upright iPads) the page is one column sized to the visible screen
+  (`dvh`), with smaller text and buttons; the device takes the height left.
+  Up to 600px (phones) the device comes first, under the tagline and title,
+  at about 56% of the screen; the paragraphs, badges and Coming soon follow
+  below, a short scroll away. The shuffle test button goes top left on these.
