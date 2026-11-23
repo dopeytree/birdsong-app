@@ -71,7 +71,7 @@ or a small test before building it.
   Cardinal", not "cardinal", matching the species index. An iPhone banner
   shows about four lines (~160 characters), so even the longest names fit.
 - **Splash notifications (Ed, Nov 2026):** only the Northern Cardinal
-  ("Birdsongs.ai / I just spotted Northern Cardinal! ❤️‍🔥 50 points"), each
+  ("Birdsongs.ai / I just spotted Northern Cardinal! ❤️‍🔥 +50 points"), each
   time "Powered by BirdNET" flies into the footer credits (about 11 s in,
   then once a round of the credits). No timer, so they stay in step. The
   bell, top right, sends one straight away; light/dark is bottom right. A
