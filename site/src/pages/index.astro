@@ -378,7 +378,10 @@ const credits = [
     const enter = () => {
       if (entered) return;
       entered = true;
-      unlock();
+      soundOK = true;            // the tap allows sound
+      song.muted = false;
+      sing();                    // and the cardinal greets them (Ed, Nov 2026)
+      notify(CARDINAL_TEXT);
       gate.classList.add('gone');
       setTimeout(() => gate.remove(), 900);
       startCredits(credits);

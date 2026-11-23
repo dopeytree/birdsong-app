@@ -128,5 +128,5 @@ or a small test before building it.
 - **Splash gate (Ed, Nov 2026):** the site opens under a veil, the page faded
   (85% of the page colour, no blur) behind a breathing "Tap to Enter" pill.
   A click, tap, Enter or Space lifts it with a fade; that tap also lets the page
-  play sound, and the credits (and so the first cardinal, with its song) start
-  then.
+  play sound, brings the cardinal (song and notification) at once, and starts
+  the credits (so the next comes with "Powered by BirdNET").
