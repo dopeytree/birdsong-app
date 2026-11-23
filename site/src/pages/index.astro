@@ -241,18 +241,21 @@ const credits = [
     </div>
   </template>
 
-  <!-- Clears every notification. Lucide "rotate-ccw" icon (ISC). -->
-  <button class="mode clear-notices" type="button" aria-label="Clear all notifications" title="Clear all notifications">
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" />
+  <!-- Notifications on or paused: a bell, crossed out when paused. Lucide
+       "bell" / "bell-off" style (ISC). Sits beside light/dark, top right. -->
+  <button class="mode test-notice" type="button" aria-pressed="true" aria-label="Pause notifications" title="Pause notifications">
+    <svg class="on" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" />
+    </svg>
+    <svg class="off" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /><path d="m3 3 18 18" />
     </svg>
   </button>
 
-  <!-- Test: each press sends the next species heard on walk #20. -->
-  <button class="mode test-notice" type="button" aria-label="Send a test notification" title="Next bird from walk #20">
-    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
-      <path d="M10 20.5a2 2 0 0 0 4 0" />
+  <!-- Test: the walk's own rhythm, or a made-up one. Lucide "shuffle" (ISC). -->
+  <button class="mode rhythm" type="button" aria-pressed="false" aria-label="Random rhythm" title="Rhythm: the walk's own (click for random)">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m18 14 4 4-4 4" /><path d="m18 2 4 4-4 4" /><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-7.6a4 4 0 0 1 3.3-1.7H22" /><path d="M2 6h1.973a4 4 0 0 1 3.3 1.7l1.174 1.6" /><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45" />
     </svg>
   </button>
 
@@ -285,7 +288,9 @@ const credits = [
       label();
     });
 
-    // Notifications: each stays until clicked or tapped.
+    // Notifications: each slides away after about 5 s (roughly an iPhone
+    // banner's time), or sooner when tapped.
+    const STAY = 5000;
     const stack = document.querySelector('.notices');
     const template = document.querySelector('#notice');
     // Moves the others smoothly when one arrives or goes.
@@ -305,25 +310,67 @@ const credits = [
       flip(() => stack.prepend(n));
       requestAnimationFrame(() => requestAnimationFrame(() => n.classList.add('show')));
       n.addEventListener('pointerdown', () => dismiss(n), { once: true });
+      setTimeout(() => dismiss(n), STAY);
     }
     function dismiss(n) {
       if (!n.classList.contains('show')) return;
       n.classList.remove('show');
       setTimeout(() => flip(() => n.remove()), 350);
     }
-    // Clear all: each goes in turn, top first.
-    document.querySelector('.clear-notices').addEventListener('click', () =>
-      [...stack.children].forEach((n, i) => setTimeout(() => dismiss(n), i * 70)));
-    setTimeout(() => notify('I just spotted Northern Cardinal! ❤️‍🔥 50 points'), 1200);
-    // Test bell: steps through walk #20's species (Fri 25 Dec, 42 species),
-    // in the order they were first heard; src/data/walk-20.json, made by
-    // tool/export_site_walk.py. Points are a stand-in rule until the app has
-    // its own: 10 for a new species, plus 10 a call heard.
-    let next = 0;
-    document.querySelector('.test-notice').addEventListener('click', () => {
-      const s = walk.species[next];
-      next = (next + 1) % walk.species.length;
-      notify(`I just spotted ${s.common}! ❤️‍🔥 ${10 + 10 * s.calls} points`);
+
+    // Walk #20 (Fri 25 Dec, 42 species) plays itself: each species arrives in
+    // the order it was first heard (src/data/walk-20.json, made by
+    // tool/export_site_walk.py). Points are a stand-in until the app has its
+    // own rule: 10 for a new species, plus 10 a call heard.
+    //   walk:   the walk's real gaps, 5× faster (bursts and pauses as heard).
+    //   random: made-up bursts and pauses, to compare (?rhythm=random).
+    const SPEED = 5, LOOP_GAP = 6000, OPENING = 1200;
+    let rhythm = new URLSearchParams(location.search).get('rhythm') === 'random' ? 'random' : 'walk';
+    let k = -1, timer = null, playing = true;
+    const species = walk.species;
+    function gap(next) {
+      if (rhythm === 'random') return Math.random() < 0.4 ? 150 + Math.random() * 450 : 2000 + Math.random() * 7000;
+      if (next === 0) return LOOP_GAP;
+      return Math.max(150, (species[next].firstHeardSeconds - species[next - 1].firstHeardSeconds) * 1000 / SPEED);
+    }
+    function schedule(wait) {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        k = (k + 1) % species.length;
+        const s = species[k];
+        notify(`I just spotted ${s.common}! ❤️‍🔥 ${10 + 10 * s.calls} points`);
+        schedule(gap((k + 1) % species.length));
+      }, wait);
+    }
+    // The opening notification, then the walk begins.
+    setTimeout(() => notify('I just spotted Northern Cardinal! ❤️‍🔥 50 points'), OPENING);
+    schedule(OPENING + 2500);
+
+    // Bell: pause or resume.
+    const bell = document.querySelector('.test-notice');
+    bell.addEventListener('click', () => {
+      playing = !playing;
+      bell.setAttribute('aria-pressed', String(playing));
+      bell.title = playing ? 'Pause notifications' : 'Resume notifications';
+      bell.setAttribute('aria-label', bell.title);
+      if (playing) schedule(600); else clearTimeout(timer);
+    });
+    // Shuffle (test): switch rhythm live.
+    const shuffle = document.querySelector('.rhythm');
+    const showRhythm = () => {
+      shuffle.setAttribute('aria-pressed', String(rhythm === 'random'));
+      shuffle.title = rhythm === 'random' ? 'Rhythm: random (click for the walk\'s own)' : 'Rhythm: the walk\'s own (click for random)';
+    };
+    showRhythm();
+    shuffle.addEventListener('click', () => {
+      rhythm = rhythm === 'random' ? 'walk' : 'random';
+      showRhythm();
+      if (playing) schedule(gap((k + 1) % species.length));
+    });
+    // Don't let a hidden tab pile them up.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) clearTimeout(timer);
+      else if (playing) schedule(800);
     });
   </script>
 </body>
@@ -613,10 +660,12 @@ const credits = [
   .mode svg { grid-area: 1 / 1; transition: opacity .35s ease, transform .5s cubic-bezier(.2, .8, .2, 1); }
   html[data-bg='black'] .mode .moon,
   html:not([data-bg='black']) .mode .sun { opacity: 0; transform: rotate(-90deg) scale(.5); }
-  /* Light/dark top right (the round buttons' default place); the bell floats
-     halfway down the right edge. */
-  .test-notice { top: 50%; margin-top: -20px; }
-  .clear-notices { top: auto; bottom: 18px; }
+  /* Light/dark top right; the bell (pause/resume) beside it; the rhythm test
+     bottom right. */
+  .test-notice { right: 66px; }
+  .rhythm { top: auto; bottom: 18px; }
+  .test-notice[aria-pressed='true'] .off, .test-notice[aria-pressed='false'] .on { display: none; }
+  .rhythm[aria-pressed='true'] { background: var(--ink); color: var(--page); }
   .test-notice:hover { transform: rotate(-12deg); }
   .mode:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
   body { transition: background-color .5s ease, color .5s ease; }

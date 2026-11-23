@@ -70,9 +70,14 @@ or a small test before building it.
 - **Notifications name the full species (Ed, Nov 2026):** e.g. "Northern
   Cardinal", not "cardinal", matching the species index. An iPhone banner
   shows about four lines (~160 characters), so even the longest names fit.
-- **Splash test bell (Ed, Nov 2026):** each press sends the next species from
-  walk #20 (Fri 25 Dec 2026, 42 species) in the order first heard:
-  `site/src/data/walk-20.json`, made by `tool/export_site_walk.py` (species,
-  calls, confidence only; no location or IDs). Points are a stand-in: 10 for
-  a new species plus 10 a call. The icon stays the app's: iOS doesn't allow a
+- **Splash notifications (Ed, Nov 2026):** after the opening Northern Cardinal,
+  walk #20 (Fri 25 Dec 2026, 42 species) plays itself: each species arrives
+  in the order first heard, at the walk's real gaps 5× faster (bursts and
+  pauses), looping after a 6 s rest. Each banner leaves after ~5 s (about an
+  iPhone's) or when tapped. Data: `site/src/data/walk-20.json`, made by
+  `tool/export_site_walk.py` (species, calls, confidence only; no location or
+  IDs). Points are a stand-in: 10 for a new species plus 10 a call. The bell,
+  top right beside light/dark, pauses and resumes; the clear-all button went.
+  A shuffle button, bottom right, switches live to a made-up rhythm to compare
+  (`?rhythm=random`). The icon stays the app's: iOS doesn't allow a
   per-notification icon (a picture thumbnail on the right is allowed).
