@@ -12,7 +12,7 @@ kept here so they can be reused.
 Take it on a walk. It listens as you go. Trusty private local AI.
 Every bird it hears. Lovingly illustrated in the manner of the old
 natural-history books. Dated. Placed on the map. Along with the weather of
-the day.
+the day!
 
 (Before: "…Every bird it hears is lovingly illustrated in the manner of the
 old natural-history books: dated, placed on the map, along with the weather
@@ -20,7 +20,7 @@ of the day.")
 
 *As old as time. Each walk becomes an artwork, with its own Index of Species.*
 
-*Now I wonder how many you might collect?*
+*Now I wonder how many you can collect?*
 
 Earlier taglines: "A field journal that listens now", "Be here now", "I just spotted Kingfisher! :D" (the
 notification's words, now with Northern Cardinal), "I wonder who has the fairest call of them all?".
