@@ -74,7 +74,7 @@ or a small test before building it.
   ("Birdsongs.ai / Aye lovely a Northern Cardinal! ❤️‍🔥 +50points"), each
   time "Powered by BirdNET" flies into the footer credits (about 11 s in,
   then once a round of the credits). No timer, so they stay in step. The
-  bell, centred above the tagline (on trial), sends one straight away;
+  bell, centred above the tagline on desktop (top right on mobile), sends one straight away;
   light/dark is bottom right. A
   banner leaves after ~5 s or when tapped. Points are a stand-in. Other
   rhythms (a run through walk #20's 42 species, a round of five, random) were
