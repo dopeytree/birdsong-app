@@ -79,4 +79,4 @@ Details of 2 to 4 are in `map.md`.
 
 - `site/`: Astro splash page with IM Fell English fonts, CSS-drawn iPhone
   and iPad frames, shots in `site/public/shots/`. GitHub Pages workflow
-  (`site.yml`) publishes to https://dopeytree.github.io/birdsongs.ai/ (live since 23 Nov 2026) whenever `site/` changes on `main`.
+  (`site.yml`) publishes to https://birdsongs.ai/ (live since 23 Nov 2026; custom domain, dopeytree.github.io/birdsongs.ai redirects) whenever `site/` changes on `main`.
