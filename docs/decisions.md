@@ -210,3 +210,8 @@ or a small test before building it.
   visitor picks a dot.
 - **Popup fade, light mode (Ed, Nov 2026):** white at 97%, with the ✕ and ‹ ›
   in ink; dark mode stays black at 96%.
+- **The map dot, and the round (Ed, Nov 2026):** a fourth dot, the map: the
+  walk film (map, then a bird's card) in the sideways iPad, silent and
+  looping, full size in the popup too. The dots now go round from page load
+  (waiting while the popup is open); a dot tapped by hand holds the round for
+  10 s instead of stopping it for good.

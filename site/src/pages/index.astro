@@ -23,6 +23,10 @@ const shots = {
     // { type: 'image', src: 'shots/ipad-plate.jpg', alt: 'The same plate on iPad, with its index of species' },
     { type: 'image', src: 'shots/ipad-landscape.jpg', alt: 'The plate on iPad, turned sideways', landscape: true },
   ],
+  // The map (Ed, Nov 2026): the fourth dot, the walk film in the sideways iPad.
+  map: [
+    { type: 'video', src: 'media/walk.mp4', poster: 'media/walk-poster.jpg', alt: "A walk on iPad: the map, then a bird's card", landscape: true },
+  ],
 };
 // The pill is three dots (Ed, Nov 2026): the film, iPhone, iPad. frame: which
 // device is drawn round it.
@@ -30,6 +34,7 @@ const devices = [
   { id: 'film', label: 'The film', frame: 'ipad film' },   // sized as the sideways iPad, drawn without its frame
   { id: 'iphone', label: 'iPhone' },
   { id: 'ipad', label: 'iPad' },
+  { id: 'map', label: 'The map', frame: 'ipad' },
 ];
 const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 // The footer's credits, shown one at a time (src/scripts/credits.js).
@@ -167,7 +172,7 @@ const credits = [
               <span class="screen">
                 {shots[d.id].map((s, j) => (
                   s.type === 'video'
-                    ? <video class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={`${base}/${s.src}`} poster={`${base}/media/coming-soon-poster.jpg`} muted loop playsinline autoplay preload="auto" aria-label={s.alt}></video>
+                    ? <video class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={`${base}/${s.src}`} poster={`${base}/${s.poster ?? 'media/coming-soon-poster.jpg'}`} muted loop playsinline autoplay preload="auto" aria-label={s.alt}></video>
                     : <img class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={`${base}/${s.src}`} alt={s.alt} loading={i === 0 && j === 0 ? 'eager' : 'lazy'} />
                 ))}
                 {d.id === 'iphone' && <span class="island" aria-hidden="true"></span>}
@@ -320,22 +325,31 @@ const credits = [
     function boxStep(dir) {
       show((k + dir + stops.length) % stops.length);
       const v = stops[k].s;
-      if (v.tagName === 'VIDEO') { openFilm(v); return; }
+      if (stops[k].d.dataset.device === 'film') { openFilm(v); return; }
       if (stageFrom) {             // leaving the film: silence it
         boxFilm.pause();
         boxFilm.muted = true;
         boxFilm.loop = true;
         stageFrom = null;
       }
-      openBox();
+      openStop();
     }
-    // The dots go round every 3 s once the film has closed, while the popup
+    // A shot full size; the map's walk film plays silently on a loop.
+    function openStop() {
+      const v = stops[k].s;
+      if (v.tagName === 'VIDEO') showShot('ipad', true, v.poster, v.getAttribute('aria-label'), v.currentSrc || v.src);
+      else openBox();
+    }
+    // The dots go round every 3 s (film, iPhone, iPad, map) while the popup
     // is shut and until the visitor picks a dot themselves.
+    // It starts on load (waiting while the film is open); a dot picked by
+    // hand holds it for 10 s (Ed, Nov 2026).
     let cycle = null;
+    let holdUntil = 0;
     function startCycle() {
-      if (cycle) return;
+      clearInterval(cycle);
       cycle = setInterval(() => {
-        if (picked) { clearInterval(cycle); return; }
+        if (Date.now() < holdUntil) return;
         if (box.open || document.hidden) return;
         show((k + 1) % stops.length);
       }, 3000);
@@ -380,14 +394,14 @@ const credits = [
       const v = stops[k].s;
       // The film (Ed, Nov 2026): a click opens it large in the popup, with
       // sound, carrying on from where it was; closing hands it back.
-      if (v.tagName === 'VIDEO') { openFilm(v); return; }
-      openBox();
+      if (d.dataset.device === 'film') { openFilm(v); return; }
+      openStop();
     }));
     nav.querySelector('.prev').addEventListener('click', () => step(-1));
     nav.querySelector('.next').addEventListener('click', () => step(1));
     const firstOn = id => stops.findIndex(t => t.d.dataset.device === id);
     let picked = false;   // once the visitor uses the pill, leave their choice alone
-    segs.forEach(s => s.addEventListener('click', () => { picked = true; show(firstOn(s.dataset.device)); }));
+    segs.forEach(s => s.addEventListener('click', () => { picked = true; holdUntil = Date.now() + 10000; show(firstOn(s.dataset.device)); }));
     // Which device to show first. On touch screens (phones, iPads), the
     // opposite shape to the screen, so the shot fills it best (Ed, Nov 2026):
     // held upright, the sideways iPad; held sideways, the upright iPhone.
@@ -400,7 +414,8 @@ const credits = [
     // #ipad in the address opens on that. byShape picks between iPhone and iPad
     // when the device turns, unless the film is showing or the pill was used.
     const hashDev = location.hash.slice(1);
-    show(firstOn(['iphone', 'ipad'].includes(hashDev) ? hashDev : 'film'));
+    show(firstOn(['iphone', 'ipad', 'map'].includes(hashDev) ? hashDev : 'film'));
+    startCycle();
     upright.addEventListener('change', () => { if (!picked && touch.matches && stops[k].d.dataset.device !== 'film') show(firstOn(byShape())); });
     requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("ready")));
   </script>
