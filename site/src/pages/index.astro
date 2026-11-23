@@ -98,8 +98,28 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     <span class="rule"></span>
   </footer>
 
+  <!-- A sideways shot opens here, as large as the window allows. -->
+  <dialog class="lightbox" aria-label="The app, full size">
+    <div class="device ipad" data-landscape="true" data-active="true">
+      <span class="frame"><span class="screen"><img class="shot" data-active="true" alt="" /></span></span>
+    </div>
+    <p class="close-hint"><em>Click anywhere to close.</em></p>
+  </dialog>
+
   <script is:inline define:vars={{ roman }}>
-    const devices = [...document.querySelectorAll('.device')];
+    const devices = [...document.querySelectorAll('.devices .device')];
+    const box = document.querySelector('.lightbox');
+    const boxImg = box.querySelector('img');
+    box.addEventListener('click', () => box.close());
+
+    // After a step by the visitor: a sideways shot also opens full size.
+    function openIfSideways() {
+      const s = current().querySelector('.shot[data-active="true"]');
+      if (s.dataset.landscape !== 'true' || s.tagName !== 'IMG') return;
+      boxImg.src = s.src;
+      boxImg.alt = s.alt;
+      box.showModal();
+    }
     const segs = [...document.querySelectorAll('.seg')];
     const hint = document.querySelector('.hint em');
     const nav = document.querySelector('.index');
@@ -144,10 +164,11 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     devices.forEach(d => d.querySelector('.frame').addEventListener('click', () => {
       if (lastShot(d)) { pos[otherId(d)] = 0; setDevice(otherId(d)); }
       else showShot(d, (pos[d.dataset.device] || 0) + 1);
+      openIfSideways();
     }));
     segs.forEach(s => s.addEventListener('click', () => setDevice(s.dataset.device)));
-    nav.querySelector('.prev').addEventListener('click', () => { const d = current(); showShot(d, (pos[d.dataset.device] || 0) - 1); });
-    nav.querySelector('.next').addEventListener('click', () => { const d = current(); showShot(d, (pos[d.dataset.device] || 0) + 1); });
+    nav.querySelector('.prev').addEventListener('click', () => { const d = current(); showShot(d, (pos[d.dataset.device] || 0) - 1); openIfSideways(); });
+    nav.querySelector('.next').addEventListener('click', () => { const d = current(); showShot(d, (pos[d.dataset.device] || 0) + 1); openIfSideways(); });
     // #ipad opens on the iPad; #ipad-2 on its second shot.
     const [, hashDev, hashN] = location.hash.match(/^#(iphone|ipad)(?:-(\d+))?$/) || [];
     if (hashN) pos[hashDev] = hashN - 1;
@@ -345,6 +366,31 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     font-size: .9rem;
     font-style: italic;
   }
+
+  /* Full-size popup for a sideways shot, over faded paper. */
+  .lightbox {
+    border: 0; padding: 0; margin: auto;
+    background: none;
+    max-width: none; max-height: none;
+    overflow: visible;
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+    cursor: zoom-out;
+  }
+  .lightbox:not([open]) { display: none; }
+  .lightbox::backdrop {
+    background: rgba(238, 229, 206, .82);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .lightbox[open], .lightbox[open]::backdrop { animation: fade-in .45s ease; }
+  .lightbox[open] .device { animation: rise .5s cubic-bezier(.2, .7, .2, 1); }
+  @keyframes fade-in { from { opacity: 0; } }
+  @keyframes rise { from { transform: scale(.92); } }
+  /* As large as the window: frame is about 1.46 × --h wide, plus the hint below. */
+  .lightbox .ipad[data-landscape='true'] { --h: min(calc(100vh - 110px), calc((100vw - 48px) / 1.46)); }
+  .lightbox .frame { cursor: zoom-out; }
+  .lightbox .frame:hover { transform: none; }
+  .close-hint { margin: 0; color: var(--sepia); font-size: 1rem; }
 
   /* While the iPad is sideways, the text gives it more of the width. */
   .ready .page { transition: grid-template-columns .6s ease; }
