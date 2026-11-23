@@ -327,42 +327,38 @@ const credits = [
       setTimeout(() => flip(() => n.remove()), 350);
     }
 
-    // Walk #20 (Fri 25 Dec, 42 species) plays itself: each species arrives in
-    // the order it was first heard (src/data/walk-20.json, made by
-    // tool/export_site_walk.py). Points are a stand-in until the app has its
+    // A round of five, then a long rest, then the same five again (Ed, Nov
+    // 2026). The five: the opening Northern Cardinal and the first four
+    // species heard on walk #20 (Fri 25 Dec; src/data/walk-20.json, made by
+    // tool/export_site_walk.py). They come as three, a rest, then two; each
+    // rest waits for the last banner to go, then leaves the screen clear for
+    // 5 s, the long one for 10 s. Points are a stand-in until the app has its
     // own rule: 10 for a new species, plus 10 a call heard.
-    //   walk:   the walk's real gaps, 5× faster (bursts and pauses as heard).
-    //   random: made-up bursts and pauses, to compare (?rhythm=random).
-    const SPEED = 5, LOOP_GAP = 6000, OPENING = 1200;
-    // They come in small bursts with rests between, so the page can be seen
-    // clear: the opening three, then 3–5 at a time. A rest waits for the last
-    // banner to go, then 5 s more of clear screen (Ed, Nov 2026).
-    const REST = STAY + 5000;
-    let inBurst = 1, burst = 3;   // the opening Northern Cardinal is the first
+    //   walk:   gaps within a burst are the walk's own, 5× faster.
+    //   random: made-up short gaps, to compare (?rhythm=random).
+    const SPEED = 5, OPENING = 1200;
+    const REST = STAY + 5000, LONG_REST = STAY + 10000;
+    const ROUND = [{ common: 'Northern Cardinal', points: 50, at: 0 },
+      ...walk.species.slice(0, 4).map(s => ({ common: s.common, points: 10 + 10 * s.calls, at: s.firstHeardSeconds }))];
+    const BURSTS_END = [2, 4];   // rest after the 3rd and the 5th
     let rhythm = new URLSearchParams(location.search).get('rhythm') === 'random' ? 'random' : 'walk';
     let k = -1, timer = null, playing = true;
-    const species = walk.species;
-    function gap(next) {
-      if (rhythm === 'random') return Math.random() < 0.4 ? 150 + Math.random() * 450 : 2000 + Math.random() * 7000;
-      if (next === 0) return LOOP_GAP;
-      return Math.max(150, (species[next].firstHeardSeconds - species[next - 1].firstHeardSeconds) * 1000 / SPEED);
+    function gap(from) {
+      if (from === BURSTS_END[0]) return REST;
+      if (from === BURSTS_END[1]) return LONG_REST;
+      if (rhythm === 'random') return 300 + Math.random() * 1800;
+      if (from === 0) return 2500;   // after the opening cardinal
+      return Math.max(300, (ROUND[from + 1].at - ROUND[from].at) * 1000 / SPEED);
     }
     function schedule(wait) {
       clearTimeout(timer);
       timer = setTimeout(() => {
-        k = (k + 1) % species.length;
-        const s = species[k];
-        notify(`I just spotted ${s.common}! ❤️‍🔥 ${10 + 10 * s.calls} points`);
-        if (++inBurst >= burst) {
-          inBurst = 0;
-          burst = 3 + Math.floor(Math.random() * 3);
-          schedule(REST);
-        } else schedule(gap((k + 1) % species.length));
+        k = (k + 1) % ROUND.length;
+        notify(`I just spotted ${ROUND[k].common}! ❤️‍🔥 ${ROUND[k].points} points`);
+        schedule(gap(k));
       }, wait);
     }
-    // The opening notification, then the walk begins.
-    setTimeout(() => notify('I just spotted Northern Cardinal! ❤️‍🔥 50 points'), OPENING);
-    schedule(OPENING + 2500);
+    schedule(OPENING);
 
     // Bell: pause or resume.
     const bell = document.querySelector('.test-notice');
@@ -383,7 +379,7 @@ const credits = [
     shuffle.addEventListener('click', () => {
       rhythm = rhythm === 'random' ? 'walk' : 'random';
       showRhythm();
-      if (playing) schedule(gap((k + 1) % species.length));
+      if (playing && k >= 0) schedule(gap(k));
     });
     // Don't let a hidden tab pile them up.
     document.addEventListener('visibilitychange', () => {
