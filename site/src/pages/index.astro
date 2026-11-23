@@ -775,7 +775,7 @@ const credits = [
       gap: 10px;
       text-align: center;
     }
-    .text { flex: none; }
+    .text { flex: none; align-self: stretch; }   /* full width: it's a size container */
     .kicker { justify-content: center; margin-bottom: .2rem; }
     .kicker em { font-size: clamp(.85rem, 3.4vw, 1.05rem); }
     .kicker::after { display: none; }
@@ -818,6 +818,8 @@ const credits = [
     /* The sideways iPad is as wide as the screen and no taller than it needs. */
     .devices:has(.ipad[data-active='true'][data-landscape='true']) { height: calc((100vw - 32px) / 1.46); }
     .lede, .badges, .soon { order: 4; }
+    /* Full width (up to the measure), so the quote can sit to the right. */
+    .lede { width: 100%; }
   }
   /* Phones held sideways: too short to fit, so the page scrolls and the
      device gets most of a screen's height of its own. */
