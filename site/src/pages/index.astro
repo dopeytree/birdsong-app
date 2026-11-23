@@ -373,6 +373,8 @@ const credits = [
     display: flex; align-items: center; gap: .55em;
   }
   .kicker em { font-family: var(--fell); letter-spacing: 0; font-size: 1.2rem; }
+  /* A short ruled line after the tagline, matching the one before the attribution. */
+  .kicker::after { content: ''; width: 2.5em; height: 1px; background: currentColor; opacity: .6; }
   .dot { width: .6em; height: .6em; border-radius: 50%; background: var(--madder); display: inline-block; animation: listen 2.4s ease-in-out infinite; }
   @keyframes listen { 50% { opacity: .35; } }
   h1 {
