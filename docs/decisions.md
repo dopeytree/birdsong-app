@@ -63,7 +63,7 @@ or a small test before building it.
   device's light or dark setting, live, until the visitor picks; the round
   button top right (Lucide sun and moon, ISC) switches and remembers it.
   `?bg=white` / `?bg=black` picks one. The paper mode (#C8B68C) was dropped.
-- **Splash page credits (Ed, Nov 2026):** the footer cycles 16 credits
+- **Splash page credits (Ed, Nov 2026):** the footer cycles 18 credits
   (list in `index.astro`, `credits`), each flocking in letter by letter, then
   fading out (`site/src/scripts/credits.js`). Left out: the model
   gallery (tphakala) and the MIT code licence. Screen readers get the full list.
@@ -80,4 +80,8 @@ or a small test before building it.
   top right beside light/dark, pauses and resumes; the clear-all button went.
   A shuffle button, bottom right, switches live to a made-up rhythm to compare
   (`?rhythm=random`). The icon stays the app's: iOS doesn't allow a
-  per-notification icon (a picture thumbnail on the right is allowed).
+  per-notification icon (a picture thumbnail on the right is allowed).- **Splash store badges (Ed, Nov 2026):** official App Store badge (black,
+  from developer.apple.com) and Get it on Google Play (from play.google.com,
+  clear margin trimmed), unaltered, then "Coming soon." Not links yet; at
+  launch they must link to the listings. Trademark lines added to the credits.
+  Apple's own Mac App Store badge exists if a Mac badge is wanted.

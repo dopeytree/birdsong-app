@@ -44,6 +44,9 @@ const credits = [
   'Nominatim & Photon',
   'GBIF',
   'IM Fell English by Igino Marini',
+  // Required with the store badges.
+  'App Store is a trademark of Apple Inc.',
+  'Google Play is a trademark of Google LLC',
 ];
 ---
 <!doctype html>
@@ -108,7 +111,13 @@ const credits = [
         ))}
       </div>
 
-      <p class="soon">for Mac, iPhone &amp; iPad. <em>Coming soon.</em></p>
+      <!-- Official store badges (Apple, Google; unaltered). Not links until the
+           app is listed: both companies ask that a badge link to the app. -->
+      <div class="badges">
+        <img src={`${base}/badges/app-store.svg`} alt="Download on the App Store" width="120" height="40" />
+        <img src={`${base}/badges/google-play.png`} alt="Get it on Google Play" width="134" height="40" />
+      </div>
+      <p class="soon"><em>Coming soon.</em></p>
     </section>
 
     <section class="stage" aria-label="The app">
@@ -504,6 +513,8 @@ const credits = [
   .seg[aria-selected='true'] { background: var(--madder); color: var(--paper); }
   .seg:focus-visible, .frame:focus-visible, .step:focus-visible { outline: 2px solid var(--madder); outline-offset: 4px; }
   .soon { color: var(--sepia); margin: 0; font-size: 1.1rem; text-align: center; }
+  .badges { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin: 0 0 .6rem; }
+  .badges img { height: 40px; width: auto; }
 
   /* ---- Stage ---- */
   .stage { display: flex; flex-direction: column; align-items: center; }
