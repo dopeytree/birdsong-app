@@ -671,6 +671,11 @@ class _WalkMapState extends State<WalkMap> {
   /// opens it (and the label stays a little longer to be reached).
   void _say(Offset at, String title, String sub, {Uri? page}) {
     _tipTimer?.cancel();
+    // Tapping the same thing again closes its label (Ed, Nov 2026).
+    if (_tip != null && _tip!.title == title && _tip!.sub == sub) {
+      setState(() => _tip = null);
+      return;
+    }
     setState(() => _tip = (title: title, sub: sub, at: at, page: page));
     _tipTimer = Timer(Duration(milliseconds: page != null ? 8000 : 3500), () {
       if (mounted) setState(() => _tip = null);
@@ -737,7 +742,7 @@ class _WalkMapState extends State<WalkMap> {
     final line = w.trail;
     final a = line.isNotEmpty ? line.first : w.place;
     String time(DateTime? t) => t == null ? '' : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-    Marker end(LatLng at, bool start, String label, String when) => Marker(
+    Marker end(LatLng at, bool start, String label, String when, {bool station = false}) => Marker(
           point: at,
           width: 80,
           height: 56,
@@ -750,14 +755,17 @@ class _WalkMapState extends State<WalkMap> {
                   final local = box?.globalToLocal(d.globalPosition) ?? Offset.zero;
                   _say(local, label, when);
                 },
-                child: CustomPaint(size: const Size.square(22), painter: _EndPainter(start)),
+                // Start +, finish ✕, in ink (Ed, Nov 2026); a station keeps its ring.
+                child: CustomPaint(
+                    size: const Size.square(22),
+                    painter: station ? const _EndPainter(false) : _StartFinishPainter(start)),
               ),
               Positioned(top: 28 + 11, child: IgnorePointer(child: _Halo(label, 11, ink, halo: 1.6))),
             ],
           ),
         );
     if (w.station != null) {
-      return [if (w.place != null) end(w.place!, false, w.station!, 'The station')];
+      return [if (w.place != null) end(w.place!, false, w.station!, 'The station', station: true)];
     }
     return [
       if (a != null) end(a, true, 'Start', time(w.start)),
@@ -1025,10 +1033,16 @@ class _WalkMapState extends State<WalkMap> {
               label: '${b.common}: open its card',
               child: GestureDetector(
                 onTap: () => widget.onBird(b.sci, b.common),
-                child: CustomPaint(size: Size.square(size + 8), painter: _CrossPainter(size)),
+                // A small red heart for each bird (Ed, Nov 2026; was a
+                // madder cross), larger for a species' first.
+                child: SizedBox.square(
+                  dimension: size + 8,
+                  child: Center(child: Text('❤️', style: TextStyle(fontSize: first ? 15 : 11, height: 1))),
+                ),
               ),
             ),
-            if (first) Positioned(top: 32 + 15, child: IgnorePointer(child: _Halo(b.common, 11, madder, halo: 1.6))),
+            // Names in ink, apart from the red hearts (Ed, Nov 2026; were madder).
+            if (first) Positioned(top: 32 + 15, child: IgnorePointer(child: _Halo(b.common, 11, ink, halo: 1.6))),
           ],
         ),
       );
@@ -1352,17 +1366,23 @@ class _WalkMapState extends State<WalkMap> {
         left: (t.at.dx - 120).clamp(8.0, math.max(8.0, widget.size.width - 248)),
         top: t.at.dy > (t.page != null ? 98 : 80) ? t.at.dy - (t.page != null ? 92 : 70) : t.at.dy + 22,
         width: 240,
-        child: IgnorePointer(
-          ignoring: t.page == null,
+        // In the app's dialog look (Ed, Nov 2026: as the download and model
+        // update dialogs): the deeper paper, rounded, a soft shadow, no ring.
+        // A tap on it closes it; its link still opens the page.
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            _tipTimer?.cancel();
+            setState(() => _tip = null);
+          },
           child: Center(
             child: Container(
-              decoration: const BoxDecoration(color: paper, boxShadow: [
-                BoxShadow(color: paper, spreadRadius: 3),
-                BoxShadow(color: Color(0xFFBCAB86), spreadRadius: 4),
-                BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 6), blurRadius: 18),
-              ]),
-              foregroundDecoration: BoxDecoration(border: Border.all(color: const Color(0xFFBCAB86))),
-              padding: const EdgeInsets.fromLTRB(12.8, 7.2, 12.8, 8),
+              decoration: BoxDecoration(
+                color: paperDeep,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 6), blurRadius: 18)],
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 11),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Text(t.title,
                     textAlign: TextAlign.center,
@@ -1426,38 +1446,6 @@ class _Halo extends StatelessWidget {
       Text(text, textAlign: align, style: style.copyWith(color: color)),
     ]);
   }
-}
-
-/// The map's ✕: two drawn strokes in madder over a broad paper one.
-class _CrossPainter extends CustomPainter {
-  const _CrossPainter(this.size);
-
-  final double size;
-
-  @override
-  void paint(Canvas canvas, Size box) {
-    // drawn in the page's 48-unit picture, shown at [size]
-    final k = size / 48;
-    canvas.translate((box.width - size) / 2, (box.height - size) / 2);
-    canvas.scale(k);
-    final path = ui.Path()
-      ..moveTo(12, 13)
-      ..quadraticBezierTo(24, 23, 36, 35)
-      ..moveTo(35, 12)
-      ..quadraticBezierTo(25, 25, 13, 36);
-    Paint s(Color c, double w) => Paint()
-      ..color = c
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas
-      ..drawPath(path, s(paper, 13))
-      ..drawPath(path, s(madder, 6));
-  }
-
-  @override
-  bool shouldRepaint(_CrossPainter old) => old.size != size;
 }
 
 /// A label point worked out beforehand (see _labelPoint).
@@ -1618,6 +1606,45 @@ class _EndPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_EndPainter old) => old.start != start;
+}
+
+/// The walk's start (+) and finish (✕), in ink on a paper halo, in the
+/// cross's hand-drawn manner.
+class _StartFinishPainter extends CustomPainter {
+  const _StartFinishPainter(this.start);
+
+  final bool start;
+
+  @override
+  void paint(Canvas canvas, Size box) {
+    const size = 16.0;
+    final k = size / 48;
+    canvas.translate((box.width - size) / 2, (box.height - size) / 2);
+    canvas.scale(k);
+    final path = start
+        ? (ui.Path()
+          ..moveTo(24, 9)
+          ..quadraticBezierTo(23, 24, 24.5, 39)
+          ..moveTo(9, 24.5)
+          ..quadraticBezierTo(24, 23, 39, 24))
+        : (ui.Path()
+          ..moveTo(12, 13)
+          ..quadraticBezierTo(24, 23, 36, 35)
+          ..moveTo(35, 12)
+          ..quadraticBezierTo(25, 25, 13, 36));
+    Paint s(Color c, double w) => Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas
+      ..drawPath(path, s(paper, 14))
+      ..drawPath(path, s(ink, 6));
+  }
+
+  @override
+  bool shouldRepaint(_StartFinishPainter old) => old.start != start;
 }
 
 /// The map's + and − at the top left, on paper.

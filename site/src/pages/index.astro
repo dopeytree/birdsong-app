@@ -123,19 +123,21 @@ const credits = [
       <p class="kicker"><span class="dot" aria-hidden="true"></span> <em>A field journal that listens <span class="underline">here</span> &amp; <span class="underline">now</span></em></p>
       <h1>Birdsongs.ai</h1>
       <p class="lede">
-        Take it on a <span class="underline">walk</span>. It listens as you go. Trusty private local AI.
+        Take it on a <span class="underline to-map">walk</span>. It listens as you go. Trusty private local AI.
         Every bird it hears. Lovingly illustrated in the manner of the old
         natural-history books. Dated. Placed on the map. Along with the weather of
         the day!
       </p>
       <p class="lede second">
-        <span class="madder">Aye Old as Time.</span> Each <span class="underline">walk</span> becomes an artwork, with its own <span class="underline">Index of Species</span>.
+        <span class="madder">Aye Old as Time.</span> Each <span class="underline to-map">walk</span> becomes an artwork, with its own <span class="underline to-index">Index of Species</span>.
       </p>
       <p class="lede second attribution">
         Now I wonder how many you can <span class="underline">collect</span>?
       </p>
 
-      <p class="soon"><span><em>Coming Soon</em></span></p>
+      <!-- iOS, Coming Soon, Android on one line, with logos (Ed, Nov 2026). Logos from Simple
+           Icons (CC0); the marks are Apple's and Google's trademarks. -->
+      <p class="soon"><span class="os"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><em>iOS</em></span><span class="cs"><em>Coming Soon</em></span><span class="os"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.4395 5.5586c-.675 1.1664-1.352 2.3318-2.0274 3.498-.0366-.0155-.0742-.0286-.1113-.043-1.8249-.6957-3.484-.8-4.42-.787-1.8551.0185-3.3544.4643-4.2597.8203-.084-.1494-1.7526-3.021-2.0215-3.4864a1.1451 1.1451 0 0 0-.1406-.1914c-.3312-.364-.9054-.4859-1.379-.203-.475.282-.7136.9361-.3886 1.5019 1.9466 3.3696-.0966-.2158 1.9473 3.3593.0172.031-.4946.2642-1.3926 1.0177C2.8987 12.176.452 14.772 0 18.9902h24c-.119-1.1108-.3686-2.099-.7461-3.0683-.7438-1.9118-1.8435-3.2928-2.7402-4.1836a12.1048 12.1048 0 0 0-2.1309-1.6875c.6594-1.122 1.312-2.2559 1.9649-3.3848.2077-.3615.1886-.7956-.0079-1.1191a1.1001 1.1001 0 0 0-.8515-.5332c-.5225-.0536-.9392.3128-1.0488.5449zm-.0391 8.461c.3944.5926.324 1.3306-.1563 1.6503-.4799.3197-1.188.0985-1.582-.4941-.3944-.5927-.324-1.3307.1563-1.6504.4727-.315 1.1812-.1086 1.582.4941zM7.207 13.5273c.4803.3197.5506 1.0577.1563 1.6504-.394.5926-1.1038.8138-1.584.4941-.48-.3197-.5503-1.0577-.1563-1.6504.4008-.6021 1.1087-.8106 1.584-.4941z"/></svg><em>Android</em></span></p>
     </section>
 
     <section class="stage" aria-label="The app">
@@ -194,7 +196,7 @@ const credits = [
     <p class="close-hint"><em>Click anywhere to close.</em></p>
   </dialog>
 
-  <script is:inline define:vars={{ roman }}>
+  <script is:inline define:vars={{ roman, base }}>
     // The pill buttons choose the device; a tap on the screen opens the shot
     // full size in the popup. ‹ › step through a device's shots, if it has more than one.
     const devices = [...document.querySelectorAll('.devices .device')];
@@ -245,6 +247,33 @@ const credits = [
       box.showModal();
     }
     box.addEventListener('click', () => box.close());
+
+    // Links in the text (Ed, Nov 2026): "Index of Species" opens the sideways
+    // iPad (its index) full size; "walk" opens the map screenshot, once
+    // public/shots/walk-map.jpg exists (until then it does nothing).
+    const shot = name => `${base}/shots/${name}`;
+    const showShot = (device, sideways, src, alt) => {
+      boxDev.className = `device ${device}`;
+      boxDev.dataset.landscape = sideways ? 'true' : 'false';
+      boxImg.src = src;
+      boxImg.alt = alt;
+      box.showModal();
+    };
+    let mapReady = false;
+    const probe = new Image();
+    probe.onload = () => { mapReady = true; document.documentElement.dataset.map = 'ready'; };
+    probe.src = shot('walk-map.jpg');
+    document.addEventListener('click', e => {
+      const t = e.target instanceof Element && e.target.closest('.to-index, .to-map');
+      if (!t) return;
+      if (t.classList.contains('to-index')) {
+        e.stopPropagation();      // not the cardinal too
+        showShot('ipad', true, shot('ipad-landscape.jpg'), 'The Index of Species, on iPad');
+      } else if (mapReady) {
+        e.stopPropagation();
+        showShot('iphone', false, shot('walk-map.jpg'), 'The map of a walk');
+      }
+    });
     // Closing hands focus back to the screen, which would show its focus ring.
     // Keep that for keyboard users only: after a click or tap, let it go.
     let byPointer = false;
@@ -436,7 +465,7 @@ const credits = [
     });
 
     // Coming Soon: a click brings the song and the notification, like the bell.
-    document.querySelector('.soon > span').addEventListener('click', () => {
+    document.querySelector('.soon > .cs').addEventListener('click', () => {
       soundOK = true;            // a click, so sound is allowed now
       song.muted = false;
       sing();
@@ -583,7 +612,11 @@ const credits = [
   .soon { color: var(--sepia); margin: 3.2rem 0 0; font-size: 1.1rem; text-align: center; }
   /* Words picked out in madder, the colour of "Coming Soon". */
   .madder { color: var(--madder); }
+  .to-index, html[data-map='ready'] .to-map { cursor: pointer; }
   .underline, .underline .fx-ch { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
+  .soon { display: flex; justify-content: center; align-items: center; flex-wrap: nowrap; gap: .6rem; }
+  .soon > span.os { color: var(--sepia); cursor: default; }   /* the colour of "Now I wonder…" */
+  .soon .os svg { width: .95em; height: .95em; fill: currentColor; vertical-align: -.12em; margin-right: .4em; }
   .soon > span {
     color: var(--madder);          /* the filled pill's red-orange, in both modes */
     cursor: pointer;               /* the hand, like a button (Ed, Nov 2026) */
@@ -912,10 +945,10 @@ const credits = [
     .devices { flex: none; height: 48svh; width: 100%; container-type: size; }
     /* The sideways iPad is as wide as the screen and no taller than it needs. */
     .devices:has(.ipad[data-active='true'][data-landscape='true']) { height: min(48svh, calc((100vw - 32px) / 1.46)); }
-    .iphone { --h: min(100cqh, calc(100cqw * 2.1)); }
+    .iphone { --h: min(92cqh, calc(100cqw * 2.1)); }   /* a touch smaller, so the pill has room */
     .ipad   { --h: min(100cqh, calc(100cqw * 1.4)); }
     .ipad[data-landscape='true'] { --h: min(100cqh, calc(100cqw / 1.47)); }
-    .pill { margin-top: .6rem; }
+    .pill { margin-top: 1.1rem; }
     .seg { font-size: .95rem; padding: .35em 1.1em .4em; }
     .hint { display: none; }
 

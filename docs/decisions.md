@@ -145,3 +145,20 @@ or a small test before building it.
 - **Page spectrogram (Ed, Nov 2026):** the cardinal's spectrogram from the
   veil also lies faint along the foot of the main page, fixed behind
   everything, in the ink colour (7% on black, 9% on white).
+- **iOS and Android buttons (Ed, Nov 2026):** either side of Coming Soon, on one line, outlined like
+  it but in the quote's colour, each with its logo (Apple, Android; from
+  Simple Icons). Plain-word versions were tried and dropped. Labels only, no
+  links yet. Apple's rules don't allow its logo on its own in others'
+  marketing; revisit (or use the official badge) at launch.
+- **Text links (Ed, Nov 2026):** "Index of Species" opens the sideways iPad
+  (its index) full size; "walk" opens a map screenshot from
+  `site/public/shots/walk-map.jpg` once that file exists (until then it does
+  nothing). These clicks don't also bring the cardinal.
+- **Walk map marks (Ed, Nov 2026):** each bird is a small ❤️ (larger for a
+  species' first sighting; was a madder hand-drawn ✕, then ❤️‍🔥), the start a hand-drawn
+  + and the finish a ✕, both in ink on a paper halo. A listening station keeps
+  its ring. (`walk_map.dart`: `_birds`, `_ends`, `_StartFinishPainter`.)
+- **Map labels (Ed, Nov 2026):** a place's label takes the app's dialog look
+  (deeper paper, rounded, soft shadow, no ring); tapping the same thing again,
+  or the label, closes it. Bird names on the map are in ink, apart from the red
+  hearts.
