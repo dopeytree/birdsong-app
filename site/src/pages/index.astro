@@ -502,10 +502,12 @@ const credits = [
   .kicker::after { content: ''; width: 2.5em; height: 1px; background: currentColor; opacity: .6; }
   .dot { width: .6em; height: .6em; border-radius: 50%; background: var(--madder); display: inline-block; animation: listen 2.4s ease-in-out infinite; }
   @keyframes listen { 50% { opacity: .35; } }
+  /* The heading shrinks to fit its column ("Birdsongs.ai" is about 5.7 em). */
+  .text { container-type: inline-size; }
   h1 {
     font-family: var(--fell-sc);
     font-weight: normal;
-    font-size: clamp(3rem, 7vw, 5.4rem);
+    font-size: min(clamp(3rem, 7vw, 5.4rem), 16.5cqw);
     letter-spacing: .04em;
     line-height: 1;
     margin: 0 0 1.4rem;
@@ -604,7 +606,9 @@ const credits = [
   .iphone { --bezel: calc(var(--h) * .016); --ar: 1179 / 2556; --r-outer: calc(var(--h) * .085); --r-inner: calc(var(--h) * .07); }
   .ipad   { --bezel: calc(var(--h) * .04);  --ar: 1488 / 2266; --r-outer: calc(var(--h) * .05);  --r-inner: calc(var(--h) * .03); }
   /* Sideways iPad: --h is now the short side. */
-  .ipad[data-landscape='true'] { --h: min(46vh, 440px); --ar: 2266 / 1488; --bezel: calc(var(--h) * .06); --r-outer: calc(var(--h) * .076); --r-inner: calc(var(--h) * .046); }
+  /* No wider than its column (frame width is about 1.46 × --h). */
+  .stage { container-type: inline-size; }
+  .ipad[data-landscape='true'] { --h: min(46vh, 440px, calc(100cqw / 1.5)); --ar: 2266 / 1488; --bezel: calc(var(--h) * .06); --r-outer: calc(var(--h) * .076); --r-inner: calc(var(--h) * .046); }
   /* Size changes animate only once the page has loaded (.ready). */
   .ready .frame { transition: transform .3s ease, padding .6s ease, border-radius .6s ease; }
   .ready .screen { transition: height .6s ease, aspect-ratio .6s ease, border-radius .6s ease; }
