@@ -205,8 +205,15 @@ const credits = [
       box.showModal();
     }
     box.addEventListener('click', () => box.close());
+    // Closing hands focus back to the screen, which would show its focus ring.
+    // Keep that for keyboard users only: after a click or tap, let it go.
+    let byPointer = false;
+    box.addEventListener('close', () => { if (byPointer) document.activeElement?.blur(); });
 
-    devices.forEach(d => d.querySelector('.frame').addEventListener('click', openBox));
+    devices.forEach(d => d.querySelector('.frame').addEventListener('click', e => {
+      byPointer = e.detail > 0;   // 0 when opened from the keyboard
+      openBox();
+    }));
     nav.querySelector('.prev').addEventListener('click', () => step(-1));
     nav.querySelector('.next').addEventListener('click', () => step(1));
     const firstOn = id => stops.findIndex(t => t.d.dataset.device === id);
