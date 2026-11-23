@@ -69,3 +69,9 @@ or a small test before building it.
 - **Notifications name the full species (Ed, Nov 2026):** e.g. "Northern
   Cardinal", not "cardinal", matching the species index. An iPhone banner
   shows about four lines (~160 characters), so even the longest names fit.
+- **Splash test bell (Ed, Nov 2026):** each press sends the next species from
+  walk #20 (Fri 25 Dec 2026, 42 species) in the order first heard:
+  `site/src/data/walk-20.json`, made by `tool/export_site_walk.py` (species,
+  calls, confidence only; no location or IDs). Points are a stand-in: 10 for
+  a new species plus 10 a call. The icon stays the app's: iOS doesn't allow a
+  per-notification icon (a picture thumbnail on the right is allowed).

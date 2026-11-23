@@ -1,0 +1,300 @@
+{
+ "walk": 20,
+ "date": "2026-12-25",
+ "species": [
+  {
+   "common": "Eastern Towhee",
+   "scientific": "Pipilo erythrophthalmus",
+   "firstHeardSeconds": 19,
+   "calls": 1,
+   "confidence": 0.881
+  },
+  {
+   "common": "Spotted Towhee",
+   "scientific": "Pipilo maculatus",
+   "firstHeardSeconds": 26,
+   "calls": 2,
+   "confidence": 0.972
+  },
+  {
+   "common": "Green-tailed Towhee",
+   "scientific": "Pipilo chlorurus",
+   "firstHeardSeconds": 39,
+   "calls": 1,
+   "confidence": 0.963
+  },
+  {
+   "common": "Canyon Towhee",
+   "scientific": "Melozone fusca",
+   "firstHeardSeconds": 52,
+   "calls": 1,
+   "confidence": 0.717
+  },
+  {
+   "common": "Great Blue Heron",
+   "scientific": "Ardea herodias",
+   "firstHeardSeconds": 63,
+   "calls": 1,
+   "confidence": 0.889
+  },
+  {
+   "common": "Eastern Phoebe",
+   "scientific": "Sayornis phoebe",
+   "firstHeardSeconds": 100,
+   "calls": 3,
+   "confidence": 0.947
+  },
+  {
+   "common": "White-eyed Vireo",
+   "scientific": "Vireo griseus",
+   "firstHeardSeconds": 103,
+   "calls": 1,
+   "confidence": 0.692
+  },
+  {
+   "common": "Sacred Kingfisher",
+   "scientific": "Todiramphus sanctus",
+   "firstHeardSeconds": 109,
+   "calls": 1,
+   "confidence": 0.907
+  },
+  {
+   "common": "Sandhill Crane",
+   "scientific": "Antigone canadensis",
+   "firstHeardSeconds": 124,
+   "calls": 1,
+   "confidence": 0.842
+  },
+  {
+   "common": "Anhinga",
+   "scientific": "Anhinga anhinga",
+   "firstHeardSeconds": 152,
+   "calls": 2,
+   "confidence": 0.866
+  },
+  {
+   "common": "Northern Cardinal",
+   "scientific": "Cardinalis cardinalis",
+   "firstHeardSeconds": 157,
+   "calls": 2,
+   "confidence": 0.778
+  },
+  {
+   "common": "Belted Kingfisher",
+   "scientific": "Megaceryle alcyon",
+   "firstHeardSeconds": 166,
+   "calls": 2,
+   "confidence": 0.954
+  },
+  {
+   "common": "Canada Goose",
+   "scientific": "Branta canadensis",
+   "firstHeardSeconds": 178,
+   "calls": 1,
+   "confidence": 0.769
+  },
+  {
+   "common": "Cackling Goose",
+   "scientific": "Branta hutchinsii",
+   "firstHeardSeconds": 193,
+   "calls": 1,
+   "confidence": 0.944
+  },
+  {
+   "common": "American Wigeon",
+   "scientific": "Mareca americana",
+   "firstHeardSeconds": 200,
+   "calls": 3,
+   "confidence": 0.933
+  },
+  {
+   "common": "Snow Goose",
+   "scientific": "Anser caerulescens",
+   "firstHeardSeconds": 212,
+   "calls": 1,
+   "confidence": 0.966
+  },
+  {
+   "common": "Mallard",
+   "scientific": "Anas platyrhynchos",
+   "firstHeardSeconds": 226,
+   "calls": 2,
+   "confidence": 0.858
+  },
+  {
+   "common": "Wood Duck",
+   "scientific": "Aix sponsa",
+   "firstHeardSeconds": 241,
+   "calls": 1,
+   "confidence": 0.967
+  },
+  {
+   "common": "Black-bellied Whistling Duck",
+   "scientific": "Dendrocygna autumnalis",
+   "firstHeardSeconds": 249,
+   "calls": 1,
+   "confidence": 0.992
+  },
+  {
+   "common": "Trumpeter Swan",
+   "scientific": "Cygnus buccinator",
+   "firstHeardSeconds": 261,
+   "calls": 1,
+   "confidence": 0.78
+  },
+  {
+   "common": "Common Yellowthroat",
+   "scientific": "Geothlypis trichas",
+   "firstHeardSeconds": 265,
+   "calls": 1,
+   "confidence": 0.752
+  },
+  {
+   "common": "Killdeer",
+   "scientific": "Charadrius vociferus",
+   "firstHeardSeconds": 273,
+   "calls": 2,
+   "confidence": 0.93
+  },
+  {
+   "common": "Red-winged Blackbird",
+   "scientific": "Agelaius phoeniceus",
+   "firstHeardSeconds": 273,
+   "calls": 4,
+   "confidence": 0.863
+  },
+  {
+   "common": "Glaucous-winged Gull",
+   "scientific": "Larus glaucescens",
+   "firstHeardSeconds": 296,
+   "calls": 1,
+   "confidence": 0.738
+  },
+  {
+   "common": "Laughing Gull",
+   "scientific": "Leucophaeus atricilla",
+   "firstHeardSeconds": 301,
+   "calls": 1,
+   "confidence": 0.868
+  },
+  {
+   "common": "Cooper's Hawk",
+   "scientific": "Astur cooperii",
+   "firstHeardSeconds": 356,
+   "calls": 1,
+   "confidence": 0.789
+  },
+  {
+   "common": "Limpkin",
+   "scientific": "Aramus guarauna",
+   "firstHeardSeconds": 373,
+   "calls": 1,
+   "confidence": 0.929
+  },
+  {
+   "common": "Black-necked Stilt",
+   "scientific": "Himantopus mexicanus",
+   "firstHeardSeconds": 382,
+   "calls": 1,
+   "confidence": 0.758
+  },
+  {
+   "common": "Least Flycatcher",
+   "scientific": "Empidonax minimus",
+   "firstHeardSeconds": 419,
+   "calls": 2,
+   "confidence": 0.981
+  },
+  {
+   "common": "Olive-sided Flycatcher",
+   "scientific": "Contopus cooperi",
+   "firstHeardSeconds": 431,
+   "calls": 1,
+   "confidence": 0.889
+  },
+  {
+   "common": "Willow Flycatcher",
+   "scientific": "Empidonax traillii",
+   "firstHeardSeconds": 440,
+   "calls": 1,
+   "confidence": 0.91
+  },
+  {
+   "common": "American Yellow Warbler",
+   "scientific": "Setophaga aestiva",
+   "firstHeardSeconds": 442,
+   "calls": 1,
+   "confidence": 0.789
+  },
+  {
+   "common": "Northern Waterthrush",
+   "scientific": "Parkesia noveboracensis",
+   "firstHeardSeconds": 443,
+   "calls": 1,
+   "confidence": 0.753
+  },
+  {
+   "common": "Vermilion Flycatcher",
+   "scientific": "Pyrocephalus rubinus",
+   "firstHeardSeconds": 449,
+   "calls": 2,
+   "confidence": 0.937
+  },
+  {
+   "common": "Song Sparrow",
+   "scientific": "Melospiza melodia",
+   "firstHeardSeconds": 451,
+   "calls": 1,
+   "confidence": 0.873
+  },
+  {
+   "common": "Great Crested Flycatcher",
+   "scientific": "Myiarchus crinitus",
+   "firstHeardSeconds": 463,
+   "calls": 2,
+   "confidence": 0.936
+  },
+  {
+   "common": "Eastern Wood Pewee",
+   "scientific": "Contopus virens",
+   "firstHeardSeconds": 478,
+   "calls": 2,
+   "confidence": 0.941
+  },
+  {
+   "common": "Worm-eating Warbler",
+   "scientific": "Helmitheros vermivorum",
+   "firstHeardSeconds": 482,
+   "calls": 1,
+   "confidence": 0.862
+  },
+  {
+   "common": "Western Wood Pewee",
+   "scientific": "Contopus sordidulus",
+   "firstHeardSeconds": 492,
+   "calls": 2,
+   "confidence": 0.934
+  },
+  {
+   "common": "Eastern Kingbird",
+   "scientific": "Tyrannus tyrannus",
+   "firstHeardSeconds": 503,
+   "calls": 2,
+   "confidence": 0.893
+  },
+  {
+   "common": "Grey Kingbird",
+   "scientific": "Tyrannus dominicensis",
+   "firstHeardSeconds": 522,
+   "calls": 1,
+   "confidence": 0.878
+  },
+  {
+   "common": "Carolina Chickadee",
+   "scientific": "Poecile carolinensis",
+   "firstHeardSeconds": 529,
+   "calls": 1,
+   "confidence": 0.788
+  }
+ ]
+}

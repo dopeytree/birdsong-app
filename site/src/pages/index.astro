@@ -229,8 +229,8 @@ const credits = [
     </div>
   </template>
 
-  <!-- Test: sends a second notification. -->
-  <button class="mode test-notice" type="button" aria-label="Send a test notification" title="Send a test notification">
+  <!-- Test: each press sends the next species heard on walk #20. -->
+  <button class="mode test-notice" type="button" aria-label="Send a test notification" title="Next bird from walk #20">
     <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
       <path d="M10 20.5a2 2 0 0 0 4 0" />
@@ -243,6 +243,7 @@ const credits = [
     startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur');
 
     import { startCredits } from '../scripts/credits.js';
+    import walk from '../data/walk-20.json';
     startCredits(document.querySelector('footer .credit'));
 
     const modes = ['black', 'white'];
@@ -281,8 +282,16 @@ const credits = [
       }, { once: true });
     }
     setTimeout(() => notify('I just spotted Northern Cardinal! ❤️‍🔥 50 points'), 1200);
-    document.querySelector('.test-notice').addEventListener('click', () =>
-      notify('I just spotted Black-bellied Whistling Duck! ❤️‍🔥 20 points'));
+    // Test bell: steps through walk #20's species (Fri 25 Dec, 42 species),
+    // in the order they were first heard; src/data/walk-20.json, made by
+    // tool/export_site_walk.py. Points are a stand-in rule until the app has
+    // its own: 10 for a new species, plus 10 a call heard.
+    let next = 0;
+    document.querySelector('.test-notice').addEventListener('click', () => {
+      const s = walk.species[next];
+      next = (next + 1) % walk.species.length;
+      notify(`I just spotted ${s.common}! ❤️‍🔥 ${10 + 10 * s.calls} points`);
+    });
   </script>
 </body>
 </html>
