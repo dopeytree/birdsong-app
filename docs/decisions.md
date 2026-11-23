@@ -58,10 +58,11 @@ or a small test before building it.
 - **Splash page background (Ed, Nov 2026):** the page is a darker paper,
   #C8B68C (`--page`), so the app's lighter screens stand out. Chosen over
   #E3D7B8, #D6C6A0 and #B8A479.
-- **Splash page modes (Ed, Nov 2026):** black is the default page (#0E0D0C;
-  ink and paper swap, the app's screens stay as they are). A round light/dark
-  button, top right, switches black and white and remembers the visitor's
-  choice; `?bg=white` picks one. The paper mode (#C8B68C) was dropped.
+- **Splash page modes (Ed, Nov 2026):** black (#0E0D0C; ink and paper swap,
+  the app's screens stay as they are) and white. The page follows the
+  device's light or dark setting, live, until the visitor picks; the round
+  button top right (Lucide sun and moon, ISC) switches and remembers it.
+  `?bg=white` / `?bg=black` picks one. The paper mode (#C8B68C) was dropped.
 - **Splash page credits (Ed, Nov 2026):** the footer cycles 16 credits
   (list in `index.astro`, `credits`), each flocking in letter by letter, then
   fading out (`site/src/scripts/credits.js`). Left out: the model

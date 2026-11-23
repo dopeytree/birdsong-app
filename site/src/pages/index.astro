@@ -50,12 +50,14 @@ const credits = [
 <html lang="en-GB">
 <head>
   <meta charset="utf-8" />
-  <!-- Page mode: ?bg= in the address, else the visitor's last choice, else black. -->
+  <!-- Page mode: ?bg= in the address, else the visitor's own choice, else
+       the device's light or dark setting. -->
   <script is:inline>
     (() => {
       const modes = ['black', 'white'];
+      const system = matchMedia('(prefers-color-scheme: dark)').matches ? 'black' : 'white';
       const pick = [new URLSearchParams(location.search).get('bg'), localStorage.getItem('bg')].find(m => modes.includes(m));
-      document.documentElement.dataset.bg = pick || 'black';
+      document.documentElement.dataset.bg = pick || system;
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -69,11 +71,14 @@ const credits = [
   <link rel="preload" href={`${base}/fonts/IMFeENsc28P.ttf`} as="font" type="font/ttf" crossorigin />
 </head>
 <body>
-  <!-- Light / dark: switches black and white. -->
-  <button class="mode" type="button" aria-label="Change background" title="Change background">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5" />
-      <path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" />
+  <!-- Light / dark: switches black and white. Sun and moon icons from
+       Lucide (lucide.dev, ISC licence); the sun shows in dark, the moon in light. -->
+  <button class="mode" type="button" aria-label="Switch light and dark" title="Switch light and dark">
+    <svg class="sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
+    </svg>
+    <svg class="moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
     </svg>
   </button>
 
@@ -253,14 +258,23 @@ const credits = [
     import walk from '../data/walk-20.json';
     startCredits(document.querySelector('footer .credit'));
 
-    const modes = ['black', 'white'];
+    // Light / dark. A choice matching the device's own setting isn't stored,
+    // so the page goes back to following the device.
+    const root = document.documentElement;
+    const dark = matchMedia('(prefers-color-scheme: dark)');
+    const system = () => dark.matches ? 'black' : 'white';
     const modeButton = document.querySelector('.mode');
-    const label = () => modeButton.title = `Background: ${document.documentElement.dataset.bg} (click to change)`;
+    const label = () => modeButton.title = root.dataset.bg === 'black' ? 'Switch to light' : 'Switch to dark';
     label();
     modeButton.addEventListener('click', () => {
-      const root = document.documentElement;
-      root.dataset.bg = modes[(modes.indexOf(root.dataset.bg) + 1) % modes.length];
-      localStorage.setItem('bg', root.dataset.bg);
+      root.dataset.bg = root.dataset.bg === 'black' ? 'white' : 'black';
+      if (root.dataset.bg === system()) localStorage.removeItem('bg');
+      else localStorage.setItem('bg', root.dataset.bg);
+      label();
+    });
+    dark.addEventListener('change', () => {
+      if (localStorage.getItem('bg') || new URLSearchParams(location.search).get('bg')) return;
+      root.dataset.bg = system();
       label();
     });
 
@@ -326,7 +340,7 @@ const credits = [
     --vignette: rgba(188, 171, 134, .35);
   }
 
-  /* Page modes: black (the default) and white. The button at the top right
+  /* Page modes: black and white; at first the device's own setting. The button at the top right
      switches them; ?bg=white in the address picks one. (The darker paper,
      #C8B68C, is still the base below if a mode is ever dropped.) Only the
      page changes: in black, ink and paper swap; the app's screens stay as they are. */
@@ -582,7 +596,11 @@ const credits = [
     cursor: pointer;
     transition: color .4s, border-color .4s, transform .3s;
   }
-  .mode:hover { transform: rotate(180deg); }
+  .mode:hover { transform: rotate(15deg); }
+  /* Sun in dark, moon in light; they swap with a turn and a fade. */
+  .mode svg { grid-area: 1 / 1; transition: opacity .35s ease, transform .5s cubic-bezier(.2, .8, .2, 1); }
+  html[data-bg='black'] .mode .moon,
+  html:not([data-bg='black']) .mode .sun { opacity: 0; transform: rotate(-90deg) scale(.5); }
   .test-notice { top: 66px; }
   .test-notice:hover { transform: rotate(-12deg); }
   .mode:focus-visible { outline: 2px solid var(--seg-ink); outline-offset: 3px; }
