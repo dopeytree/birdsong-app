@@ -25,6 +25,25 @@ const devices = [
   { id: 'ipad', label: 'iPad', other: 'iPhone' },
 ];
 const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
+// The footer's credits, shown one at a time (src/scripts/credits.js).
+// Chosen by Ed, Nov 2026; sources in docs/data-sources.md and the README.
+const credits = [
+  'Made by Ed Stone',
+  'Powered by BirdNET · Cornell Lab & TU Chemnitz',
+  'Also listening: Google Perch v2',
+  'Bird cut-outs: Fugleramme by Arne Giacomo',
+  'Plates: Nederlandsche Vogelen, 1770–1829',
+  'Further plates: public domain, Wikimedia Commons',
+  'Descriptions: Wikipedia, CC BY-SA',
+  'Weather: MET Norway, CC BY 4.0',
+  'Maps: OpenFreeMap · OpenMapTiles · OpenStreetMap',
+  'Contours: Mapzen Terrain Tiles',
+  'Places: Historic & Natural England, NatureScot, NRW',
+  'Contains OS data © Crown copyright 2026',
+  'Place names: Nominatim & Photon',
+  'Bird records: GBIF',
+  'Type: IM Fell English by Igino Marini',
+];
 ---
 <!doctype html>
 <html lang="en-GB">
@@ -118,8 +137,9 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 
   <footer>
     <span class="rule"></span>
-    <span>Type: IM Fell English, by Igino Marini</span>
+    <span class="credit" aria-hidden="true" data-credits={JSON.stringify(credits)}>{credits[0]}</span>
     <span class="rule"></span>
+    <ul class="sr-only" aria-label="Credits">{credits.map(c => <li>{c}</li>)}</ul>
   </footer>
 
   <!-- The shot on the page opens here, as large as the window allows. -->
@@ -208,6 +228,9 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   <script>
     import { startTextFx } from '../scripts/text-fx.js';
     startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur');
+
+    import { startCredits } from '../scripts/credits.js';
+    startCredits(document.querySelector('footer .credit'));
 
     const modes = ['black', 'white'];
     const modeButton = document.querySelector('.mode');
@@ -438,6 +461,10 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     font-size: .9rem;
     font-style: italic;
   }
+  /* min-height so the footer doesn't jump between lines. */
+  .credit { display: inline-block; min-height: 1.5em; white-space: nowrap; }
+  .cr-ch { display: inline-block; transition: transform .9s cubic-bezier(.2, .7, .2, 1), opacity .7s ease; }
+  @media (max-width: 520px) { footer .rule { display: none; } }
 
   /* iPhone-style notification: frosted glass and the system font, as on iOS.
      Icon: the cardinal from the app's loading screen, on paper. */

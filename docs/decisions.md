@@ -62,3 +62,7 @@ or a small test before building it.
   ink and paper swap, the app's screens stay as they are). A round light/dark
   button, top right, switches black and white and remembers the visitor's
   choice; `?bg=white` picks one. The paper mode (#C8B68C) was dropped.
+- **Splash page credits (Ed, Nov 2026):** the footer cycles 15 credits
+  (list in `index.astro`, `credits`), each flocking in letter by letter and
+  scattering away (`site/src/scripts/credits.js`). Left out: the model
+  gallery (tphakala) and the MIT code licence. Screen readers get the full list.
