@@ -18,7 +18,7 @@ the day!
 old natural-history books: dated, placed on the map, along with the weather
 of the day.")
 
-*Aye old as time.* (in madder) *Each walk becomes an artwork, with its own Index of Species.* ("walk" and "Index of Species" underlined; "walk" in the first paragraph too)
+*Aye Old as Time.* (in madder) *Each walk becomes an artwork, with its own Index of Species.* ("walk" and "Index of Species" underlined; "walk" in the first paragraph too)
 
 *Now I wonder how many you can collect?* ("collect" underlined)
 

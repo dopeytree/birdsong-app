@@ -63,34 +63,23 @@ or a small test before building it.
   device's light or dark setting, live, until the visitor picks; the round
   button top right (Lucide sun and moon, ISC) switches and remembers it.
   `?bg=white` / `?bg=black` picks one. The paper mode (#C8B68C) was dropped.
-- **Splash page credits (Ed, Nov 2026):** the footer cycles 16 credits
+- **Splash page credits (Ed, Nov 2026):** the footer cycles 16 credits, Nederlandsche Vogelen first
   (list in `index.astro`, `credits`), each flocking in letter by letter, then
   fading out (`site/src/scripts/credits.js`). Left out: the model
   gallery (tphakala) and the MIT code licence. Screen readers get the full list.
 - **Notifications name the full species (Ed, Nov 2026):** e.g. "Northern
   Cardinal", not "cardinal", matching the species index. An iPhone banner
   shows about four lines (~160 characters), so even the longest names fit.
-- **Splash notifications (Ed, Nov 2026):** five modes; the shuffle button
-  (bottom right) cycles them, or `?rhythm=cardinal|intro|single|round|random`.
-  *The cardinal alone* (default): only the Northern Cardinal, each time
-  "Powered by BirdNET" flies into the footer credits (about 11 s in, then
-  once a round of the credits, about every 85 s). No timer, so they stay in
-  step.
-  *Three, then one at a time*: 5 s after the page opens, a burst of
-  three (cardinal, Eastern and Spotted Towhee), 5 s clear, then each other
-  species alone with 5 s clear between; then again from the burst.
-  *One at a time*: the opening Northern Cardinal (50 points), then
-  all 42 species of walk #20 (Fri 25 Dec 2026) in the order first heard, each
-  shown alone for ~5 s, then 3 s of clear screen (about 6 minutes a loop).
-  *Round of five*: the cardinal and the walk's first four, as three, 5 s
-  clear, two, 10 s clear, then again; gaps in a burst are the walk's own, 5×
-  faster. *Random*: the round with made-up gaps. A banner leaves after ~5 s
-  (about an iPhone's) or when tapped. Data: `site/src/data/walk-20.json`,
-  made by `tool/export_site_walk.py` (species, calls, confidence only; no
-  location or IDs). Points are a stand-in: 10 for a new species plus 10 a
-  call. The bell, top right beside light/dark, pauses and resumes. The icon
-  stays the app's: iOS doesn't allow a per-notification icon (a picture
-  thumbnail is allowed).
+- **Splash notifications (Ed, Nov 2026):** only the Northern Cardinal
+  ("Birdsongs.ai / I just spotted Northern Cardinal! ❤️‍🔥 50 points"), each
+  time "Powered by BirdNET" flies into the footer credits (about 11 s in,
+  then once a round of the credits). No timer, so they stay in step. The
+  bell, top right, sends one straight away; light/dark is bottom right. A
+  banner leaves after ~5 s or when tapped. Points are a stand-in. Other
+  rhythms (a run through walk #20's 42 species, a round of five, random) were
+  tried and archived in `docs/splash-notification-modes.md`; the walk's data
+  stays in `site/src/data/walk-20.json` (made by `tool/export_site_walk.py`).
+  The icon stays the app's: iOS doesn't allow a per-notification icon.
 - **Splash "Coming soon" (Ed, Nov 2026):** the App Store and Google Play
   badges were tried and removed (with their trademark lines in the credits).
   "Coming Soon" sits in a thin rounded outline in the pill's red-orange (madder, #8C3B2A, both modes), a label
@@ -100,9 +89,10 @@ or a small test before building it.
   Desktop, over 820px wide: text left, device right. Mobile, 820px and under
   (phones, upright iPads, narrow windows): one column with the tagline and
   title, then the device at most half the screen height, then the paragraphs
-  and Coming soon, a short scroll away; smaller text and buttons; no
-  "Tap the screen" hint; the shuffle test button top left. Held sideways, the
-  device gets about 82% of the screen height.
+  and Coming Soon (centred between the quote and the credits), credits at
+  the foot of the screen; smaller text and buttons. Held sideways, the device
+  gets about 82% of the screen height. The "Tap the screen to see it full
+  size" hint is hidden on every screen.
   On touch screens the first shot is the opposite shape to the screen: held
   upright, the sideways iPad; held sideways, the upright iPhone. Turning the
   device switches it, until the visitor uses the pill. Desktops open on the

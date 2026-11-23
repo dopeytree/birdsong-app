@@ -28,8 +28,8 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 // The footer's credits, shown one at a time (src/scripts/credits.js).
 // Chosen by Ed, Nov 2026; sources in docs/data-sources.md and the README.
 const credits = [
-  'Made by Ed Stone',
   'Nederlandsche Vogelen, 1770–1829',
+  'Made by Ed Stone',
   'Powered by BirdNET',
   'Cornell Lab & TU Chemnitz',
   'Google Perch v2',
@@ -94,7 +94,7 @@ const credits = [
         the day!
       </p>
       <p class="lede second">
-        <span class="madder">Aye old as time.</span> Each <span class="underline">walk</span> becomes an artwork, with its own <span class="underline">Index of Species</span>.
+        <span class="madder">Aye Old as Time.</span> Each <span class="underline">walk</span> becomes an artwork, with its own <span class="underline">Index of Species</span>.
       </p>
       <p class="lede second attribution">
         Now I wonder how many you can <span class="underline">collect</span>?
@@ -250,23 +250,13 @@ const credits = [
     </div>
   </template>
 
-  <!-- Notifications on or paused: a bell, crossed out when paused. Lucide
-       "bell" / "bell-off" style (ISC). Sits beside light/dark, top right. -->
-  <button class="mode test-notice" type="button" aria-pressed="true" aria-label="Pause notifications" title="Pause notifications">
-    <svg class="on" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Bell: sends the cardinal notification now. Lucide-style bell (ISC). -->
+  <button class="mode test-notice" type="button" aria-label="Show a notification" title="Show a notification">
+    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" />
-    </svg>
-    <svg class="off" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /><path d="m3 3 18 18" />
     </svg>
   </button>
 
-  <!-- Test: the walk's own rhythm, or a made-up one. Lucide "shuffle" (ISC). -->
-  <button class="mode rhythm" type="button" aria-pressed="false" aria-label="Random rhythm" title="Rhythm: the walk's own (click for random)">
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m18 14 4 4-4 4" /><path d="m18 2 4 4-4 4" /><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-7.6a4 4 0 0 1 3.3-1.7H22" /><path d="M2 6h1.973a4 4 0 0 1 3.3 1.7l1.174 1.6" /><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45" />
-    </svg>
-  </button>
 
   <!-- Text effect: murmuration (Ed's choice). ?fx=ink or ?fx=none to compare. -->
   <script>
@@ -274,7 +264,6 @@ const credits = [
     startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur');
 
     import { startCredits } from '../scripts/credits.js';
-    import walk from '../data/walk-20.json';
     startCredits(document.querySelector('footer .credit'));
 
     // Light / dark. A choice matching the device's own setting isn't stored,
@@ -327,105 +316,35 @@ const credits = [
       setTimeout(() => flip(() => n.remove()), 350);
     }
 
-    // How the notifications play. Five modes, cycled by the shuffle button
-    // (bottom right) or picked with ?rhythm=cardinal|intro|single|round|random:
-    //   cardinal (default, Ed, Nov 2026): only the Northern Cardinal, each
-    //     time "Powered by BirdNET" flies into the footer's credits (first at
-    //     about 11 s, then once per round of the credits).
-    //   intro: 5 s after the page opens, a burst of three
-    //     (the cardinal and the walk's first two), 5 s of clear screen, then
-    //     every other species one at a time with 5 s clear between; then
-    //     again from the burst.
-    //   single: every species of walk #20 in the order
-    //     first heard, after the opening Northern Cardinal; one at a time,
-    //     then 3 s of clear screen before the next.
-    //   round: five (the cardinal and the walk's first four), as three, a
-    //     rest with 5 s clear, two, then a long rest with 10 s clear; gaps in
-    //     a burst are the walk's own, 5× faster. Then the same five again.
-    //   random: the round of five with made-up gaps within a burst.
-    // Walk #20 is Fri 25 Dec 2026: src/data/walk-20.json, made by
-    // tool/export_site_walk.py. Points are a stand-in until the app has its
-    // own rule: 10 for a new species, plus 10 a call heard.
-    const SPEED = 5, OPENING = 1200;
-    const GONE = STAY + 350;                       // until a banner has left
-    const REST = GONE + 5000, LONG_REST = GONE + 10000, BETWEEN = GONE + 3000;
-    const CARDINAL = { common: 'Northern Cardinal', points: 50, at: 0 };
-    const ALL = [CARDINAL, ...walk.species.map(s => ({ common: s.common, points: 10 + 10 * s.calls, at: s.firstHeardSeconds }))];
-    const ROUND = ALL.slice(0, 5);
-    const MODES = ['cardinal', 'intro', 'single', 'round', 'random'];
-    const NAMES = { cardinal: 'the cardinal alone', intro: 'three, then one at a time', single: 'one at a time', round: 'a round of five', random: 'random gaps' };
-    let rhythm = MODES.includes(new URLSearchParams(location.search).get('rhythm')) ? new URLSearchParams(location.search).get('rhythm') : 'cardinal';
-    let k = -1, timer = null, playing = true;
-    const list = () => rhythm === 'cardinal' ? [CARDINAL] : rhythm === 'intro' || rhythm === 'single' ? ALL : ROUND;
-    const CARDINAL_WAIT = 10000, CARDINAL_EVERY = 60000;
-    const INTRO_WAIT = 5000, INTRO_BETWEEN = GONE + 5000;
-    function gap(from) {
-      if (rhythm === 'cardinal') return CARDINAL_EVERY;
-      if (rhythm === 'intro') {
-        if (from === 0) return 1300;               // the burst of three
-        if (from === 1) return 1300;
-        return INTRO_BETWEEN;                      // then 5 s clear between each
-      }
-      if (rhythm === 'single') return BETWEEN;
-      if (from === 2) return REST;                 // after the third
-      if (from === 4) return LONG_REST;            // after the fifth
-      if (rhythm === 'random') return 300 + Math.random() * 1800;
-      if (from === 0) return 2500;                 // after the opening cardinal
-      return Math.max(300, (ROUND[from + 1].at - ROUND[from].at) * 1000 / SPEED);
-    }
-    function schedule(wait) {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        const l = list();
-        k = (k + 1) % l.length;
-        notify(`I just spotted ${l[k].common}! ❤️‍🔥 ${l[k].points} points`);
-        schedule(gap(k));
-      }, wait);
-    }
-    const firstWait = () => rhythm === 'cardinal' ? CARDINAL_WAIT : rhythm === 'intro' ? INTRO_WAIT : OPENING;
-    // The cardinal mode has no timer: the cardinal arrives each time "Powered
-    // by BirdNET" flies into the footer credits, so the two stay in step for
-    // as long as the page is open. (Without that credit, it falls back to a
-    // timer: 10 s, then every 60 s.)
-    const CUE = 'Powered by BirdNET';
+    // Notifications (Ed, Nov 2026): only the Northern Cardinal, each time
+    // "Powered by BirdNET" flies into the footer credits (first at about
+    // 11 s, then once a round of the credits), so the two stay in step. If
+    // that credit is ever removed, a timer takes over: 10 s, then every 60 s.
+    // Other rhythms were tried and archived: docs/splash-notification-modes.md.
+    // Points are a stand-in until the app has its own rule.
+    const CARDINAL_TEXT = 'I just spotted Northern Cardinal! ❤️‍🔥 50 points';
+    const CUE = 'Powered by BirdNET', FIRST = 10000, EVERY = 60000;
+    let timer = null;
     const credits = document.querySelector('footer .credit');
-    const cued = () => rhythm === 'cardinal' && JSON.parse(credits.dataset.credits || '[]').includes(CUE);
+    const cued = JSON.parse(credits.dataset.credits || '[]').includes(CUE);
     credits.addEventListener('credit', e => {
-      if (e.detail === CUE && cued() && playing && !document.hidden) notify(`I just spotted ${CARDINAL.common}! ❤️‍🔥 ${CARDINAL.points} points`);
+      if (cued && e.detail === CUE && !document.hidden) notify(CARDINAL_TEXT);
     });
-    // Start the timer, unless the credits are doing the timing.
-    const start = wait => { if (!cued()) schedule(wait); };
-    start(firstWait());
-
-    // Bell: pause or resume.
-    const bell = document.querySelector('.test-notice');
-    bell.addEventListener('click', () => {
-      playing = !playing;
-      bell.setAttribute('aria-pressed', String(playing));
-      bell.title = playing ? 'Pause notifications' : 'Resume notifications';
-      bell.setAttribute('aria-label', bell.title);
-      if (playing) start(600); else clearTimeout(timer);
-    });
-    // Shuffle (test): the next mode, starting it afresh.
-    const shuffle = document.querySelector('.rhythm');
-    const showRhythm = () => {
-      const next = MODES[(MODES.indexOf(rhythm) + 1) % MODES.length];
-      shuffle.setAttribute('aria-pressed', String(rhythm !== 'cardinal'));
-      shuffle.title = `Notifications: ${NAMES[rhythm]} (click for ${NAMES[next]})`;
-      shuffle.setAttribute('aria-label', shuffle.title);
-    };
-    showRhythm();
-    shuffle.addEventListener('click', () => {
-      rhythm = MODES[(MODES.indexOf(rhythm) + 1) % MODES.length];
-      showRhythm();
-      k = -1;
+    // The fallback timer, used only without the BirdNET credit.
+    function start(wait) {
+      if (cued) return;
       clearTimeout(timer);
-      if (playing) start(rhythm === 'cardinal' ? CARDINAL_WAIT : rhythm === 'intro' ? INTRO_WAIT : GONE);
-    });
+      timer = setTimeout(() => { notify(CARDINAL_TEXT); start(EVERY); }, wait);
+    }
+    start(FIRST);
+
+    // Bell: the cardinal notification, straight away (Ed, Nov 2026).
+    document.querySelector('.test-notice').addEventListener('click', () => notify(CARDINAL_TEXT));
+
     // Don't let a hidden tab pile them up.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) clearTimeout(timer);
-      else if (playing) start(800);
+      else start(800);
     });
   </script>
 </body>
@@ -562,7 +481,7 @@ const credits = [
   .seg:focus-visible, .frame:focus-visible, .step:focus-visible { outline: 2px solid var(--madder); outline-offset: 4px; }
   /* "Coming Soon" in a thin rounded outline (Ed, Nov 2026): a label, not a
      button, in the pill's red. */
-  .soon { color: var(--sepia); margin: 1.8rem 0 0; font-size: 1.1rem; text-align: center; }
+  .soon { color: var(--sepia); margin: 3.2rem 0 0; font-size: 1.1rem; text-align: center; }
   /* Words picked out in madder, the colour of "Coming Soon". */
   .madder { color: var(--madder); }
   .underline, .underline .fx-ch { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
@@ -662,7 +581,9 @@ const credits = [
   .index[hidden] { display: none; }
   .rule { display: inline-block; width: 3rem; height: 1px; background: var(--rule); }
   .step { border: 0; background: none; color: var(--sepia); cursor: pointer; font-size: 1.3rem; padding: 0 .3rem; }
-  .hint { color: var(--sepia); margin: 1rem 0 0; font-size: 1rem; }
+  /* Hidden everywhere for now (Ed, Nov 2026); the pointer turns to a
+     magnifier over the screen instead. */
+  .hint { display: none; color: var(--sepia); margin: 1rem 0 0; font-size: 1rem; }
 
   footer {
     display: flex; align-items: center; justify-content: center; gap: .8rem;
@@ -738,12 +659,8 @@ const credits = [
   .mode svg { grid-area: 1 / 1; transition: opacity .35s ease, transform .5s cubic-bezier(.2, .8, .2, 1); }
   html[data-bg='black'] .mode .moon,
   html:not([data-bg='black']) .mode .sun { opacity: 0; transform: rotate(-90deg) scale(.5); }
-  /* Light/dark top right; the bell (pause/resume) beside it; the rhythm test
-     bottom right. */
-  .test-notice { right: 66px; }
-  .rhythm { top: auto; bottom: 18px; }
-  .test-notice[aria-pressed='true'] .off, .test-notice[aria-pressed='false'] .on { display: none; }
-  .rhythm[aria-pressed='true'] { background: var(--ink); color: var(--page); }
+  /* The bell (a notification now) top right; light/dark bottom right. */
+  .theme { top: auto; bottom: 18px; }
   .test-notice:hover { transform: rotate(-12deg); }
   .mode:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
   body { transition: background-color .5s ease, color .5s ease; }
@@ -789,7 +706,8 @@ const credits = [
   @media (max-width: 820px) {
     .page {
       display: flex; flex-direction: column;
-      height: auto; min-height: 0;
+      height: auto;
+      min-height: calc(100svh - 34px);       /* at least a screen, so the credits sit at the bottom */
       padding: 54px 16px 6px;                /* room for the round buttons */
       gap: 0;
       text-align: center;
@@ -805,7 +723,8 @@ const credits = [
     /* The paragraphs sit centred as a block, their lines set left; the quote
        keeps to the right. */
     .lede:not(.attribution) { text-align: left; }
-    .soon { font-size: .9rem; margin-top: .9rem; }
+    /* Centred in the space left between the quote and the credits. */
+    .soon { font-size: .9rem; margin: auto 0; padding: .9rem 0; }
 
     /* The device: sized from its box, which is at most half the screen high. */
     .devices { flex: none; height: 48svh; width: 100%; container-type: size; }
@@ -820,11 +739,10 @@ const credits = [
 
     footer { padding: 4px 12px 10px; font-size: .8rem; }
 
-    /* Round buttons smaller; the shuffle test goes top left, off the device. */
+    /* Round buttons smaller. */
     .mode { width: 34px; height: 34px; top: 10px; right: 10px; }
     .mode svg { width: 16px; height: 16px; }
-    .test-notice { right: 52px; }
-    .rhythm { top: 10px; bottom: auto; right: auto; left: 10px; }
+    .theme { top: auto; bottom: 10px; }
   }
   /* Mobile held sideways: the screen is short, so the device gets most of
      its height. */
