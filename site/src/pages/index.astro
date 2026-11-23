@@ -917,10 +917,10 @@ const credits = [
     .devices { flex: none; height: 48svh; width: 100%; container-type: size; }
     /* The sideways iPad is as wide as the screen and no taller than it needs. */
     .devices:has(.ipad[data-active='true'][data-landscape='true']) { height: min(48svh, calc((100vw - 32px) / 1.46)); }
-    .iphone { --h: min(100cqh, calc(100cqw * 2.1)); }
+    .iphone { --h: min(92cqh, calc(100cqw * 2.1)); }   /* a touch smaller, so the pill has room */
     .ipad   { --h: min(100cqh, calc(100cqw * 1.4)); }
     .ipad[data-landscape='true'] { --h: min(100cqh, calc(100cqw / 1.47)); }
-    .pill { margin-top: .6rem; }
+    .pill { margin-top: 1.1rem; }
     .seg { font-size: .95rem; padding: .35em 1.1em .4em; }
     .hint { display: none; }
 
