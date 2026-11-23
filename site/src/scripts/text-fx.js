@@ -72,10 +72,19 @@ function split(el, letters) {
   const shown = document.createElement('span');
   shown.setAttribute('aria-hidden', 'true');
   const parts = [];
-  text.split(/( )/).forEach(tok => {
-    if (tok === ' ') return shown.append(' ');
+  // Words keep the class of any span they were in (e.g. a coloured phrase).
+  const tokens = [];
+  el.childNodes.forEach(n => {
+    const cls = n.nodeType === 1 ? n.className : '';
+    n.textContent.split(/(\s+)/).forEach(t => tokens.push({ t: /^\s+$/.test(t) ? ' ' : t, cls }));
+  });
+  const words = tokens.filter(x => x.t);
+  while (words[0]?.t === ' ') words.shift();
+  while (words.at(-1)?.t === ' ') words.pop();
+  words.forEach(({ t: tok, cls }, i) => {
+    if (tok === ' ') { if (words[i - 1]?.t !== ' ') shown.append(' '); return; }
     const w = document.createElement('span');
-    w.className = 'fx-word';
+    w.className = cls ? `fx-word ${cls}` : 'fx-word';
     if (letters) {
       [...tok].forEach(ch => {
         const c = document.createElement('span');
