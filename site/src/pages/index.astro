@@ -26,11 +26,11 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Birdsongs: a field journal that listens</title>
-  <meta name="description" content="Birdsongs listens for birds on a walk and sets each one it hears on a plate, in the manner of the old natural-history books." />
+  <title>Birdsongs: who has the fairest call of them all?</title>
+  <meta name="description" content="Take Birdsongs on a walk. It listens as you go, with private AI on your own device, and illustrates every bird it hears in the manner of the old natural-history books." />
   <meta name="theme-color" content="#EEE5CE" />
   <meta property="og:title" content="Birdsongs" />
-  <meta property="og:description" content="A field journal that listens." />
+  <meta property="og:description" content="I wonder who has the fairest call of them all?" />
   <meta property="og:image" content={`${base}/shots/iphone-plate.jpg`} />
   <link rel="preload" href={`${base}/fonts/IMFeENrm28P.ttf`} as="font" type="font/ttf" crossorigin />
   <link rel="preload" href={`${base}/fonts/IMFeENsc28P.ttf`} as="font" type="font/ttf" crossorigin />
@@ -38,15 +38,17 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 <body>
   <main class="page">
     <section class="text">
-      <p class="kicker"><span class="dot" aria-hidden="true"></span> A field journal that listens</p>
+      <!-- Wording, and earlier versions: docs/site-copy.md -->
+      <p class="kicker"><span class="dot" aria-hidden="true"></span> <em>I wonder who has the fairest call of them all?</em></p>
       <h1>Birdsongs</h1>
       <p class="lede">
-        Take it on a walk. Birdsongs listens as you go, and sets every bird it
-        hears on a plate in the manner of the old natural-history books:
-        dated, placed on the map, with the weather of the day.
+        Take Birdsongs on a walk. It listens as you go. Trusted private local AI.
+        Every bird it hears is lovingly illustrated in the manner of the old
+        natural-history books: dated, placed on the map, along with the
+        weather of the day.
       </p>
       <p class="lede second">
-        Each walk becomes a numbered plate, with its own index of species.
+        Each walk becomes an artwork, with its own index of species. A moment in time.
       </p>
 
       <div class="pill" role="tablist" aria-label="Show the app on">
@@ -209,6 +211,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     margin: 0 0 .4rem;
     display: flex; align-items: center; gap: .55em;
   }
+  .kicker em { font-family: var(--fell); letter-spacing: 0; font-size: 1.2rem; }
   .dot { width: .6em; height: .6em; border-radius: 50%; background: var(--madder); display: inline-block; animation: listen 2.4s ease-in-out infinite; }
   @keyframes listen { 50% { opacity: .35; } }
   h1 {

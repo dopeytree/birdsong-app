@@ -1,0 +1,39 @@
+# Splash page wording
+
+The words on the splash page (`site/src/pages/index.astro`). Older versions are
+kept here so they can be reused.
+
+## Current (Ed, Nov 2026)
+
+> I wonder who has the fairest call of them all?
+
+**Birdsongs**
+
+Take Birdsongs on a walk. It listens as you go. Trusted private local AI.
+Every bird it hears is lovingly illustrated in the manner of the old
+natural-history books: dated, placed on the map, along with the weather of
+the day.
+
+*Each walk becomes an artwork, with its own index of species. A moment in time.*
+
+## First draft (Claude, Nov 2026)
+
+> A field journal that listens
+
+**Birdsongs**
+
+Take it on a walk. Birdsongs listens as you go, and sets every bird it hears
+on a plate in the manner of the old natural-history books: dated, placed on
+the map, with the weather of the day.
+
+*Each walk becomes a numbered plate, with its own index of species.*
+
+Page title: "Birdsongs: a field journal that listens".
+Description: "Birdsongs listens for birds on a walk and sets each one it hears
+on a plate, in the manner of the old natural-history books."
+
+## Always on the page
+
+- Device switch: iPhone | iPad
+- "For Mac, iPhone and iPad. *Coming soon.*"
+- Footer: "Type: IM Fell English, by Igino Marini"

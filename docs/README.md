@@ -15,6 +15,7 @@ needs: every file read costs tokens.
 | `dev-tools.md` | opencode, Grok, Locals, OMO on Ed's Mac: what's installed, a proposed mixed setup | Setting up other coding tools |
 | `upstream-whole-plate-blend.md` | A patch offered to the web page upstream | Web-page sync only |
 | `site/` | Astro splash page, shots, GitHub Pages workflow | Web page work
+| `site-copy.md` | The splash page's wording, current and earlier | Changing the page's words
 
 Agents are in `.claude/agents/`, project skills in `.claude/skills/`
 (their `README.md` also lists the plugin skills we use).
