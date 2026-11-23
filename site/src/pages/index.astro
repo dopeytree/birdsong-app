@@ -285,7 +285,7 @@ const credits = [
       letters: '.seg, .soon em',                    // the pill's and Coming Soon's words, letter by letter
       dynamicLetters: '.notice-head strong, .notice-text',   // the notifications' words, as they come
       dynamic: 'footer .cr-ch',                     // the credits' letters, as they come
-      wholes: '.mode, .pill, .soon span, .maker, .kicker .dot, .devices .device .frame, footer .rule, .notices',
+      wholes: '.mode, .pill, .soon > span, .maker, .kicker .dot, .devices .device .frame, footer .rule, .notices',
     });
 
     import { startCredits } from '../scripts/credits.js';
@@ -567,7 +567,7 @@ const credits = [
   /* Words picked out in madder, the colour of "Coming Soon". */
   .madder { color: var(--madder); }
   .underline, .underline .fx-ch { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
-  .soon span {
+  .soon > span {
     color: var(--madder);               /* the filled pill's red-orange, in both modes */
     display: inline-block;
     padding: .35em 1.3em .4em;
