@@ -122,3 +122,8 @@ or a small test before building it.
   A click, tap, Enter or Space lifts it with a fade; that tap also lets the page
   play sound, brings the cardinal (song and notification) at once, and starts
   the credits.
+- **Gate video (on trial, Ed, Nov 2026):** the 22 s preview
+  (`site/public/media/coming-soon.mp4`, black bands cropped) plays on a loop
+  above Tap to Enter. It tries to play with sound; browsers mostly refuse
+  before a tap, so it plays silently with a "Sound on" label, and clicking the
+  video restarts it with sound without entering. Entering stops it.

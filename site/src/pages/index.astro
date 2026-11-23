@@ -103,7 +103,16 @@ const credits = [
   <!-- The gate (Ed, Nov 2026): the page faded behind "Tap to Enter". The
        tap lifts it and, being a tap, lets the page play sound. -->
   <div class="gate" role="dialog" aria-modal="true" aria-label="Birdsongs.ai">
-    <button class="gate-btn" type="button">Tap to Enter</button>
+    <div class="gate-inner">
+      <!-- On trial (Ed, Nov 2026): the preview video above Tap to Enter. It
+           tries to play with sound; browsers mostly refuse before a tap, so
+           then it plays silently, and clicking it gives the sound. -->
+      <div class="gate-film">
+        <video class="gate-video" src={`${base}/media/coming-soon.mp4`} poster={`${base}/media/coming-soon-poster.jpg`} muted loop playsinline aria-label="A preview of Birdsongs.ai"></video>
+        <button class="gate-sound" type="button" aria-label="Play the video with sound">Sound on</button>
+      </div>
+      <button class="gate-btn" type="button">Tap to Enter</button>
+    </div>
   </div>
 
   <main class="page">
@@ -372,6 +381,7 @@ const credits = [
     const enter = () => {
       if (entered) return;
       entered = true;
+      gate.querySelector('.gate-video')?.pause();   // the preview stops as they go in
       soundOK = true;            // the tap allows sound
       song.muted = false;
       sing();                    // and the cardinal greets them (Ed, Nov 2026)
@@ -381,6 +391,24 @@ const credits = [
       startCredits(credits);
     };
     gate.addEventListener('click', enter);
+
+    // The preview video: try with sound; if the browser refuses, silently.
+    // Clicking the video (or "Sound on") restarts it with sound, without
+    // entering.
+    const film = gate.querySelector('.gate-video');
+    const soundBtn = gate.querySelector('.gate-sound');
+    film.muted = false;
+    film.play().then(() => { soundBtn.hidden = true; })
+      .catch(() => { film.muted = true; film.play().catch(() => {}); });
+    const withSound = e => {
+      e.stopPropagation();
+      film.muted = false;
+      film.currentTime = 0;
+      film.play().catch(() => {});
+      soundBtn.hidden = true;
+    };
+    film.addEventListener('click', withSound);
+    soundBtn.addEventListener('click', withSound);
     addEventListener('keydown', e => { if (!entered && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); } });
 
 
@@ -751,6 +779,28 @@ const credits = [
     transition: opacity .8s ease;
   }
   .gate.gone { opacity: 0; pointer-events: none; }
+  .gate-inner { display: flex; flex-direction: column; align-items: center; gap: clamp(18px, 4vh, 36px); padding: 20px; }
+  .gate-film { position: relative; }
+  /* The recording has black bands top and bottom; cropped off. */
+  .gate-video {
+    display: block;
+    width: min(640px, 86vw, calc(58vh * 1.576));
+    height: auto;
+    aspect-ratio: 1280 / 812;
+    object-fit: cover;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .7);
+    cursor: pointer;
+  }
+  .gate-sound {
+    position: absolute; right: 10px; bottom: 10px;
+    font-family: var(--fell); font-style: italic; font-size: .9rem;
+    color: #EEE5CE; background: rgba(0, 0, 0, .55);
+    border: 1px solid rgba(238, 229, 206, .5); border-radius: 999px;
+    padding: .2em .9em .3em;
+    cursor: pointer;
+  }
+  .gate-sound[hidden] { display: none; }
   .gate-btn {
     font-family: var(--fell-sc);
     font-size: clamp(1.4rem, 4vw, 2rem);
