@@ -118,11 +118,12 @@ or a small test before building it.
   PolyForm Noncommercial 1.0.0 (it lets charities, schools and public bodies
   use it). Earlier copies keep MIT. Others' work keeps its own licence; the
   README lists them under "Credits and licences".
-- **Splash page murmurs throughout (Ed, Nov 2026):** besides the letters, the
-  round buttons, the iPhone | iPad pill (as one piece), Coming Soon, the devices, the lion, the credits line
-  and its rules, the dot and the notifications sway and drift as whole pieces
-  (CSS translate/rotate, turning less the bigger they are). Only the text
-  brings the notification.
+- **Splash page murmurs throughout (Ed, Nov 2026):** like the text, the words
+  on the pill, Coming Soon and the credits scatter letter by letter, and the
+  icons' strokes scatter one by one (the sun's rays, the bell's parts). The
+  bigger things (the round buttons' outlines, the pill, the devices, the lion,
+  the dot, the credit rules, the notifications) sway and drift as whole
+  pieces, a little further than letters. Only the text brings the notification.
 - **Splash gate (Ed, Nov 2026):** the site opens under a veil, the page faded
   (85% of the page colour, no blur) behind a breathing "Tap to Enter" pill.
   A click, tap, Enter or Space lifts it with a fade; that tap also lets the page

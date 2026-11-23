@@ -282,7 +282,10 @@ const credits = [
     // The whole page murmurs (Ed, Nov 2026): letters scatter, and these sway
     // and drift as whole pieces. Only the text brings the notification.
     startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur', {
-      wholes: '.mode, .pill, .soon span, .maker, .kicker .dot, .devices .device .frame, footer .credit, footer .rule, .notices',
+      letters: '.seg, .soon em',                    // button words scatter letter by letter
+      bits: '.mode svg > *',                        // each stroke of the icons
+      dynamic: 'footer .cr-ch',                     // the credits' letters, as they come
+      wholes: '.mode, .pill, .soon span, .maker, .kicker .dot, .devices .device .frame, footer .rule, .notices',
     });
 
     import { startCredits } from '../scripts/credits.js';
@@ -777,6 +780,8 @@ const credits = [
   /* Text effect (src/scripts/text-fx.js): words and letters it moves. */
   .fx-word { display: inline-block; white-space: nowrap; }
   .fx-ch { display: inline-block; will-change: transform; }
+  /* Icon strokes turn about their own middle when they scatter. */
+  .mode svg > * { transform-box: fill-box; transform-origin: center; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
   /* Full-size popup for a sideways shot, over the page faded to black. */

@@ -11,29 +11,48 @@
 
 const TARGETS = 'h1, .lede, .kicker em';
 
-// wholes: for murmur, a selector for other things that are stirred as one
-// piece (buttons, images, the credits line...): they sway and drift, turning
-// less the bigger they are (Ed, Nov 2026: the whole page murmurs).
-export function startTextFx(mode, { wholes = '' } = {}) {
+// Options, for murmur (Ed, Nov 2026: the whole page murmurs, like the text):
+//   letters: more text to split into letters that scatter (button words...).
+//   bits:    small pieces that scatter one by one, e.g. an icon's strokes.
+//   dynamic: like bits, but they come and go (the credits' flying letters),
+//            so they're looked up afresh each time stirring begins.
+//   wholes:  bigger things that sway and drift as one piece (outlines,
+//            pictures), turning less the bigger they are.
+// Bits, dynamic pieces and wholes move by the separate CSS translate and
+// rotate properties, so they add to any transform they already have.
+export function startTextFx(mode, { letters = '', bits = '', dynamic = '', wholes = '' } = {}) {
   if (!['murmur', 'ink'].includes(mode)) return;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const els = [...document.querySelectorAll(TARGETS)];
-  const parts = els.flatMap(el => split(el, mode === 'murmur'));
-  if (mode === 'murmur' && wholes) document.querySelectorAll(wholes).forEach(el =>
-    parts.push({ el, whole: true, x: 0, y: 0, vx: 0, vy: 0 }));
+  const murmuring = mode === 'murmur';
+  const sel = murmuring && letters ? `${TARGETS}, ${letters}` : TARGETS;
+  const els = [...document.querySelectorAll(sel)];
+  const parts = els.flatMap(el => split(el, murmuring));
+  const piece = (el, whole) => ({ el, whole, props: true, x: 0, y: 0, vx: 0, vy: 0 });
+  if (murmuring) {
+    if (bits) document.querySelectorAll(bits).forEach(el => parts.push(piece(el, false)));
+    if (wholes) document.querySelectorAll(wholes).forEach(el => parts.push(piece(el, true)));
+  }
+  // Dynamic pieces: drop the ones that have gone, add the new ones.
+  const seen = new WeakSet();
+  const refresh = () => {
+    if (!murmuring || !dynamic) return;
+    for (let i = parts.length - 1; i >= 0; i--) if (parts[i].dyn && !parts[i].el.isConnected) parts.splice(i, 1);
+    document.querySelectorAll(dynamic).forEach(el => { if (!seen.has(el)) { seen.add(el); parts.push({ ...piece(el, false), dyn: true }); } });
+  };
+  refresh();
   const fx = mode === 'murmur' ? murmur(parts) : ink(parts);
 
   // Rest positions, in page coordinates (and half sizes, for whole pieces).
   // Measured at rest: at the start, after the fonts arrive, on resize, and
   // whenever stirring begins (things move, appear and switch meanwhile).
-  const measure = () => parts.forEach(p => {
+  const measure = () => { refresh(); parts.forEach(p => {
     if (p.moved) return;
     const r = p.el.getBoundingClientRect();
     p.cx = r.left + scrollX + r.width / 2;
     p.cy = r.top + scrollY + r.height / 2;
     p.hw = r.width / 2;
     p.hh = r.height / 2;
-  });
+  }); };
   measure();
   document.fonts?.ready.then(measure);
   addEventListener('resize', measure);
@@ -129,7 +148,7 @@ function gap(q, x, y) {
 }
 
 function murmur(parts) {
-  const R = 90, MAX = 9;
+  const R = 90, MAX = 9, MAX_WHOLE = 14;   // pictures and outlines drift a little further
   return {
     stir(p, speed, mx, my) {
       parts.forEach(q => {
@@ -148,12 +167,13 @@ function murmur(parts) {
       parts.forEach(q => {
         q.vx = (q.vx - q.x * 0.07) * 0.84;
         q.vy = (q.vy - q.y * 0.07) * 0.84;
-        q.x = Math.max(-MAX, Math.min(MAX, q.x + q.vx));
-        q.y = Math.max(-MAX, Math.min(MAX, q.y + q.vy));
+        const m = q.whole ? MAX_WHOLE : MAX;
+        q.x = Math.max(-m, Math.min(m, q.x + q.vx));
+        q.y = Math.max(-m, Math.min(m, q.y + q.vy));
         const still = Math.abs(q.x) + Math.abs(q.y) + Math.abs(q.vx) + Math.abs(q.vy) < 0.05;
         if (still) {
           if (q.moved) {
-            if (q.whole) { q.el.style.translate = ''; q.el.style.rotate = ''; }
+            if (q.props) { q.el.style.translate = ''; q.el.style.rotate = ''; }
             else q.el.style.transform = '';
             q.moved = false;
           }
@@ -162,11 +182,12 @@ function murmur(parts) {
         }
         busy = true;
         q.moved = true;
-        // Whole pieces use the separate translate/rotate properties, so they
-        // add to the transforms those pieces already have (hover, flights).
+        // Pieces use the separate translate/rotate properties, so they add to
+        // the transforms they already have (hover, flights). Whole pieces
+        // turn less the bigger they are, so a picture sways, not spins.
         const size = q.whole ? Math.max(2 * q.hw, 2 * q.hh, 1) : 1;
-        const turn = Math.max(-14, Math.min(14, q.vx * 3)) * (q.whole ? Math.min(1, 40 / size) : 1);
-        if (q.whole) {
+        const turn = Math.max(-14, Math.min(14, q.vx * 3)) * (q.whole ? Math.min(1, 120 / size) : 1);
+        if (q.props) {
           q.el.style.translate = `${q.x.toFixed(2)}px ${q.y.toFixed(2)}px`;
           q.el.style.rotate = `${turn.toFixed(2)}deg`;
         } else q.el.style.transform = `translate(${q.x.toFixed(2)}px, ${q.y.toFixed(2)}px) rotate(${turn.toFixed(1)}deg)`;
