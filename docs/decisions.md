@@ -66,3 +66,6 @@ or a small test before building it.
   (list in `index.astro`, `credits`), each flocking in letter by letter, then
   fading out (`site/src/scripts/credits.js`). Left out: the model
   gallery (tphakala) and the MIT code licence. Screen readers get the full list.
+- **Notifications name the full species (Ed, Nov 2026):** e.g. "Northern
+  Cardinal", not "cardinal", matching the species index. An iPhone banner
+  shows about four lines (~160 characters), so even the longest names fit.
