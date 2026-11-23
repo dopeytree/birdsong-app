@@ -571,6 +571,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _switch('Fit on one screen', s.nativeFit, (v) => s.update((x) => x.nativeFit = v)),
           _switch('Title', s.nativeShowTitle, (v) => s.update((x) => x.nativeShowTitle = v)),
           _switch('Date', s.nativeShowDate, (v) => s.update((x) => x.nativeShowDate = v)),
+          _switch('Song scribble while listening', s.songScribble, (v) => s.update((x) => x.songScribble = v)),
           _switch('Species and calls under the date', s.nativeTotals, (v) => s.update((x) => x.nativeTotals = v)),
           _switch('Heading in small capitals', s.nativeTitleCaps, (v) => s.update((x) => x.nativeTitleCaps = v)),
           _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',

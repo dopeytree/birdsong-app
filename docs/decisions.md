@@ -9,6 +9,16 @@ Vintage natural history: paper, sepia ink, serif (IM Fell English),
 engraved plates. "Vintage illustrations, not modern cartoon." Show an idea
 or a small test before building it.
 
+## 23 Nov 2026
+
+- **Song scribble (on trial):** Ed asked for "a sort of almost pencil
+  scribble drawing but representing the organic noise", between the bottom
+  buttons, with the live species named in it. Stills shown first (sepia
+  pencil, a fainter second pass, loops tighter for high song and rounder
+  for low, the name in italic in a gap): "love it". Live sessions only for
+  now; a faint resting line when not listening; on by default with a
+  switch (Settings → Display).
+
 ## 22 Nov 2026
 
 - **Blackletter names and a symbol for every kind of ancient site: no.**

@@ -15,6 +15,7 @@ import '../store/detection_store.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
 import '../ui/format.dart';
 import '../ui/plate_buttons.dart';
+import 'song_scribble.dart';
 import '../ui/settings_button.dart';
 import '../ui/station_editor.dart';
 import 'bird_card.dart';
@@ -1091,6 +1092,16 @@ class _NativePlateState extends State<NativePlate> {
                     height: 40,
                     child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
                         inline: true),
+                  ),
+                // The song scribble between the buttons along the bottom:
+                // listening here only, not on a station.
+                if (feed == null && app.settings.songScribble)
+                  Positioned(
+                    left: 8 + 40 + 40 + 8,
+                    right: (PlateShare.supported ? 8 + 40 + 40 : 8 + 40) + 8,
+                    bottom: 8,
+                    height: 40,
+                    child: SongScribble(engine: engine),
                   ),
                 // The calendar, at the bottom right beside share (in the
                 // corner where there is no share).

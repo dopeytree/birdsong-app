@@ -56,6 +56,13 @@ Ed needs to run `Build on Mac.command` and look at:
    a tap on a name opens the card; "Passed on the way" on the bottom of
    the full-screen map.
 
+7. (23 Nov) The song scribble: a sepia pencil line along the bottom
+   between the map and calendar buttons, drawn live from the mic while
+   listening here, with the bird being heard named in a gap; a faint
+   resting line otherwise. Settings → Display → Song scribble while
+   listening (on by default). `native/song_scribble.dart`,
+   `engine/scribble_trace.dart`. Not on stations yet.
+
 Details of 2 to 6 are in `map.md`; Ed's words in `decisions.md`.
 
 Also built 23 Nov: the model update strip along the top of the screen

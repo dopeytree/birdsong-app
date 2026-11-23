@@ -162,6 +162,10 @@ class Settings extends ChangeNotifier {
   bool nativeShowTitle = true;
   bool nativeShowDate = true;
 
+  /// A pencil scribble of the sound, with the bird being heard, along the
+  /// bottom of the plate between the buttons (Listen here only).
+  bool songScribble = true;
+
   /// The Flutter plate's collage: 'calls' (noisiest species), 'time'
   /// (recent ramblings) or 'equal' (no pecking order).
   String nativeSizeBy = 'calls';
@@ -335,6 +339,7 @@ class Settings extends ChangeNotifier {
     webPlate = (j['webPlate'] as bool?) ?? webPlate;
     nativeShowTitle = (j['nativeShowTitle'] as bool?) ?? nativeShowTitle;
     nativeShowDate = (j['nativeShowDate'] as bool?) ?? nativeShowDate;
+    songScribble = (j['songScribble'] as bool?) ?? songScribble;
     nativePlateStyle = const ['cutout', 'tint', 'plain'].contains(j['nativePlateStyle'])
         ? j['nativePlateStyle'] as String
         : nativePlateStyle;
@@ -417,6 +422,7 @@ class Settings extends ChangeNotifier {
         'webPlate': webPlate,
         'nativeShowTitle': nativeShowTitle,
         'nativeShowDate': nativeShowDate,
+        'songScribble': songScribble,
         'nativeSizeBy': nativeSizeBy,
         'nativePlateStyle': nativePlateStyle,
         'nativeMarkAt': nativeMarkAt,
