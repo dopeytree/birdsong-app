@@ -334,6 +334,11 @@ const credits = [
     //   walk:   the walk's real gaps, 5× faster (bursts and pauses as heard).
     //   random: made-up bursts and pauses, to compare (?rhythm=random).
     const SPEED = 5, LOOP_GAP = 6000, OPENING = 1200;
+    // They come in small bursts with rests between, so the page can be seen
+    // clear: the opening three, then 3–5 at a time. A rest waits for the last
+    // banner to go, then 5 s more of clear screen (Ed, Nov 2026).
+    const REST = STAY + 5000;
+    let inBurst = 1, burst = 3;   // the opening Northern Cardinal is the first
     let rhythm = new URLSearchParams(location.search).get('rhythm') === 'random' ? 'random' : 'walk';
     let k = -1, timer = null, playing = true;
     const species = walk.species;
@@ -348,7 +353,11 @@ const credits = [
         k = (k + 1) % species.length;
         const s = species[k];
         notify(`I just spotted ${s.common}! ❤️‍🔥 ${10 + 10 * s.calls} points`);
-        schedule(gap((k + 1) % species.length));
+        if (++inBurst >= burst) {
+          inBurst = 0;
+          burst = 3 + Math.floor(Math.random() * 3);
+          schedule(REST);
+        } else schedule(gap((k + 1) % species.length));
       }, wait);
     }
     // The opening notification, then the walk begins.

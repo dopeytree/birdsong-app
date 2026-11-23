@@ -73,7 +73,8 @@ or a small test before building it.
 - **Splash notifications (Ed, Nov 2026):** after the opening Northern Cardinal,
   walk #20 (Fri 25 Dec 2026, 42 species) plays itself: each species arrives
   in the order first heard, at the walk's real gaps 5× faster (bursts and
-  pauses), looping after a 6 s rest. Each banner leaves after ~5 s (about an
+  pauses), looping after a 6 s rest. They come in bursts (the opening three,
+  then 3–5 at a time) with a rest between, long enough for 5 s of clear screen. Each banner leaves after ~5 s (about an
   iPhone's) or when tapped. Data: `site/src/data/walk-20.json`, made by
   `tool/export_site_walk.py` (species, calls, confidence only; no location or
   IDs). Points are a stand-in: 10 for a new species plus 10 a call. The bell,
