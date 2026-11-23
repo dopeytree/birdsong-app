@@ -497,7 +497,7 @@ const credits = [
     const BEAT = 850, DUB = 210;
     const heartbeat = (lub, dub) => { beatFrom(lub); setTimeout(() => beatFrom(dub), DUB); };
     let pulse = null;
-    const startPulse = () => { if (!pulse) pulse = setInterval(() => { if (!document.hidden) heartbeat(.55, .35); }, BEAT); };
+    const startPulse = () => { if (!pulse) pulse = setInterval(() => { if (!document.hidden) heartbeat(1.6, 1.0); }, BEAT); };   // the same strong beat as a click on Time, looping
     let strong = false;
     document.addEventListener('click', e => {
       if (!(e.target instanceof Element && e.target.closest('.to-beat'))) return;
