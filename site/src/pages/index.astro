@@ -1109,7 +1109,7 @@ const credits = [
   /* The popup takes focus when it opens (so Esc works); no browser focus ring. */
   .lightbox:focus, .lightbox:focus-visible { outline: none; }
   .lightbox::backdrop {
-    background: rgba(0, 0, 0, .9);
+    background: rgba(0, 0, 0, .96);   /* the same for the film and the shots; was .9 (Ed, Nov 2026) */
   }
   .lightbox[open], .lightbox[open]::backdrop { animation: fade-in .45s ease; }
   .lightbox[open] .device { animation: rise .5s cubic-bezier(.2, .7, .2, 1); }

@@ -202,3 +202,5 @@ or a small test before building it.
   always opens from the beginning, with sound; small on the page it is muted.
   The film's soft picture edges are trimmed (rows 113–1388 of Ed's 1460) and
   its corners sit on the film's own dark, so no pale rim.
+- **Popup fade (Ed, Nov 2026):** black at 96% (was 90%), the same for the film
+  and the shots.
