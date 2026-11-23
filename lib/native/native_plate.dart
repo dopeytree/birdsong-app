@@ -1199,7 +1199,7 @@ class _NativePlateState extends State<NativePlate> {
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: math.max(120, width - row1)),
           child: Text.rich(
-            TextSpan(text: 'Birdsong', children: [
+            TextSpan(text: 'Birdsongs', children: [
               // the session's number, small, in the lines' own style
               if (feed == null && n > 0 && i >= 0)
                 TextSpan(text: '  #${i + 1}/$n', style: sub.copyWith(height: 1)),
