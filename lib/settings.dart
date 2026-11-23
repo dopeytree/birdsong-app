@@ -132,6 +132,20 @@ class Settings extends ChangeNotifier {
   /// Which model's detections the plate draws, or 'all'.
   String plateModel = 'bnl-v3-10k';
 
+  /// When installed models were last checked for a newer build, epoch ms.
+  /// 0 until the first check succeeds.
+  int modelCheckAt = 0;
+
+  /// A manifest path to the epoch ms until which its notice stays hidden.
+  Map<String, int> modelSnoozed = {};
+
+  /// Manifest paths the user does not want offered again.
+  Set<String> modelSkipped = {};
+
+  /// A newer build taken in place of a catalogue model, keyed by spec id.
+  /// The fields are written by ModelUpdates.accept.
+  Map<String, Map<String, dynamic>> modelOverrides = {};
+
   /// The plate as the old web page draws it (assets/web/index.html in a web
   /// view, lib/ui/plate_view.dart) instead of Flutter's own
   /// (lib/native/native_plate.dart, the default since 22 Nov 2026). Saved
@@ -289,6 +303,35 @@ class Settings extends ChangeNotifier {
     final active = j['activeModels'];
     if (active is List) activeModels = active.whereType<String>().toSet();
     plateModel = (j['plateModel'] as String?) ?? plateModel;
+    // A bad value is skipped, never thrown: a throw here would drop every
+    // field after this one.
+    final checked = j['modelCheckAt'];
+    if (checked is num && checked.isFinite) modelCheckAt = math.max(0, checked.toInt());
+    final snoozed = j['modelSnoozed'];
+    if (snoozed is Map) {
+      final next = <String, int>{};
+      for (final e in snoozed.entries) {
+        if (e.value is! num || !(e.value as num).isFinite) continue;
+        next['${e.key}'] = (e.value as num).toInt();
+      }
+      modelSnoozed = next;
+    }
+    final skipped = j['modelSkipped'];
+    if (skipped is List) modelSkipped = skipped.whereType<String>().toSet();
+    final overrides = j['modelOverrides'];
+    if (overrides is Map) {
+      final next = <String, Map<String, dynamic>>{};
+      for (final e in overrides.entries) {
+        if (e.value is! Map) continue;
+        final inner = <String, dynamic>{};
+        for (final f in (e.value as Map).entries) {
+          if (f.key is! String) continue;
+          inner[f.key as String] = f.value;
+        }
+        next['${e.key}'] = inner;
+      }
+      modelOverrides = next;
+    }
     webPlate = (j['webPlate'] as bool?) ?? webPlate;
     nativeShowTitle = (j['nativeShowTitle'] as bool?) ?? nativeShowTitle;
     nativeShowDate = (j['nativeShowDate'] as bool?) ?? nativeShowDate;
@@ -367,6 +410,10 @@ class Settings extends ChangeNotifier {
         'plateView': plateModes[plateMode - 1].key,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
+        'modelCheckAt': modelCheckAt,
+        'modelSnoozed': modelSnoozed,
+        'modelSkipped': modelSkipped.toList(),
+        'modelOverrides': modelOverrides,
         'webPlate': webPlate,
         'nativeShowTitle': nativeShowTitle,
         'nativeShowDate': nativeShowDate,

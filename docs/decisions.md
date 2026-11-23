@@ -134,3 +134,11 @@ or a small test before building it.
   band, cleaned; `site/public/media/cardinal-spectrogram.png`) along the
   bottom in the ink colour, faint, plus fine grain. `?veil=song`, `?veil=grain`
   or `?veil=both` (default) to compare.
+- **Model updates (Ed, Nov 2026):** the app looks for newer builds of the
+  models you have installed, once a day: on opening, on coming back to it,
+  and every 3 h while open (1 h wait after a failed try). A slim paper strip
+  along the top of the screen, not a card or a system notification: "A newer
+  {model} is ready ({version}, {MB} MB)." Download (madder), Not now (a
+  week), Skip this version. It sits outside the share capture. Settings →
+  Models shows "Newer build ready" and Check now. Downloads are checked by
+  sha256; the old files go once the new ones check out.

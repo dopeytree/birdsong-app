@@ -78,6 +78,32 @@ class ModelSpec {
   int get windowSamples => (sampleRate * windowSeconds).round();
 
   int get totalBytes => model.bytes + labels.bytes;
+
+  /// A copy with a newer build's files in place of these. Every other field
+  /// stays: the name is unchanged, so a Settings row can append the build's
+  /// label itself.
+  ModelSpec copyWith({
+    ModelFile? model,
+    ModelFile? labels,
+    double? restLogit,
+    bool setRestLogit = false,
+  }) {
+    return ModelSpec(
+      id: id,
+      name: name,
+      family: family,
+      licence: licence,
+      releaseOk: releaseOk,
+      sampleRate: sampleRate,
+      windowSeconds: windowSeconds,
+      activation: activation,
+      model: model ?? this.model,
+      labels: labels ?? this.labels,
+      restLogit: setRestLogit ? restLogit : this.restLogit,
+      namesFromSharedLabels: namesFromSharedLabels,
+      note: note,
+    );
+  }
 }
 
 String _hf(String repo, String path) =>
@@ -282,4 +308,50 @@ ModelSpec? specById(String id) {
     if (s.id == id) return s;
   }
   return null;
+}
+
+/// [s] with a downloaded newer build in place of the catalogue file, or [s]
+/// itself when [overrides] has nothing usable for it. A half-written or
+/// garbage override is ignored whole. The name is left as it is.
+ModelSpec effective(ModelSpec s, Map<String, Map<String, dynamic>> overrides) {
+  final o = overrides[s.id];
+  if (o == null) return s;
+  final modelUrl = o['modelUrl'];
+  final modelName = o['modelName'];
+  final labelsUrl = o['labelsUrl'];
+  final labelsName = o['labelsName'];
+  final modelBytes = o['modelBytes'];
+  final labelsBytes = o['labelsBytes'];
+  if (modelUrl is! String ||
+      modelUrl.isEmpty ||
+      modelName is! String ||
+      modelName.isEmpty ||
+      labelsUrl is! String ||
+      labelsUrl.isEmpty ||
+      labelsName is! String ||
+      labelsName.isEmpty ||
+      modelBytes is! num ||
+      !modelBytes.isFinite ||
+      labelsBytes is! num ||
+      !labelsBytes.isFinite) {
+    return s;
+  }
+  final rest = o['restLogit'];
+  final replaceRest = rest is num && rest.isFinite;
+  return s.copyWith(
+    model: ModelFile(modelUrl, modelName, modelBytes.toInt()),
+    labels: ModelFile(labelsUrl, labelsName, labelsBytes.toInt()),
+    restLogit: replaceRest ? rest.toDouble() : null,
+    setRestLogit: replaceRest,
+  );
+}
+
+/// [catalog] as installed, newer builds included.
+List<ModelSpec> effectiveCatalog(Map<String, Map<String, dynamic>> overrides) =>
+    [for (final s in catalog) effective(s, overrides)];
+
+/// [specById] with any downloaded newer build applied.
+ModelSpec? effectiveById(String id, Map<String, Map<String, dynamic>> overrides) {
+  final s = specById(id);
+  return s == null ? null : effective(s, overrides);
 }

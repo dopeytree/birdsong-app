@@ -37,6 +37,9 @@ dependencies:
   # Where models, detections and recordings live.
   path_provider: ^2.1.5
 
+  # sha256 of a newer model build, checked as the file downloads.
+  crypto: ^3.0.6
+
   # Where each listening session happened.
   geolocator: ^14.1.1
   animations: ^3.0.0

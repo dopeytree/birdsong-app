@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/foundation.dart';
 
 import 'model_catalog.dart';
@@ -71,7 +72,34 @@ class ModelManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _download(ModelFile f, void Function(int got) onProgress) async {
+  /// Downloads one file. When [sha256] is set, the bytes are hashed as they
+  /// arrive; a mismatch deletes the part-file and throws, and the caller
+  /// records the error against the model.
+  Future<void> downloadFile(
+    ModelFile f, {
+    String? sha256,
+    void Function(int got)? onProgress,
+  }) {
+    return _download(f, onProgress ?? (_) {}, sha256hex: sha256);
+  }
+
+  /// Removes files a newer build has replaced. Never touches [sharedNames],
+  /// nor any name in [keep] (still used by an installed model).
+  Future<void> deleteReplaced(Iterable<ModelFile> files, {required Set<String> keep}) async {
+    for (final f in files) {
+      if (identical(f, sharedNames) || f.name == sharedNames.name) continue;
+      if (keep.contains(f.name)) continue;
+      final file = fileFor(f);
+      if (await file.exists()) await file.delete();
+    }
+    notifyListeners();
+  }
+
+  Future<void> _download(
+    ModelFile f,
+    void Function(int got) onProgress, {
+    String? sha256hex,
+  }) async {
     await dir.create(recursive: true);
     final part = File('${fileFor(f).path}.part');
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 30);
@@ -84,11 +112,14 @@ class ModelManager extends ChangeNotifier {
         throw HttpException('${res.statusCode} for ${f.url}');
       }
       final sink = part.openWrite();
+      final digest = sha256hex == null ? null : _DigestCatcher();
+      final hasher = digest == null ? null : crypto.sha256.startChunkedConversion(digest);
       var got = 0;
       var lastReport = 0;
       try {
         await for (final chunk in res) {
           sink.add(chunk);
+          hasher?.add(chunk);
           got += chunk.length;
           if (got - lastReport > 512 * 1024) {
             lastReport = got;
@@ -97,15 +128,33 @@ class ModelManager extends ChangeNotifier {
         }
       } finally {
         await sink.close();
+        hasher?.close();
       }
       onProgress(got);
       if (f.bytes > 0 && got != f.bytes) {
         await part.delete();
         throw HttpException('${f.name}: got $got bytes, expected ${f.bytes}');
       }
+      if (sha256hex != null) {
+        final gotHex = digest!.digest?.toString();
+        if (gotHex != sha256hex.toLowerCase()) {
+          await part.delete();
+          throw HttpException('${f.name}: sha256 does not match');
+        }
+      }
       await part.rename(fileFor(f).path);
     } finally {
       client.close();
     }
   }
+}
+
+class _DigestCatcher implements Sink<crypto.Digest> {
+  crypto.Digest? digest;
+
+  @override
+  void add(crypto.Digest data) => digest = data;
+
+  @override
+  void close() {}
 }
