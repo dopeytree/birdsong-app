@@ -226,7 +226,11 @@ class Session {
   bool get live => end == null;
   bool get hasPlace => lat != null && lon != null;
 
-  bool contains(DateTime t) => !t.isBefore(start) && (end == null || !t.isAfter(end!));
+  /// An open session runs to now (with a minute's grace), so a walk dated in
+  /// the future (a test or promo copy) never leaks into the live one.
+  bool contains(DateTime t) =>
+      !t.isBefore(start) &&
+      !t.isAfter(end ?? DateTime.now().add(const Duration(minutes: 1)));
 
   /// "2026-11-18T2219Z_a91e4c": the start in UTC and the start of the UUID,
   /// so folders sort by time and never collide.
@@ -559,13 +563,15 @@ class DetectionStore extends ChangeNotifier {
   // ---- sessions -------------------------------------------------------------
 
   /// The session the plate shows: the one picked with the arrows, else the
-  /// latest.
+  /// latest that has begun (not one dated in the future).
   Session? get selected {
     if (sessions.isEmpty) return null;
     for (final x in sessions) {
       if (x.id == _selectedId) return x;
     }
-    return sessions.last;
+    final now = DateTime.now();
+    return liveSession ??
+        sessions.lastWhere((x) => !x.start.isAfter(now), orElse: () => sessions.last);
   }
 
   int get selectedIndex {
@@ -573,7 +579,13 @@ class DetectionStore extends ChangeNotifier {
     return sel == null ? -1 : sessions.indexOf(sel);
   }
 
-  Session? get liveSession => sessions.isNotEmpty && sessions.last.live ? sessions.last : null;
+  /// The open session, wherever it sorts (a future-dated walk may follow it).
+  Session? get liveSession {
+    for (final x in sessions.reversed) {
+      if (x.live) return x;
+    }
+    return null;
+  }
 
   /// Move the plate [delta] sessions back (-1) or on (+1).
   void step(int delta) {
@@ -606,7 +618,9 @@ class DetectionStore extends ChangeNotifier {
         lon: lon,
         settings: settings,
         models: models);
-    sessions.add(x);
+    sessions
+      ..add(x)
+      ..sort((a, b) => a.start.compareTo(b.start)); // same order as after a relaunch
     _selectedId = x.id;
     await _write(x);
     notifyListeners();
