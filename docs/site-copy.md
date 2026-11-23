@@ -9,7 +9,7 @@ kept here so they can be reused.
 
 **Birdsongs**
 
-Take it on a walk. It listens as you go. Trusted private local AI.
+Take it on a walk. It listens as you go. Trusty private local AI.
 Every bird it hears is lovingly illustrated in the manner of the old
 natural-history books: dated, placed on the map, along with the weather of
 the day.
