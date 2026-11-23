@@ -1,4 +1,6 @@
 ---
+// The film's v3 file is HEVC, Main 10, level 5 (Ed, Nov 2026).
+const HEVC = 'video/mp4; codecs="hvc1.2.4.L150.B0"';
 // Birdsongs splash page. One page, no framework on the client: a few lines of
 // script swap the device and open the popup.
 //
@@ -13,7 +15,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const shots = {
   // The film (Ed, Nov 2026): the first dot, playing in the sideways iPad.
   film: [
-    { type: 'video', src: 'media/coming-soon.mp4', alt: 'A short film of Birdsongs.ai', landscape: true },
+    // v3 is HEVC; browsers that can't play it get v2 (H.264), cropped to suit
+    // (html[data-film], set in the head).
+    { type: 'video', src: 'media/coming-soon.mp4', old: 'media/coming-soon-v2.mp4', alt: 'A short film of Birdsongs.ai', landscape: true },
   ],
   iphone: [
     { type: 'image', src: 'shots/iphone-plate.jpg', alt: 'A plate of the birds heard on one walk, on iPhone' },
@@ -70,6 +74,8 @@ const credits = [
       const system = matchMedia('(prefers-color-scheme: dark)').matches ? 'black' : 'white';
       const pick = [new URLSearchParams(location.search).get('bg'), localStorage.getItem('bg')].find(m => modes.includes(m));
       document.documentElement.dataset.bg = pick || system;
+      // The film: v3 (HEVC) where the browser can play it, else v2 (H.264).
+      document.documentElement.dataset.film = document.createElement('video').canPlayType('video/mp4; codecs="hvc1.2.4.L150.B0"') ? 'v3' : 'v2';
       // The way in (Ed, Nov 2026): none (straight in, the film playing in the
       // stage), or on trial ?gate=play (a play button over the faded page) or
       // ?gate=video (the earlier film with Tap to Enter).
@@ -127,7 +133,7 @@ const credits = [
            the browser's controls. It tries to play with sound; browsers mostly
            refuse before a tap, so then it plays silently until "Sound on". -->
       <div class="gate-film">
-        <video class="gate-video" src={`${base}/media/coming-soon.mp4`} poster={`${base}/media/coming-soon-poster.jpg`} muted playsinline controls aria-label="A preview of Birdsongs.ai"></video>
+        <video class="gate-video" poster={`${base}/media/coming-soon-poster.jpg`} muted playsinline controls aria-label="A preview of Birdsongs.ai"><source src={`${base}/media/coming-soon.mp4`} type={HEVC} /><source src={`${base}/media/coming-soon-v2.mp4`} type="video/mp4" /></video>
         <button class="gate-sound" type="button" aria-label="Play the video with sound">Sound on</button>
       </div>
       <button class="gate-btn" type="button"><svg class="ico" viewBox="0 0 256 256" aria-hidden="true"><path d="M64,64a48,48,0,0,1,96,0,8,8,0,0,1-16,0,32,32,0,0,0-64,0,8,8,0,0,1-16,0Zm143.23,56c-8.61.4-15.23,7.82-15.23,16.43v7.28a8.17,8.17,0,0,1-7.47,8.25,8,8,0,0,1-8.53-8V120.45c0-8.61-6.62-16-15.23-16.43A16,16,0,0,0,144,120v15.73a8.17,8.17,0,0,1-7.47,8.25,8,8,0,0,1-8.53-8V64.45c0-8.61-6.62-16-15.23-16.43A16,16,0,0,0,96,64V183.74a8.19,8.19,0,0,1-6.72,8.16l-.12,0a6.09,6.09,0,0,1-6-3.09l-21-36.44c-4.3-7.46-13.74-10.57-21.4-6.62A16,16,0,0,0,34.15,168L65.1,228.05A8,8,0,0,0,72,232H208a8,8,0,0,0,7.16-4.42c.36-.72,8.84-15.06,8.84-40.65V136A16,16,0,0,0,207.23,120Z"/></svg>Tap to Enter</button>
@@ -172,7 +178,7 @@ const credits = [
               <span class="screen">
                 {shots[d.id].map((s, j) => (
                   s.type === 'video'
-                    ? <video class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={`${base}/${s.src}`} poster={`${base}/${s.poster ?? 'media/coming-soon-poster.jpg'}`} muted loop playsinline autoplay preload="auto" aria-label={s.alt}></video>
+                    ? <video class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={s.old ? undefined : `${base}/${s.src}`} poster={`${base}/${s.poster ?? 'media/coming-soon-poster.jpg'}`} muted loop playsinline autoplay preload="auto" aria-label={s.alt}>{s.old && <><source src={`${base}/${s.src}`} type={HEVC} /><source src={`${base}/${s.old}`} type="video/mp4" /></>}</video>
                     : <img class="shot" data-active={j === 0 ? 'true' : 'false'} data-landscape={s.landscape ? 'true' : 'false'} src={`${base}/${s.src}`} alt={s.alt} loading={i === 0 && j === 0 ? 'eager' : 'lazy'} />
                 ))}
                 {d.id === 'iphone' && <span class="island" aria-hidden="true"></span>}
@@ -309,7 +315,9 @@ const credits = [
       boxDev.dataset.landscape = 'true';
       boxImg.hidden = true;
       boxFilm.hidden = false;
-      if (!boxFilm.src.endsWith(v.getAttribute('src'))) { boxFilm.src = v.currentSrc || v.src; boxFilm.poster = v.poster; }
+      // The file the page's film chose (v3 or the v2 fallback).
+      const src = v.currentSrc || v.src || [...v.querySelectorAll('source')].find(o => !o.type.includes('hvc1') || document.documentElement.dataset.film === 'v3')?.src;
+      if (boxFilm.src !== src) { boxFilm.src = src; boxFilm.poster = v.poster; }
       boxFilm.setAttribute('aria-label', v.getAttribute('aria-label'));
       boxFilm.muted = false;
       boxFilm.loop = false;        // the film plays once, then the popup closes
@@ -886,10 +894,14 @@ const credits = [
   .ready .screen { transition: height .6s ease, aspect-ratio .6s ease, border-radius .6s ease; }
   /* The film: no device frame, just the picture with rounded corners and a
      soft shadow (Ed, Nov 2026). Its file has black bands, cropped off here. */
-  .device.film { --bezel: 0px; --ar: 1920 / 1276; --r-outer: 12px; --r-inner: 12px; }
+  .device.film { --bezel: 0px; --ar: 1820 / 1216; --r-outer: 12px; --r-inner: 12px; }
   .device.film .screen { background: #131311; }   /* the film's own dark, so no pale rim at the corners */
   .device.film .frame, .device.film .frame:hover { background: none; box-shadow: 0 30px 60px -12px rgba(0, 0, 0, .5); }
-  .device.film video { object-position: 50% 61.4%; }   /* Ed's file: picture rows 113–1388 of 1460; its soft edges trimmed */
+  .device.film video { object-position: 50% 58.6%; }
+  /* The v2 fallback, 1920×1460: picture rows 113–1388. */
+  html[data-film='v2'] .device.film { --ar: 1920 / 1276; }
+  html[data-film='v2'] .device.film video, html[data-film='v2'] .gate-video { object-position: 50% 61.4%; }
+  html[data-film='v2'] .gate-video { aspect-ratio: 1920 / 1276; }   /* Ed's v3 file, 1820×1460: picture rows 143–1358; its bands and soft edges trimmed */
   .ipad .frame { box-shadow:
       0 0 0 1.5px #6a6761, 0 0 0 3px #3a3936,
       0 2px 3px 3px rgba(42, 36, 28, .25),
@@ -1086,10 +1098,10 @@ const credits = [
   /* The intro video (v2, Nov 2026): Ed's file as is; its black bands are cropped off here. */
   .gate-video {
     display: block;
-    width: min(96vw, calc((100svh - 130px) * 1.498));   /* as large as the screen allows, Tap to Enter below (Ed, Nov 2026) */
+    width: min(96vw, calc((100svh - 130px) * 1.497));   /* as large as the screen allows, Tap to Enter below (Ed, Nov 2026) */
     height: auto;
-    aspect-ratio: 1920 / 1282;
-    object-position: 50% 61.8%;      /* Ed's original file, 1920×1460: shows just the picture, 110 px band above, 68 below */
+    aspect-ratio: 1820 / 1216;
+    object-position: 50% 58.6%;      /* Ed's v3 file, 1820×1460: shows just the picture, 143 px above, 101 below */
     object-fit: cover;
     border-radius: 14px;
     box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .7);
@@ -1149,7 +1161,7 @@ const credits = [
   .lightbox .ipad { --h: min(calc(100vh - 110px), calc((100vw - 48px) * 1.4)); }
   .lightbox .ipad .btn, .lightbox .ipad .island { display: none; }
   .lightbox .ipad[data-landscape='true'] { --h: min(calc(100vh - 110px), calc((100vw - 48px) / 1.46)); }
-  .lightbox .device.film[data-landscape='true'] { --h: min(calc(100vh - 110px), calc((100vw - 140px) / 1.505)); }   /* room for ‹ › */
+  .lightbox .device.film[data-landscape='true'] { --h: min(calc(100vh - 110px), calc((100vw - 140px) / 1.497)); }   /* room for ‹ › */
   .lightbox .frame { cursor: zoom-out; }
   .lightbox .frame:hover { transform: none; }
   /* Light mode: the popup fades to white, and its ✕ and ‹ › turn to ink (Ed, Nov 2026). */

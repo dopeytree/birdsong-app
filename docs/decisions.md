@@ -215,3 +215,7 @@ or a small test before building it.
   looping, full size in the popup too. The dots now go round from page load
   (waiting while the popup is open); a dot tapped by hand holds the round for
   10 s instead of stopping it for good.
+- **Intro video v3 (Ed, Nov 2026):** `coming-soon.mp4` is Ed's v3 as is (HEVC,
+  1820×1460, 60 fps, 13.7 MB; picture rows 143–1358, cropped by the page).
+  Browsers that can't play HEVC get v2 (`coming-soon-v2.mp4`, H.264) via
+  <source>, with its own crop (`html[data-film='v2']`, set in the head).
