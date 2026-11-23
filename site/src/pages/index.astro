@@ -1,18 +1,22 @@
 ---
 // Birdsongs splash page. One page, no framework on the client: a few lines of
-// script swap the device and step through the shots.
+// script swap the device and open the popup.
+//
+// The pill buttons choose the device. Clicking the screen opens what it shows
+// full size in a popup over the page faded to black.
 //
 // To add screenshots or a video later, add entries to `shots` below and put
 // the files in public/shots/. type is 'image' or 'video'; add landscape: true
-// for a sideways shot and the device turns to suit it. The iPad pill button
-// opens the iPad's sideways shot full size in a popup.
+// for a sideways shot and the device turns to suit it. With more than one shot
+// for a device, a "‹ Plate i of ii ›" line appears to step through them.
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const shots = {
   iphone: [
     { type: 'image', src: 'shots/iphone-plate.jpg', alt: 'A plate of the birds heard on one walk, on iPhone' },
   ],
   ipad: [
-    { type: 'image', src: 'shots/ipad-plate.jpg', alt: 'The same plate on iPad, with its index of species' },
+    // Upright iPad, hidden for now (Ed, Nov 2026). Uncomment to bring it back.
+    // { type: 'image', src: 'shots/ipad-plate.jpg', alt: 'The same plate on iPad, with its index of species' },
     { type: 'image', src: 'shots/ipad-landscape.jpg', alt: 'The plate on iPad, turned sideways', landscape: true },
   ],
 };
@@ -66,8 +70,8 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     <section class="stage" aria-label="The app">
       <div class="devices">
         {devices.map((d, i) => (
-          <figure class={`device ${d.id}`} data-device={d.id} data-active={i === 0 ? 'true' : 'false'} aria-hidden={i === 0 ? 'false' : 'true'}>
-            <button class="frame" title={`Show it on ${d.other}`} aria-label={`Show it on ${d.other}`} tabindex={i === 0 ? 0 : -1}>
+          <figure class={`device ${d.id}`} data-device={d.id} data-active={i === 0 ? 'true' : 'false'} data-landscape={shots[d.id][0]?.landscape ? 'true' : 'false'} aria-hidden={i === 0 ? 'false' : 'true'}>
+            <button class="frame" title="See it full size" aria-label="See it full size" tabindex={i === 0 ? 0 : -1}>
               {d.id === 'iphone' && <><span class="btn b1"></span><span class="btn b2"></span><span class="btn b3"></span><span class="btn b4"></span></>}
               <span class="screen">
                 {shots[d.id].map((s, j) => (
@@ -89,7 +93,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
         <span class="rule"></span>
         <button class="step next" aria-label="Next">›</button>
       </nav>
-      <p class="hint"><em>Tap the screen to see it on <span class="other">iPad</span>.</em></p>
+      <p class="hint"><em>Tap the screen to see it full size.</em></p>
     </section>
   </main>
 
@@ -99,28 +103,28 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     <span class="rule"></span>
   </footer>
 
-  <!-- A sideways shot opens here, as large as the window allows. -->
+  <!-- The shot on the page opens here, as large as the window allows. -->
   <dialog class="lightbox" aria-label="The app, full size">
-    <div class="device ipad" data-landscape="true" data-active="true">
-      <span class="frame"><span class="screen"><img class="shot" data-active="true" alt="" /></span></span>
+    <div class="device iphone" data-landscape="false" data-active="true">
+      <span class="frame">
+        <span class="btn b1"></span><span class="btn b2"></span><span class="btn b3"></span><span class="btn b4"></span>
+        <span class="screen"><img class="shot" data-active="true" alt="" /><span class="island" aria-hidden="true"></span></span>
+      </span>
     </div>
     <p class="close-hint"><em>Click anywhere to close.</em></p>
   </dialog>
 
   <script is:inline define:vars={{ roman }}>
-    // Every shot is a stop in one loop: iPhone shots, then iPad shots. A tap
-    // on the screen steps through them in the page, sideways ones included.
-    // The iPad pill button also opens the sideways shot full size in a popup;
-    // closing it leaves the sideways iPad showing in the page.
+    // The pill buttons choose the device; a tap on the screen opens the shot
+    // full size in the popup. ‹ › step through a device's shots, if it has more than one.
     const devices = [...document.querySelectorAll('.devices .device')];
     const segs = [...document.querySelectorAll('.seg')];
-    const hint = document.querySelector('.hint em');
     const nav = document.querySelector('.index');
     const box = document.querySelector('.lightbox');
     const boxImg = box.querySelector('img');
+    const boxDev = box.querySelector('.device');
     const stops = devices.flatMap(d => [...d.querySelectorAll('.shot')].map((s, i) =>
       ({ d, i, s, sideways: s.dataset.landscape === 'true' })));
-    const other = d => d.dataset.device === 'iphone' ? 'iPad' : 'iPhone';
     let k = 0;            // the stop showing on the page
 
     function show(n) {
@@ -138,34 +142,35 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
       });
       d.dataset.landscape = stops[k].sideways ? 'true' : 'false';
       segs.forEach(s => s.setAttribute('aria-selected', s.dataset.device === d.dataset.device ? 'true' : 'false'));
-      const next = stops[(k + 1) % stops.length];
-      hint.textContent = next.sideways ? 'Tap the screen to turn it sideways.'
-        : next.d !== d ? `Tap the screen to see it on ${other(d)}.`
-        : 'Tap the screen for the next plate.';
       const own = stops.filter(t => t.d === d);
       nav.hidden = own.length < 2;
       nav.querySelector('.num').textContent = roman[own.indexOf(stops[k])] || '';
       nav.querySelector('.count').textContent = roman[own.length - 1] || '';
     }
 
-    // One step forward (1) or back (-1).
-    function step(dir) { show((k + dir + stops.length) % stops.length); }
+    // One step forward (1) or back (-1) through this device's shots.
+    function step(dir) {
+      const own = stops.filter(t => t.d === stops[k].d);
+      show(stops.indexOf(own[(own.indexOf(stops[k]) + dir + own.length) % own.length]));
+    }
+
+    // The popup: the same device and shot as the page, full size.
+    function openBox() {
+      const { d, s, sideways } = stops[k];
+      if (s.tagName !== 'IMG') return;
+      boxDev.className = `device ${d.dataset.device}`;
+      boxDev.dataset.landscape = sideways ? 'true' : 'false';
+      boxImg.src = s.src;
+      boxImg.alt = s.alt;
+      box.showModal();
+    }
     box.addEventListener('click', () => box.close());
 
-    devices.forEach(d => d.querySelector('.frame').addEventListener('click', () => step(1)));
+    devices.forEach(d => d.querySelector('.frame').addEventListener('click', openBox));
     nav.querySelector('.prev').addEventListener('click', () => step(-1));
     nav.querySelector('.next').addEventListener('click', () => step(1));
-    const firstOn = id => stops.findIndex(t => t.d.dataset.device === id && !t.sideways);
-    // iPhone pill: the iPhone. iPad pill: the sideways shot, full size in the popup.
-    segs.forEach(s => s.addEventListener('click', () => {
-      const id = s.dataset.device;
-      const side = stops.findIndex(t => t.d.dataset.device === id && t.sideways);
-      if (id !== 'ipad' || side < 0 || stops[side].s.tagName !== 'IMG') return show(firstOn(id));
-      show(side);
-      boxImg.src = stops[side].s.src;
-      boxImg.alt = stops[side].s.alt;
-      box.showModal();
-    }));
+    const firstOn = id => stops.findIndex(t => t.d.dataset.device === id);
+    segs.forEach(s => s.addEventListener('click', () => show(firstOn(s.dataset.device))));
     // #ipad opens on the iPad.
     show(location.hash === '#ipad' ? firstOn('ipad') : 0);
     requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("ready")));
@@ -283,7 +288,7 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
     border: 0;
     border-radius: var(--r-outer);
     background: #0b0b0c;
-    cursor: pointer;
+    cursor: zoom-in;
     /* Titanium edge, then a soft sepia shadow onto the paper. */
     box-shadow:
       0 0 0 1.5px #5d5a55,
@@ -380,6 +385,9 @@ const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   @keyframes fade-in { from { opacity: 0; } }
   @keyframes rise { from { transform: scale(.92); } }
   /* As large as the window: frame is about 1.46 × --h wide, plus the hint below. */
+  .lightbox .iphone { --h: min(calc(100vh - 110px), calc((100vw - 48px) * 2.1)); }
+  .lightbox .ipad { --h: min(calc(100vh - 110px), calc((100vw - 48px) * 1.4)); }
+  .lightbox .ipad .btn, .lightbox .ipad .island { display: none; }
   .lightbox .ipad[data-landscape='true'] { --h: min(calc(100vh - 110px), calc((100vw - 48px) / 1.46)); }
   .lightbox .frame { cursor: zoom-out; }
   .lightbox .frame:hover { transform: none; }

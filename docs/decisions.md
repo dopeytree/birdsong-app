@@ -42,5 +42,8 @@ or a small test before building it.
 - **Astro splash page:** Ed chose Astro over plain HTML and Flutter web.
   "Flutter web too slow to load and poor for search." Built with the app's
   palette (paper #EEE5CE, ink, sepia, madder) and IM Fell English fonts.
-  Shows the app in a CSS-drawn iPhone frame; clicking or `#ipad` swaps to
-  an iPad frame. Shots live in `site/public/shots/`.
+  Shows the app in a CSS-drawn iPhone frame. The iPhone | iPad pill (styled
+  like the app's mic pill) switches device; the iPad shows sideways.
+  Clicking the screen opens it full size in a popup over the page faded to
+  black at 70%. The upright iPad shot is hidden for now (commented out in
+  the shots list). Shots live in `site/public/shots/`.
