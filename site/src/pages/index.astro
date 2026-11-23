@@ -21,8 +21,8 @@ const shots = {
   ],
 };
 const devices = [
-  { id: 'iphone', label: 'iPhone', other: 'iPad' },
-  { id: 'ipad', label: 'iPad', other: 'iPhone' },
+  { id: 'iphone', label: 'iphone', other: 'iPad' },
+  { id: 'ipad', label: 'ipad', other: 'iPhone' },
 ];
 const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 // The footer's credits, shown one at a time (src/scripts/credits.js).
@@ -58,6 +58,8 @@ const credits = [
       const system = matchMedia('(prefers-color-scheme: dark)').matches ? 'black' : 'white';
       const pick = [new URLSearchParams(location.search).get('bg'), localStorage.getItem('bg')].find(m => modes.includes(m));
       document.documentElement.dataset.bg = pick || system;
+      const veil = new URLSearchParams(location.search).get('veil');
+      if (['grain', 'song', 'both'].includes(veil)) document.documentElement.dataset.veil = veil;
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -92,6 +94,28 @@ const credits = [
   <a class="maker" href="https://www.ed-stone.co.uk" target="_blank" rel="noopener" title="Ed Stone">
     <img src={`${base}/ed-stone-lion.gif`} alt="Ed Stone" width="70" height="35" />
   </a>
+
+  <!-- Bell: sends the cardinal notification now, top right. Lucide-style bell (ISC). -->
+  <button class="mode test-notice" type="button" aria-label="Show a notification" title="Show a notification">
+    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" />
+    </svg>
+  </button>
+
+  <!-- The gate (Ed, Nov 2026): the page faded behind "Tap to Enter". The
+       tap lifts it and, being a tap, lets the page play sound. -->
+  <div class="gate" role="dialog" aria-modal="true" aria-label="Birdsongs.ai">
+    <div class="gate-inner">
+      <!-- On trial (Ed, Nov 2026): the preview video above Tap to Enter, with
+           the browser's controls. It tries to play with sound; browsers mostly
+           refuse before a tap, so then it plays silently until "Sound on". -->
+      <div class="gate-film">
+        <video class="gate-video" src={`${base}/media/coming-soon.mp4`} poster={`${base}/media/coming-soon-poster.jpg`} muted playsinline controls aria-label="A preview of Birdsongs.ai"></video>
+        <button class="gate-sound" type="button" aria-label="Play the video with sound">Sound on</button>
+      </div>
+      <button class="gate-btn" type="button">Tap to Enter</button>
+    </div>
+  </div>
 
   <main class="page">
     <section class="text">
@@ -261,21 +285,22 @@ const credits = [
     </div>
   </template>
 
-  <!-- Bell: sends the cardinal notification now. Lucide-style bell (ISC). -->
-  <button class="mode test-notice" type="button" aria-label="Show a notification" title="Show a notification">
-    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" />
-    </svg>
-  </button>
 
 
   <!-- Text effect: murmuration (Ed's choice). ?fx=ink or ?fx=none to compare. -->
   <script>
     import { startTextFx } from '../scripts/text-fx.js';
-    startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur');
+    // Murmuration (Ed, Nov 2026): the text, Coming Soon and the credits. The
+    // buttons, icons, pill, pictures, lion and notifications stay still.
+    // Only the text brings the notification.
+    startTextFx(new URLSearchParams(location.search).get('fx') ?? 'murmur', {
+      letters: '.soon em',                          // Coming Soon, letter by letter
+      dynamic: 'footer .cr-ch',                     // the credits' letters, as they come
+      wholes: '.soon > span, .kicker .dot, footer .rule',   // Coming Soon's outline, the dot, the credit rules
+    });
 
     import { startCredits } from '../scripts/credits.js';
-    startCredits(document.querySelector('footer .credit'));
+    // The credits start once the visitor has entered (see the gate below).
 
     // Light / dark. A choice matching the device's own setting isn't stored,
     // so the page goes back to following the device.
@@ -327,36 +352,105 @@ const credits = [
       setTimeout(() => flip(() => n.remove()), 350);
     }
 
-    // Notifications (Ed, Nov 2026): only the Northern Cardinal, each time
-    // "Powered by BirdNET" flies into the footer credits (first at about
-    // 11 s, then once a round of the credits), so the two stay in step. If
-    // that credit is ever removed, a timer takes over: 10 s, then every 60 s.
-    // Other rhythms were tried and archived: docs/splash-notification-modes.md.
-    // Points are a stand-in until the app has its own rule.
+    // Notifications (Ed, Nov 2026): the Northern Cardinal, with its song, when
+    // the visitor enters, presses the bell, clicks Coming Soon or stirs the
+    // text. Nothing arrives by itself (it used to come with the "Powered by
+    // BirdNET" credit; other rhythms are archived in
+    // docs/splash-notification-modes.md). Points are a stand-in.
     const CARDINAL_TEXT = 'Aye lovely a Northern Cardinal! ❤️‍🔥 +50points';
-    const CUE = 'Powered by BirdNET', FIRST = 10000, EVERY = 60000;
-    let timer = null;
     const credits = document.querySelector('footer .credit');
-    const cued = JSON.parse(credits.dataset.credits || '[]').includes(CUE);
-    credits.addEventListener('credit', e => {
-      if (cued && e.detail === CUE && !document.hidden) notify(CARDINAL_TEXT);
+    // The cardinal's song. Browsers only allow sound once the visitor has
+    // clicked, tapped or pressed a key on the page, so the first such touch
+    // quietly unlocks it; before that, no sound.
+    const song = new Audio(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/sounds/northern_cardinal.mp3`);
+    song.preload = 'auto';
+    let soundOK = false;
+    const unlock = () => {
+      if (soundOK) return;
+      soundOK = true;
+      song.muted = true;
+      // Stop the silent run only if nothing has started the song meanwhile.
+      song.play().then(() => { if (song.muted) { song.pause(); song.currentTime = 0; song.muted = false; } })
+        .catch(() => { song.muted = false; soundOK = false; });
+    };
+    ['pointerdown', 'keydown', 'touchstart'].forEach(t => addEventListener(t, unlock, { passive: true }));
+    const sing = () => { if (!soundOK) return; song.currentTime = 0; song.play().catch(() => {}); };
+
+    // The gate: a click, tap or key lifts it (the tap also allows sound),
+    // then the credits begin, so the first cardinal comes with its song.
+    const gate = document.querySelector('.gate');
+    let entered = false;
+    const enter = () => {
+      if (entered) return;
+      entered = true;
+      gate.querySelector('.gate-video')?.pause();   // the preview stops as they go in
+      soundOK = true;            // the tap allows sound
+      song.muted = false;
+      sing();                    // and the cardinal greets them (Ed, Nov 2026)
+      notify(CARDINAL_TEXT);
+      gate.classList.add('gone');
+      setTimeout(() => gate.remove(), 900);
+      startCredits(credits);
+    };
+    gate.addEventListener('click', enter);
+
+    // The preview video: try with sound; if the browser refuses, silently.
+    // It has the browser's own controls (pause, scrub, volume); clicks on it
+    // never enter the site. "Sound on" turns the sound on where it is.
+    const film = gate.querySelector('.gate-video');
+    const soundBtn = gate.querySelector('.gate-sound');
+    film.muted = false;
+    film.play().then(() => { soundBtn.hidden = true; })
+      .catch(() => { film.muted = true; film.play().catch(() => {}); });
+    film.addEventListener('click', e => e.stopPropagation());
+    film.addEventListener('volumechange', () => { if (!film.muted) soundBtn.hidden = true; });
+    soundBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      film.muted = false;
+      if (film.paused) film.play().catch(() => {});
+      soundBtn.hidden = true;
     });
-    // The fallback timer, used only without the BirdNET credit.
-    function start(wait) {
-      if (cued) return;
-      clearTimeout(timer);
-      timer = setTimeout(() => { notify(CARDINAL_TEXT); start(EVERY); }, wait);
-    }
-    start(FIRST);
+    addEventListener('keydown', e => { if (!entered && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); } });
+
 
     // Bell: the cardinal notification, straight away (Ed, Nov 2026).
-    document.querySelector('.test-notice').addEventListener('click', () => notify(CARDINAL_TEXT));
-
-    // Don't let a hidden tab pile them up.
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) clearTimeout(timer);
-      else start(800);
+    // Easter egg (Ed, Nov 2026): stirring the murmuration text (tagline,
+    // title, paragraphs) brings the song and the notification, by moving the
+    // pointer over it or clicking it; then a 10 s rest before it can again.
+    // A move isn't a click, so the song only plays once sound is allowed.
+    const EGG_REST = 10000;
+    let lastEgg = 0;
+    const onText = t => t instanceof Element && t.closest('h1, .lede, .kicker em');
+    const egg = () => {
+      if (Date.now() - lastEgg < EGG_REST) return;
+      lastEgg = Date.now();
+      sing();
+      notify(CARDINAL_TEXT);
+    };
+    addEventListener('pointermove', e => { if (onText(e.target)) egg(); }, { passive: true });
+    addEventListener('click', e => {
+      if (!onText(e.target)) return;
+      soundOK = true;            // a click, so sound is allowed now
+      song.muted = false;
+      egg();
     });
+
+    // Coming Soon: a click brings the song and the notification, like the bell.
+    document.querySelector('.soon > span').addEventListener('click', () => {
+      soundOK = true;            // a click, so sound is allowed now
+      song.muted = false;
+      sing();
+      notify(CARDINAL_TEXT);
+    });
+
+    // The bell: the song and the notification together.
+    document.querySelector('.test-notice').addEventListener('click', () => {
+      soundOK = true;            // a click, so sound is allowed now
+      song.muted = false;
+      sing();
+      notify(CARDINAL_TEXT);
+    });
+
   </script>
 </body>
 </html>
@@ -490,8 +584,9 @@ const credits = [
   /* Words picked out in madder, the colour of "Coming Soon". */
   .madder { color: var(--madder); }
   .underline, .underline .fx-ch { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
-  .soon span {
-    color: var(--madder);               /* the filled pill's red-orange, in both modes */
+  .soon > span {
+    color: var(--madder);          /* the filled pill's red-orange, in both modes */
+    cursor: pointer;               /* the hand, like a button (Ed, Nov 2026) */
     display: inline-block;
     padding: .35em 1.3em .4em;
     border: 1px solid currentColor;
@@ -675,6 +770,67 @@ const credits = [
   /* The plain arrow over text, not the text-selection I-beam (Ed, Nov 2026).
      Buttons and the screen keep their own pointers. */
   body { cursor: default; }
+
+  /* The gate: the page faded behind "Tap to Enter"; it fades away on entry. */
+  .gate {
+    position: fixed; inset: 0; z-index: 100;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--page) 98%, transparent);   /* faded, not blurred: the page barely shows through */
+    cursor: pointer;
+    transition: opacity .8s ease;
+  }
+  .gate.gone { opacity: 0; pointer-events: none; }
+  /* Texture on the veil (on trial): ?veil=grain, ?veil=song (the cardinal's
+     spectrogram along the bottom, in the ink colour), or ?veil=both (the default). */
+  .gate::before, .gate::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+  .gate::before {
+    background-color: var(--ink);
+    -webkit-mask: url(/media/cardinal-spectrogram.png) center bottom / min(1400px, 140vw) auto no-repeat;
+            mask: url(/media/cardinal-spectrogram.png) center bottom / min(1400px, 140vw) auto no-repeat;
+    opacity: .14;
+  }
+  .gate::after {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5  0 0 0 0 .45  0 0 0 0 .38  0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    opacity: .22;                       /* plain grain: blending it made the page show through */
+  }
+  html[data-veil='grain'] .gate::before, html[data-veil='song'] .gate::after { display: none; }
+  .gate-inner { position: relative; z-index: 1; }
+  .gate-inner { display: flex; flex-direction: column; align-items: center; gap: clamp(18px, 4vh, 36px); padding: 20px; }
+  .gate-film { position: relative; }
+  /* The recording has black bands top and bottom; cropped off. */
+  .gate-video {
+    display: block;
+    width: min(640px, 86vw, calc(58vh * 1.576));
+    height: auto;
+    aspect-ratio: 1280 / 812;
+    object-fit: cover;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .7);
+    cursor: default;
+  }
+  .gate-sound {
+    position: absolute; right: 10px; top: 10px;   /* top corner, clear of the controls */
+    font-family: var(--fell); font-style: italic; font-size: .9rem;
+    color: #EEE5CE; background: rgba(0, 0, 0, .55);
+    border: 1px solid rgba(238, 229, 206, .5); border-radius: 999px;
+    padding: .2em .9em .3em;
+    cursor: pointer;
+  }
+  .gate-sound[hidden] { display: none; }
+  /* Tap to Enter: styled exactly as Coming Soon (Ed, Nov 2026): italic, in
+     madder, in a thin rounded outline. */
+  .gate-btn {
+    font-family: var(--fell);
+    font-style: italic;
+    font-size: 1.1rem;
+    color: var(--madder);
+    background: none;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    padding: .35em 1.3em .4em;
+    cursor: pointer;
+  }
+  .gate-btn:focus, .gate-btn:focus-visible { outline: none; }   /* no focus ring (Ed, Nov 2026); Enter and Space work anyway */
 
   /* Text effect (src/scripts/text-fx.js): words and letters it moves. */
   .fx-word { display: inline-block; white-space: nowrap; }
