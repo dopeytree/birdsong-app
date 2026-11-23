@@ -14,7 +14,7 @@ Every bird it hears is lovingly illustrated in the manner of the old
 natural-history books: dated, placed on the map, along with the weather of
 the day.
 
-*As old as time. Each walk becomes an artwork, with its own Index of Species.*
+*As old as time. Each walk becomes an artwork, with it's own Index of Species.*
 
 *Now I wonder how many you might collect?*
 
