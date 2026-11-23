@@ -912,14 +912,14 @@ const credits = [
   }
   html[data-veil='grain'] .gate::before, html[data-veil='song'] .gate::after { display: none; }
   .gate-inner { position: relative; z-index: 1; }
-  .gate-inner { display: flex; flex-direction: column; align-items: center; gap: clamp(18px, 4vh, 36px); padding: 20px; }
+  .gate-inner { display: flex; flex-direction: column; align-items: center; gap: clamp(12px, 2.5vh, 24px); padding: 12px; }
   .gate-film { position: relative; }
   /* The intro video (v2, Nov 2026), its black bands already cropped in the file. */
   .gate-video {
     display: block;
-    width: min(640px, 86vw, calc(58vh * 1.5));
+    width: min(96vw, calc((100svh - 130px) * 1.5));   /* as large as the screen allows, Tap to Enter below (Ed, Nov 2026) */
     height: auto;
-    aspect-ratio: 1280 / 854;
+    aspect-ratio: 3 / 2;
     object-fit: cover;
     border-radius: 14px;
     box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .7);
