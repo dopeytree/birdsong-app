@@ -102,6 +102,8 @@ class _CollageViewState extends State<CollageView> {
   String? _focusedSci;
   List<CollagePlace> _lastPlaces = const [];
   DateTime _lastSwitch = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _lastTapSci;
+  DateTime _lastTapAt = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _resetTimer;
 
   // The first plateful comes in one after another; later arrivals at once.
@@ -169,6 +171,20 @@ class _CollageViewState extends State<CollageView> {
     _scheduleReset();
   }
 
+  void _onTapBird(CollageBird b, bool isCenter) {
+    final now = DateTime.now();
+    final isDoubleTap =
+        _lastTapSci == b.sci && now.difference(_lastTapAt) < const Duration(milliseconds: 400);
+    _lastTapSci = b.sci;
+    _lastTapAt = now;
+    if (isCenter || isDoubleTap) {
+      widget.onOpen(b);
+      return;
+    }
+    setState(() => _focusedSci = b.sci);
+    _scheduleReset();
+  }
+
   @override
   Widget build(BuildContext context) {
     final birds = widget.birds, art = widget.art;
@@ -201,6 +217,8 @@ class _CollageViewState extends State<CollageView> {
         )
     ], widget.size);
     _lastPlaces = places;
+    // layoutCollage puts the largest / hero bird first, dead centre.
+    final centerSci = places.isEmpty ? null : places.first.id;
     final bird = {for (final b in birds) b.sci: b};
     final newest = widget.markAt == 'none' ? null : widget.newest;
     // has-newest: the rest only stand back when the latest is on the plate
@@ -239,6 +257,7 @@ class _CollageViewState extends State<CollageView> {
                   width: p.rect.width,
                   delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
                   hovered: _hover == p.id,
+                  isCenter: p.id == centerSci,
                   newest: p.id == newest,
                   markBelow: widget.markAt == 'below',
                   showDot: widget.markAt == 'centre' || widget.markAt == 'below',
@@ -248,7 +267,8 @@ class _CollageViewState extends State<CollageView> {
                     _hover = where == null ? (_hover == p.id ? null : _hover) : p.id;
                     if (where != null) _pointer = p.rect.topLeft + where;
                   }),
-                  onTap: () => widget.onOpen(bird[p.id]!),
+                  onTap: () => _onTapBird(bird[p.id]!, p.id == centerSci),
+                  onLongPress: () => widget.onOpen(bird[p.id]!),
                 ),
               ),
             // The label that follows the pointer.
@@ -282,6 +302,7 @@ class _Bird extends StatefulWidget {
     required this.width,
     required this.delay,
     required this.hovered,
+    required this.isCenter,
     required this.newest,
     required this.markBelow,
     required this.showDot,
@@ -289,6 +310,7 @@ class _Bird extends StatefulWidget {
     required this.live,
     required this.onHover,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final CollageBird bird;
@@ -296,6 +318,7 @@ class _Bird extends StatefulWidget {
   final double width;
   final Duration delay;
   final bool hovered;
+  final bool isCenter;
   final bool newest;
   final bool markBelow;
   final bool showDot;
@@ -305,6 +328,7 @@ class _Bird extends StatefulWidget {
   /// Where the pointer is inside the figure, or null when it has left.
   final ValueChanged<Offset?> onHover;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   State<_Bird> createState() => _BirdState();
@@ -395,6 +419,7 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: widget.onTap,
+          onLongPress: widget.onLongPress,
           child: FadeTransition(
             opacity: _fade,
             child: AnimatedOpacity(
@@ -412,6 +437,32 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                     curve: Curves.easeOut,
                     child: figure,
                   ),
+                  if (widget.isCenter)
+                    Align(
+                      alignment: Alignment.center,
+                      child: Transform.translate(
+                        offset: widget.newest && widget.showDot && !widget.markBelow
+                            ? const Offset(0, 18)
+                            : Offset.zero,
+                        child: IgnorePointer(
+                          child: Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: paper.withValues(alpha: 0.82),
+                              border: Border.all(color: rule, width: 0.9),
+                              boxShadow: const [BoxShadow(color: Color(0x283C280A), blurRadius: 4)],
+                            ),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              '+',
+                              style: TextStyle(fontSize: 15, height: 1, color: sepia),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (widget.newest && widget.showDot)
                     Align(
                       // over its centre, or on its lower edge (top:100%, -70%)
