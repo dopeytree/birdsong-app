@@ -96,12 +96,17 @@ class Walk {
 
   /// The walk [selected] belongs to: its trail and the detections of
   /// [model] ('all' for every model) that have a place.
-  static Walk of(DetectionStore store, Session selected, String model) {
+  static Walk of(
+    DetectionStore store,
+    Session selected,
+    String model, {
+    bool Function(String common, String sci)? ignore,
+  }) {
     final parts = store.walkOf(selected);
     final heard = [
       for (final x in parts)
         for (final d in store.forPlate(model, session: x))
-          if (d.hasPlace) d
+          if (d.hasPlace && !(ignore?.call(d.common, d.sci) ?? false)) d
     ]..sort((a, b) => a.at.compareTo(b.at));
     LatLng? place;
     for (final x in parts) {
@@ -803,7 +808,7 @@ class _WalkMapState extends State<WalkMap> {
   static const _natureEdge = Color(0xFF5F7D4C), _natureWash = Color(0xFF7F9A6A);
 
   /// Over the wood's #c2cc9f and its trees: a little deeper and older.
-  static const _ancient = Color(0x993F5A2A); // #3F5A2A at 60% (Ed, 23 Nov: "C very deep")
+  static const _ancient = Color(0x523F5A2A); // #3F5A2A at 32% (lightened from 60%)
   static const _monument = Color(0xFF8A5A3A), _building = Color(0xFF6B4A33), _wiki = Color(0xFF3D5566);
 
   TextStyle _labelStyle(Color c) => TextStyle(
@@ -1815,8 +1820,8 @@ class _ZoomButtons extends StatelessWidget {
   }
 }
 
-/// Full screen, to the right of the search: the same engraved grey, with
-/// the search bar's paper hairline (Ed, 23 Nov).
+/// Full screen, to the right of the search: the same grey style as the
+/// zoom buttons on the left.
 class _FullScreenButton extends StatelessWidget {
   const _FullScreenButton({required this.isFull, required this.onTap});
 
@@ -1843,20 +1848,9 @@ class _FullScreenButton extends StatelessWidget {
               child: SizedBox(
                 width: 31,
                 height: 31,
-                child: Stack(alignment: Alignment.center, children: [
-                  const Positioned.fill(
-                    child: Padding(
-                      padding: EdgeInsets.all(2),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(3)),
-                          border: Border.fromBorderSide(BorderSide(color: Color(0x8CEEE5CE), width: 0.8)),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Icon(isFull ? Icons.fullscreen_exit : Icons.fullscreen, size: 19, color: paper),
-                ]),
+                child: Center(
+                  child: Icon(isFull ? Icons.fullscreen_exit : Icons.fullscreen, size: 19, color: paper),
+                ),
               ),
             ),
           ),

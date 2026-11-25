@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../main.dart' show ink, paper, rule, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 
 // The plate's own controls, shared by the web plate (plate_view.dart) and
 // the Flutter plate (native/native_plate.dart) so both carry the same ones.
 
-/// A short message on paper, ruled like the plate's pop-ups.
+/// A slim paper notification strip along the top of the screen, matching the
+/// model update banner's look and placement.
 class PlateNote extends StatelessWidget {
   const PlateNote({super.key, required this.text, this.action, this.onAction});
 
@@ -15,24 +16,54 @@ class PlateNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: paper,
-      elevation: 3,
-      shadowColor: const Color(0x553C280A),
-      shape: const RoundedRectangleBorder(side: BorderSide(color: rule)),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 10, action == null ? 16 : 6, 10),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Text(text,
-                  style: const TextStyle(
-                      fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 16, color: ink)),
+    final message = Text(
+      text,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontFamily: serif,
+        fontStyle: FontStyle.italic,
+        fontSize: 16,
+        color: ink,
+      ),
+    );
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+          child: Material(
+            color: paper,
+            elevation: 3,
+            shadowColor: const Color(0x553C280A),
+            shape: const RoundedRectangleBorder(side: BorderSide(color: rule)),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(14, 6, action == null ? 14 : 6, 6),
+              child: action == null
+                  ? message
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(child: message),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: madder,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            minimumSize: const Size(0, 32),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            textStyle: const TextStyle(
+                              fontFamily: caps,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                          onPressed: onAction,
+                          child: Text(action!),
+                        ),
+                      ],
+                    ),
             ),
-            if (action != null)
-              TextButton(onPressed: onAction, child: Text(action!)),
-          ],
+          ),
         ),
       ),
     );

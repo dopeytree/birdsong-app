@@ -101,6 +101,10 @@ class BirdsongApp extends StatelessWidget {
       title: 'Birdsong',
       debugShowCheckedModeBanner: false,
       theme: birdsongTheme(),
+      builder: (context, child) => TooltipVisibility(
+        visible: false,
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: Boot(boot: boot),
     );
   }

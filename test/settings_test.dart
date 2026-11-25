@@ -69,11 +69,39 @@ void main() {
 
   test('a station is read from a number, a BirdWeather page or an address', () {
     expect(Station.fromInput('', '1234').kind, 'BirdWeather 1234');
+    expect(Station.fromInput('', '#1234').kind, 'BirdWeather 1234');
+    expect(Station.fromInput('', '# 1234').birdweather, '1234');
     expect(Station.fromInput('', 'https://app.birdweather.com/stations/987').birdweather, '987');
+    expect(Station.fromInput('', 'https://app.birdweather.com/stations/#987').birdweather, '987');
     final b = Station.fromInput('', 'http://192.168.1.50:8080');
     expect(b.kind, 'BirdNET-Go');
     expect(b.name, 'BirdNET-Go');
     expect(Station.fromInput('Garden', '1234').name, 'Garden');
+  });
+
+  test('song scribble mode migrates legacy bool and persists', () async {
+    expect((await loadWith({})).songScribbleMode, 'scribble');
+    expect((await loadWith({'songScribble': false})).songScribbleMode, 'off');
+    final w = await loadWith({'songScribbleMode': 'wave'});
+    expect(w.songScribbleMode, 'wave');
+    expect(w.songScribble, isTrue);
+    expect(w.toJson()['songScribbleMode'], 'wave');
+  });
+
+  test('ignored species defaults filter non-bird sounds and persist custom entries', () async {
+    final s = await loadWith({});
+    expect(s.isIgnoredSpecies('Human vocal'), isTrue);
+    expect(s.isIgnoredSpecies('Humans'), isTrue);
+    expect(s.isIgnoredSpecies('Domestic Dog'), isTrue);
+    expect(s.isIgnoredSpecies('Engine'), isTrue);
+    expect(s.isIgnoredSpecies('Domestic sounds'), isTrue);
+    expect(s.isIgnoredSpecies('Home sounds'), isTrue);
+    expect(s.isIgnoredSpecies('Harbor Seal'), isTrue);
+    expect(s.isIgnoredSpecies('European Robin', 'Erithacus rubecula'), isFalse);
+    final custom = await loadWith({'ignoredSpecies': ['Gull']});
+    expect(custom.isIgnoredSpecies('Herring Gull'), isTrue);
+    expect(custom.isIgnoredSpecies('Human vocal'), isFalse);
+    expect(custom.toJson()['ignoredSpecies'], ['Gull']);
   });
 
   test('removing the station on show moves to the next, or back here', () async {

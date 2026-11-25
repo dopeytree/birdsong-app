@@ -12,8 +12,9 @@ Tobermory).
 
 ## Controls
 
-- Controls are grey "engraved labels" (#8C877D, radius 4, paper hairline,
-  shadow; Ed 23 Nov).
+- Controls are mid-grey (#8C877D, radius 4, shadow) with no extra inner
+  border line — search bar and full-screen button match the zoom column on
+  the left (Ed 25 Nov).
 - Search box top right (Photon), deduped; places first, then nature;
   shops, amenities, streets and addresses dropped (`placesOf`). A click
   into it clears the last search.
@@ -60,10 +61,11 @@ footprints; contours ≥ 10 m; outlines no finer than z13; ≤ 150 marks. The
 timing readout (Settings → Map → Timing readout, debug builds, off by
 default) showed 20–47 ms after.
 
-## Ancient woods (22 Nov, not yet seen)
+## Ancient woods (25 Nov)
 
-A fill over the map's own woods (`_ancient`, `#3F5A2A` at 60%, Ed 23 Nov;
-was `#4F6B35` at 18%; no edge, no name). England only. Stockhill is a plantation, so not
+A fill over the map's own woods (`_ancient`, `#3F5A2A` at 32%, lightened
+25 Nov from 60% which looked too dark against the rest of the map; was
+`#4F6B35` at 18%; no edge, no name). England only. Stockhill is a plantation, so not
 tinted; Buddle's Wood and Loxley Wood are. Ed may want the shade tuned.
 Heavy in dense places (the Weald: 1,430 woods, 1.3 MB a view).
 

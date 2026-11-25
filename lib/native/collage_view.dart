@@ -49,6 +49,7 @@ class CollageView extends StatefulWidget {
     required this.newest,
     required this.live,
     required this.onOpen,
+    this.showHoverInfo = false,
   });
 
   /// The creatures to draw, most heard first. Only those in [art].
@@ -71,6 +72,10 @@ class CollageView extends StatefulWidget {
   /// Scientific names being heard right now.
   final Set<String> live;
   final ValueChanged<CollageBird> onOpen;
+
+  /// Whether hovering over a bird shows the info ticket (off by default to
+  /// encourage clicking to open the bird card, matching touch devices).
+  final bool showHoverInfo;
 
   @override
   State<CollageView> createState() => _CollageViewState();
@@ -115,7 +120,7 @@ class _CollageViewState extends State<CollageView> {
     int z(CollagePlace p) => p.id == _hover ? 1000 : (art[p.id] == null ? 900 : p.order);
     final order = [...places]..sort((a, b) => z(a).compareTo(z(b)));
     final at = {for (var i = 0; i < places.length; i++) places[i].id: i};
-    final tipFor = _hover == null ? null : bird[_hover];
+    final tipFor = widget.showHoverInfo && _hover != null ? bird[_hover] : null;
 
     return SizedBox.fromSize(
       size: widget.size,

@@ -5,22 +5,39 @@ import 'package:flutter/scheduler.dart';
 
 import '../engine/listen_engine.dart';
 import '../engine/scribble_trace.dart';
-import '../main.dart' show sepia, serif;
+import '../main.dart' show ink, sepia, serif;
 
 /// The song scribble: along the bottom of the plate, between the buttons,
 /// a pencil line drawn from the sound as it is heard, drifting to the left,
 /// with the bird being heard named in a gap in the middle. A faint resting
-/// line while not listening. Settings > Display > Song scribble.
+/// line while not listening. On a remote station ([remote] true), shows the
+/// same resting line with [remoteName] (the latest bird heard there) kept in
+/// the gap until the next bird arrives. When [simpleWave] is true, draws a
+/// lighter single-pass black waveform instead (for slower / mobile devices).
+/// Settings > Display > Song scribble.
 class SongScribble extends StatefulWidget {
-  const SongScribble({super.key, required this.engine});
+  const SongScribble({
+    super.key,
+    required this.engine,
+    this.simpleWave = false,
+    this.remote = false,
+    this.remoteName,
+  });
 
   final ListenEngine engine;
+  final bool simpleWave;
+  final bool remote;
+  final String? remoteName;
 
   @override
   State<SongScribble> createState() => _SongScribbleState();
 }
 
 class _SongScribbleState extends State<SongScribble> with SingleTickerProviderStateMixin {
+  /// A quiet trace shared by remote views so they draw the exact same resting
+  /// line as local mode when not recording.
+  static final ScribbleTrace _quiet = ScribbleTrace();
+
   late final Ticker _ticker = createTicker(_frame);
   Duration _last = Duration.zero, _painted = Duration.zero;
 
@@ -39,12 +56,39 @@ class _SongScribbleState extends State<SongScribble> with SingleTickerProviderSt
   static const _nameStyle =
       TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 16, height: 1, color: sepia);
 
+  ScribbleTrace get _trace => widget.remote ? _quiet : widget.engine.scribble;
+
   @override
   void initState() {
     super.initState();
-    _head = widget.engine.scribble.count.toDouble();
+    _head = _trace.count.toDouble();
+    if (widget.remote && widget.remoteName != null) {
+      _name = widget.remoteName;
+      _open = 1.0;
+    }
     widget.engine.addListener(_changed);
     _changed();
+  }
+
+  @override
+  void didUpdateWidget(SongScribble old) {
+    super.didUpdateWidget(old);
+    if (old.remote != widget.remote) {
+      _head = _trace.count.toDouble();
+      if (widget.remote) {
+        _name = widget.remoteName;
+        _open = _name != null ? 1.0 : 0.0;
+      } else {
+        _open = 0.0;
+        _name = null;
+      }
+      _changed();
+      return;
+    }
+    if (widget.remote && old.remoteName != widget.remoteName) {
+      if (widget.remoteName != null) _name = widget.remoteName;
+      _changed();
+    }
   }
 
   @override
@@ -55,6 +99,18 @@ class _SongScribbleState extends State<SongScribble> with SingleTickerProviderSt
   }
 
   void _changed() {
+    if (widget.remote) {
+      final want = widget.remoteName != null ? 1.0 : 0.0;
+      final needAnim = (_open - want).abs() > 0.001;
+      if (needAnim && !_ticker.isActive) {
+        _last = Duration.zero;
+        _ticker.start();
+      } else if (!needAnim && _ticker.isActive) {
+        _ticker.stop();
+      }
+      if (!needAnim && want == 0.0) _name = null;
+      return;
+    }
     final on = widget.engine.running;
     if (on && !_ticker.isActive) {
       _last = Duration.zero;
@@ -73,14 +129,29 @@ class _SongScribbleState extends State<SongScribble> with SingleTickerProviderSt
   void _frame(Duration t) {
     final dt = _last == Duration.zero ? 0.0 : (t - _last).inMicroseconds / 1e6;
     _last = t;
-    final count = widget.engine.scribble.count.toDouble();
-    _head = (_head + dt * 1000 / ScribbleTrace.sliceMs).clamp(count - 12, count).toDouble();
-    final live = widget.engine.liveName;
-    if (live != null) _name = live;
-    _open = (_open + (live != null ? dt : -dt) / .45).clamp(0.0, 1.0);
-    if (_open == 0) _name = null;
-    // about sixty a second is plenty, even on a faster screen
-    if (t - _painted < const Duration(milliseconds: 15)) return;
+    if (widget.remote) {
+      final live = widget.remoteName;
+      if (live != null) _name = live;
+      _open = (_open + (live != null ? dt : -dt) / .45).clamp(0.0, 1.0);
+      if (_open == 0) _name = null;
+      final want = live != null ? 1.0 : 0.0;
+      if ((_open - want).abs() <= 0.001) {
+        _open = want;
+        _ticker.stop();
+        setState(() {});
+        return;
+      }
+    } else {
+      final count = widget.engine.scribble.count.toDouble();
+      _head = (_head + dt * 1000 / ScribbleTrace.sliceMs).clamp(count - 12, count).toDouble();
+      final live = widget.engine.liveName;
+      if (live != null) _name = live;
+      _open = (_open + (live != null ? dt : -dt) / .45).clamp(0.0, 1.0);
+      if (_open == 0) _name = null;
+    }
+    // about 60 fps for pencil scribble, 30 fps for the lighter wave mode
+    final frameMs = widget.simpleWave ? 32 : 15;
+    if (t - _painted < Duration(milliseconds: frameMs)) return;
     _painted = t;
     setState(() {});
   }
@@ -90,7 +161,7 @@ class _SongScribbleState extends State<SongScribble> with SingleTickerProviderSt
     return IgnorePointer(
       child: LayoutBuilder(builder: (context, box) {
         final w = box.maxWidth;
-        final trace = widget.engine.scribble;
+        final trace = _trace;
         // the head can lag 12 slices behind: keep the window inside what is kept
         final shown = math.min(trace.capacity - 16, math.max(8, (w / ScribbleTrace.unit).round()));
         final from = _head - shown;
@@ -112,19 +183,26 @@ class _SongScribbleState extends State<SongScribble> with SingleTickerProviderSt
           }
           gap = (_nameWidth + 18) * Curves.easeInOut.transform(_open);
         }
+        final nameStyle = widget.simpleWave ? _nameStyle.copyWith(color: ink) : _nameStyle;
         return Stack(
           fit: StackFit.expand,
           children: [
             RepaintBoundary(
               child: CustomPaint(
-                painter: SongScribblePainter(
-                  level: win.level,
-                  pitch: win.pitch,
-                  phase: win.phase,
-                  base: base.toDouble(),
-                  shift: from - base,
-                  gap: gap,
-                ),
+                painter: widget.simpleWave
+                    ? SimpleWavePainter(
+                        level: win.level,
+                        shift: from - base,
+                        gap: gap,
+                      )
+                    : SongScribblePainter(
+                        level: win.level,
+                        pitch: win.pitch,
+                        phase: win.phase,
+                        base: base.toDouble(),
+                        shift: from - base,
+                        gap: gap,
+                      ),
               ),
             ),
             if (name != null)
@@ -137,7 +215,7 @@ class _SongScribbleState extends State<SongScribble> with SingleTickerProviderSt
                     child: ExcludeSemantics(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: math.max(0, w - 60)),
-                        child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _nameStyle),
+                        child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: nameStyle),
                       ),
                     ),
                   ),
@@ -286,4 +364,76 @@ class SongScribblePainter extends CustomPainter {
   @override
   bool shouldRepaint(SongScribblePainter old) =>
       old.level != level || old.pitch != pitch || old.phase != phase || old.shift != shift || old.gap != gap;
+}
+
+/// A lightweight single-pass black waveform for less capable / mobile devices.
+/// Draws one [Path] with one [Canvas.drawPath] call and no per-pixel noise.
+class SimpleWavePainter extends CustomPainter {
+  const SimpleWavePainter({
+    required this.level,
+    this.shift = 0,
+    this.gap = 0,
+    this.color = ink,
+  });
+
+  final List<double> level;
+  final double shift;
+  final double gap;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || level.length < 3) return;
+    final w = size.width, mid = size.height / 2;
+    final span = level.length - 2;
+    final half = gap / 2;
+    const step = 3.0;
+    final path = Path();
+    // Resting baseline (split cleanly around the name gap)
+    if (gap <= 0) {
+      path
+        ..moveTo(0, mid)
+        ..lineTo(w, mid);
+    } else {
+      final leftEnd = math.max(0.0, w / 2 - half);
+      final rightStart = math.min(w, w / 2 + half);
+      if (leftEnd > 0) {
+        path
+          ..moveTo(0, mid)
+          ..lineTo(leftEnd, mid);
+      }
+      if (rightStart < w) {
+        path
+          ..moveTo(rightStart, mid)
+          ..lineTo(w, mid);
+      }
+    }
+    for (var x = 1.5; x < w; x += step) {
+      final fromMid = (x - w / 2).abs();
+      if (gap > 0 && fromMid < half) continue;
+      final s = shift + x / w * span;
+      var a = SongScribblePainter._at(level, s);
+      final edge = SongScribblePainter._smooth(math.min(x, w - x) / 14);
+      final clear = gap <= 0 ? 1.0 : SongScribblePainter._smooth((fromMid - half) / 16);
+      a *= edge * clear;
+      final h = a * size.height * .44;
+      if (h > .6) {
+        path
+          ..moveTo(x, mid - h)
+          ..lineTo(x, mid + h);
+      }
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.1
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(SimpleWavePainter old) =>
+      old.level != level || old.shift != shift || old.gap != gap || old.color != color;
 }

@@ -110,6 +110,42 @@ class Settings extends ChangeNotifier {
 
   bool animalsOnly = true;
 
+  /// Default species / sound names ignored from detections and the plate.
+  static const defaultIgnoredSpecies = <String>[
+    'Human',
+    'Humans',
+    'Dog',
+    'Engine',
+    'Domestic sounds',
+    'Home sounds',
+    'Harbor Seal',
+  ];
+
+  /// Species or sound names to ignore (case-insensitive whole-word match
+  /// against common or scientific name). Editable in Settings > Listening.
+  List<String> ignoredSpecies = List<String>.of(defaultIgnoredSpecies);
+
+  String? _ignoredKey;
+  List<RegExp> _ignoredRes = const [];
+
+  /// Whether a species or sound label matches [ignoredSpecies].
+  bool isIgnoredSpecies(String common, [String sci = '']) {
+    if (ignoredSpecies.isEmpty) return false;
+    final key = ignoredSpecies.join('\u0000');
+    if (key != _ignoredKey) {
+      _ignoredKey = key;
+      _ignoredRes = [
+        for (final raw in ignoredSpecies)
+          if (raw.trim().isNotEmpty)
+            RegExp(r'\b' + RegExp.escape(raw.trim()) + r'\b', caseSensitive: false),
+      ];
+    }
+    for (final re in _ignoredRes) {
+      if (re.hasMatch(common) || (sci.isNotEmpty && re.hasMatch(sci))) return true;
+    }
+    return false;
+  }
+
   bool useGeomodel = false;
   double? latitude;
   double? longitude;
@@ -162,9 +198,12 @@ class Settings extends ChangeNotifier {
   bool nativeShowTitle = true;
   bool nativeShowDate = true;
 
-  /// A pencil scribble of the sound, with the bird being heard, along the
-  /// bottom of the plate between the buttons (Listen here only).
-  bool songScribble = true;
+  /// What runs along the bottom of the plate between the buttons (Listen here):
+  /// 'scribble' (sepia pencil line), 'wave' (lighter black waveform for
+  /// slower devices), or 'off'.
+  String songScribbleMode = 'scribble';
+
+  bool get songScribble => songScribbleMode != 'off';
 
   /// The Flutter plate's collage: 'calls' (noisiest species), 'time'
   /// (recent ramblings) or 'equal' (no pecking order).
@@ -208,6 +247,10 @@ class Settings extends ChangeNotifier {
   /// The Flutter plate: the lines under the title (session number, date,
   /// place, weather) in the title's ink (the default) or in sepia.
   bool nativeHeadingInk = true;
+
+  /// The Flutter plate: show a bird's info ticket on mouse hover (off by
+  /// default so clicking opens the bird card, as on touch devices).
+  bool nativeHoverInfo = false;
 
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
@@ -291,6 +334,13 @@ class Settings extends ChangeNotifier {
     micSource = j['micSource'] == 'headset' ? 'headset' : 'phone';
     repeatSeconds = (j['repeatSeconds'] as num?)?.toDouble() ?? repeatSeconds;
     animalsOnly = (j['animalsOnly'] as bool?) ?? animalsOnly;
+    final ignored = j['ignoredSpecies'];
+    if (ignored is List) {
+      ignoredSpecies = [
+        for (final x in ignored.whereType<String>())
+          if (x.trim().isNotEmpty) x.trim(),
+      ];
+    }
     useGeomodel = (j['useGeomodel'] as bool?) ?? useGeomodel;
     latitude = (j['latitude'] as num?)?.toDouble();
     longitude = (j['longitude'] as num?)?.toDouble();
@@ -339,7 +389,12 @@ class Settings extends ChangeNotifier {
     webPlate = (j['webPlate'] as bool?) ?? webPlate;
     nativeShowTitle = (j['nativeShowTitle'] as bool?) ?? nativeShowTitle;
     nativeShowDate = (j['nativeShowDate'] as bool?) ?? nativeShowDate;
-    songScribble = (j['songScribble'] as bool?) ?? songScribble;
+    final scribbleMode = j['songScribbleMode'];
+    if (const ['scribble', 'wave', 'off'].contains(scribbleMode)) {
+      songScribbleMode = scribbleMode as String;
+    } else if (j['songScribble'] is bool) {
+      songScribbleMode = (j['songScribble'] as bool) ? 'scribble' : 'off';
+    }
     nativePlateStyle = const ['cutout', 'tint', 'plain'].contains(j['nativePlateStyle'])
         ? j['nativePlateStyle'] as String
         : nativePlateStyle;
@@ -353,6 +408,7 @@ class Settings extends ChangeNotifier {
     nativeTotals = (j['nativeTotals'] as bool?) ?? nativeTotals;
     nativeTitleCaps = (j['nativeTitleCaps'] as bool?) ?? nativeTitleCaps;
     nativeHeadingInk = (j['nativeHeadingInk'] as bool?) ?? nativeHeadingInk;
+    nativeHoverInfo = (j['nativeHoverInfo'] as bool?) ?? nativeHoverInfo;
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -384,6 +440,7 @@ class Settings extends ChangeNotifier {
         'hopSeconds': hopSeconds,
         'repeatSeconds': repeatSeconds,
         'animalsOnly': animalsOnly,
+        'ignoredSpecies': List<String>.of(ignoredSpecies),
         'microphone': micSource,
         'locationFilter': useGeomodel,
         if (useGeomodel) 'locationFilterThreshold': geoThreshold,
@@ -406,6 +463,7 @@ class Settings extends ChangeNotifier {
         'micSource': micSource,
         'repeatSeconds': repeatSeconds,
         'animalsOnly': animalsOnly,
+        'ignoredSpecies': List<String>.of(ignoredSpecies),
         'useGeomodel': useGeomodel,
         'latitude': latitude,
         'longitude': longitude,
@@ -423,6 +481,7 @@ class Settings extends ChangeNotifier {
         'nativeShowTitle': nativeShowTitle,
         'nativeShowDate': nativeShowDate,
         'songScribble': songScribble,
+        'songScribbleMode': songScribbleMode,
         'nativeSizeBy': nativeSizeBy,
         'nativePlateStyle': nativePlateStyle,
         'nativeMarkAt': nativeMarkAt,
@@ -433,6 +492,7 @@ class Settings extends ChangeNotifier {
         'nativeTotals': nativeTotals,
         'nativeTitleCaps': nativeTitleCaps,
         'nativeHeadingInk': nativeHeadingInk,
+        'nativeHoverInfo': nativeHoverInfo,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,
@@ -522,12 +582,13 @@ String plateLetter(int n) => String.fromCharCode(0x60 + n);
 class Station {
   Station({required this.id, required this.name, this.birdnetUrl = '', this.birdweather = ''});
 
-  /// Reads what someone typed or pasted: a BirdWeather station number or
-  /// page (app.birdweather.com/stations/1234), else a BirdNET-Go address.
+  /// Reads what someone typed or pasted: a BirdWeather station number (with
+  /// or without a leading #) or page (app.birdweather.com/stations/1234),
+  /// else a BirdNET-Go address.
   factory Station.fromInput(String name, String input, {String? id}) {
     final t = input.trim();
-    final bw = RegExp(r'birdweather\.com/stations/(\d+)').firstMatch(t)?.group(1) ??
-        (RegExp(r'^\d+$').hasMatch(t) ? t : null);
+    final bw = RegExp(r'birdweather\.com/stations/#?(\d+)').firstMatch(t)?.group(1) ??
+        RegExp(r'^#?\s*(\d+)$').firstMatch(t)?.group(1);
     final kind = bw != null ? 'BirdWeather $bw' : 'BirdNET-Go';
     return Station(
       id: id ?? 's${DateTime.now().microsecondsSinceEpoch}-${_made++}',

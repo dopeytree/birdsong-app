@@ -318,6 +318,7 @@ class ListenEngine extends ChangeNotifier {
   bool _keep(LoadedModel m, int i) {
     final l = m.labels[i];
     if (settings.animalsOnly && !l.animal) return false;
+    if (settings.isIgnoredSpecies(l.common, l.sci)) return false;
     final geo = _geoScores;
     if (geo != null) {
       final g = geo[l.sci];
@@ -382,7 +383,10 @@ class ListenEngine extends ChangeNotifier {
   bool _sessionFull(String sci) {
     final ses = session;
     if (ses == null) return false;
-    final heard = {for (final d in store.forPlate(settings.plateModel, session: ses)) d.sci};
+    final heard = {
+      for (final d in store.forPlate(settings.plateModel, session: ses))
+        if (!settings.isIgnoredSpecies(d.common, d.sci)) d.sci
+    };
     return !heard.contains(sci) && heard.length >= maxSessionSpecies;
   }
 

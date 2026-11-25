@@ -46,13 +46,16 @@ DateTime _day(DateTime t) => DateTime(t.year, t.month, t.day);
 class _DayPickerState extends State<DayPicker> {
   List<Session> get _sessions => widget.store.sessions;
   late final Set<DateTime> _days = {for (final x in _sessions) _day(x.start)};
-  late DateTime _picked = _day(widget.shown?.start ?? _sessions.last.start);
+  late DateTime _picked = _sessions.isEmpty
+      ? _day(DateTime.now())
+      : _day(widget.shown?.start ?? _sessions.last.start);
 
   List<Session> get _that => [for (final x in _sessions) if (sameDay(x.start, _picked)) x];
 
   @override
   void initState() {
     super.initState();
+    if (_sessions.isEmpty) return;
     // name the places of sessions that have none yet; the list follows
     widget.store.namePlaces(nearestPlace);
     // and where each walk went (a reserve, wood or heath)
@@ -61,11 +64,57 @@ class _DayPickerState extends State<DayPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    const small = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia);
+    if (_days.isEmpty) {
+      return Dialog(
+        backgroundColor: paper,
+        surfaceTintColor: Colors.transparent,
+        insetPadding: EdgeInsets.symmetric(horizontal: screen.width * .04, vertical: screen.height * .04),
+        shape: const RoundedRectangleBorder(side: BorderSide(color: sepia)),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 400, maxHeight: screen.height * .92),
+          child: Stack(
+            children: [
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: Padding(
+                    padding: EdgeInsets.all(6),
+                    child: DecoratedBox(
+                        decoration: BoxDecoration(border: Border.fromBorderSide(BorderSide(color: rule)))),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Sessions on',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 1.1, color: ink)),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 36),
+                      child: Text('Nothing recorded yet.', textAlign: TextAlign.center, style: small),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final first = _days.reduce((a, b) => a.isBefore(b) ? a : b);
     final last = _days.reduce((a, b) => a.isAfter(b) ? a : b);
     final that = _that;
-    final screen = MediaQuery.sizeOf(context);
-    const small = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia);
     return Dialog(
       backgroundColor: paper,
       surfaceTintColor: Colors.transparent,

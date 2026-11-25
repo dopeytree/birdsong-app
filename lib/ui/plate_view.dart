@@ -7,7 +7,6 @@ import 'package:plate_share/plate_share.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../app_state.dart';
-import '../engine/listen_engine.dart' show maxSessionSpecies;
 import '../main.dart' show paper, sepia;
 import '../server/page_control.dart';
 import '../settings.dart';
@@ -84,43 +83,6 @@ class _PlateViewState extends State<PlateView> {
     _noteTimer = Timer(Duration(seconds: seconds), () {
       if (mounted) setState(() => _noteShown = false);
     });
-  }
-
-  // Session started, ended, or full and carried on in a new one.
-  int? _sesId;
-  void _watchSession() {
-    final now = app.engine.session?.id;
-    if (now == _sesId) return;
-    final before = _sesId;
-    _sesId = now;
-    final store = app.store;
-    String number(int id) {
-      final i = store.sessions.indexWhere((x) => x.id == id);
-      return i < 0 ? '' : ' #${i + 1}';
-    }
-
-    if (before == null && now != null) {
-      _say('Listening: session${number(now)} started.');
-    } else if (before != null && now != null) {
-      _say('Session${number(before)} is full at $maxSessionSpecies species; '
-          'session${number(now)} started.', seconds: 5);
-    } else if (before != null) {
-      // The store closes (or drops) the session just after the engine stops.
-      Future.delayed(const Duration(milliseconds: 400), () {
-        final found = store.sessions.where((x) => x.id == before);
-        if (found.isEmpty) {
-          _say('Stopped. Nothing was heard, so no session was kept.');
-          return;
-        }
-        final ses = found.first;
-        final species = {
-          for (final d in store.forPlate(_s.plateModel, session: ses)) d.sci
-        }.length;
-        _say('Session${number(before)} ended: '
-            '${lasting((ses.end ?? DateTime.now()).difference(ses.start))}, '
-            '$species species.', seconds: 4);
-      });
-    }
   }
 
   // The screen's safe-area insets, as last given to the page.
@@ -244,8 +206,6 @@ class _PlateViewState extends State<PlateView> {
     app.store.addListener(_storeChanged);
     app.engine.addListener(_pushLive);
     app.engine.addListener(_pushSession);
-    _sesId = app.engine.session?.id;
-    app.engine.addListener(_watchSession);
   }
 
   @override
@@ -257,7 +217,6 @@ class _PlateViewState extends State<PlateView> {
     app.store.removeListener(_storeChanged);
     app.engine.removeListener(_pushLive);
     app.engine.removeListener(_pushSession);
-    app.engine.removeListener(_watchSession);
     _noteTimer?.cancel();
     super.dispose();
   }
@@ -307,7 +266,6 @@ class _PlateViewState extends State<PlateView> {
   void _toggleMap() {
     final on = !_s.showMap;
     _s.update((x) => x.showMap = on);
-    _say(on ? 'The walk, on a map.' : 'The plate.', seconds: 2);
   }
 
   // Tell the page which creatures are being heard right now, so they glow.
@@ -391,8 +349,6 @@ class _PlateViewState extends State<PlateView> {
     final mode = plateModes[next - 1];
     _s.update((x) => x.plateMode = next);   // b to e reload the page with their view
     if (mode.sizeBy != null) await app.page?.set('sizeBy', mode.sizeBy!);
-    if (!mounted) return;
-    _say(mode.name, seconds: 2);
   }
 
   // ---- the source pill, the record button and the stations button --------
@@ -401,7 +357,6 @@ class _PlateViewState extends State<PlateView> {
   void _toListen() {
     if (_s.mode == AppMode.listen) return;
     _s.update((x) => x.mode = AppMode.listen);
-    _say('Listen here & now', seconds: 2);
   }
 
   // The pill's sensors half: show the remote station last shown. With none
@@ -416,7 +371,6 @@ class _PlateViewState extends State<PlateView> {
       x.mode = AppMode.station;
       x.stationId = x.station!.id;
     });
-    _say(_s.station!.name, seconds: 2);
   }
 
   // The record button, under the microphone: a tap starts a new session, a
@@ -473,7 +427,6 @@ class _PlateViewState extends State<PlateView> {
       x.mode = AppMode.station;
       x.stationId = picked;
     });
-    _say(_s.station!.name, seconds: 2);
   }
 
   Future<void> _share() async {
@@ -546,7 +499,9 @@ class _PlateViewState extends State<PlateView> {
                           tooltip: 'Stations',
                           constraints: const BoxConstraints.tightFor(
                               width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                          icon: const Icon(Icons.add),
+                          icon: Text('±',
+                              style: TextStyle(
+                                  fontSize: 22, height: 1, color: Theme.of(context).colorScheme.primary)),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: () => _stationsTap(bc),
                         ),
@@ -631,25 +586,23 @@ class _PlateViewState extends State<PlateView> {
               ),
             if (_note != null)
               Positioned(
-                left: 16 + safe.left,
-                right: 16 + safe.right,
-                top: 112 + safe.top,
+                left: safe.left,
+                right: safe.right,
+                top: safe.top,
                 child: IgnorePointer(
                   ignoring: !_noteShown,
                   child: AnimatedOpacity(
                     opacity: _noteShown && !_popup ? 1 : 0,
                     duration: const Duration(milliseconds: 250),
-                    child: Center(
-                      child: PlateNote(
-                        text: _note!,
-                        action: _noteAction,
-                        onAction: _noteDo == null
-                            ? null
-                            : () {
-                                setState(() => _noteShown = false);
-                                _noteDo!();
-                              },
-                      ),
+                    child: PlateNote(
+                      text: _note!,
+                      action: _noteAction,
+                      onAction: _noteDo == null
+                          ? null
+                          : () {
+                              setState(() => _noteShown = false);
+                              _noteDo!();
+                            },
                     ),
                   ),
                 ),

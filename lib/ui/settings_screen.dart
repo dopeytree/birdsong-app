@@ -33,6 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _lat;
   late final TextEditingController _lon;
   final _limit = TextEditingController();
+  final _ignoreAdd = TextEditingController();
 
   /// The page's version, from assets/web/UPSTREAM.json (tool/sync_web.py).
   late final Future<String?> _webVersion = rootBundle
@@ -64,7 +65,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _lat.dispose();
     _lon.dispose();
     _limit.dispose();
+    _ignoreAdd.dispose();
     super.dispose();
+  }
+
+  void _addIgnored() {
+    final term = _ignoreAdd.text.trim();
+    if (term.isEmpty) return;
+    final exists = s.ignoredSpecies.any((x) => x.toLowerCase() == term.toLowerCase());
+    if (!exists) {
+      s.update((x) => x.ignoredSpecies = [...x.ignoredSpecies, term]);
+    }
+    _ignoreAdd.clear();
   }
 
   void _saveLocation() => s.update((x) {
@@ -75,7 +87,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text('Settings'),
+        actions: [
+          IconButton(
+            tooltip: 'Close',
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
       body: ListenableBuilder(
         listenable: Listenable.merge([s, app.engine, app.models, app.store, app.updates]),
         builder: (context, _) {
@@ -309,6 +331,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _slider('Repeat after ${s.repeatSeconds.round()} s', s.repeatSeconds, 3, 60, 19,
             (v) => s.update((x) => x.repeatSeconds = v)),
         _switch('Animals only', s.animalsOnly, (v) => s.update((x) => x.animalsOnly = v)),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: Text('Ignored species', style: theme.textTheme.titleSmall)),
+            if (s.ignoredSpecies.join('\u0000') != Settings.defaultIgnoredSpecies.join('\u0000'))
+              TextButton(
+                onPressed: () => s.update((x) => x.ignoredSpecies = List<String>.of(Settings.defaultIgnoredSpecies)),
+                child: const Text('Reset defaults'),
+              ),
+          ],
+        ),
+        Text(
+          'Detections matching these names are ignored while listening and hidden from the plate.',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        if (s.ignoredSpecies.isNotEmpty)
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final term in s.ignoredSpecies)
+                InputChip(
+                  label: Text(term),
+                  visualDensity: VisualDensity.compact,
+                  onDeleted: () => s.update((x) => x.ignoredSpecies = [
+                        for (final item in x.ignoredSpecies)
+                          if (item != term) item,
+                      ]),
+                ),
+            ],
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _ignoreAdd,
+                decoration: const InputDecoration(
+                  hintText: 'Add species or sound to ignore',
+                  isDense: true,
+                ),
+                onSubmitted: (_) => _addIgnored(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(onPressed: _addIgnored, child: const Text('Add')),
+          ],
+        ),
+        const SizedBox(height: 8),
         if (Platform.isIOS || Platform.isMacOS)
           _switch('Core ML (GPU / Neural Engine)', s.useCoreMl,
               locked ? null : (v) => s.update((x) => x.useCoreMl = v)),
@@ -571,7 +642,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _switch('Fit on one screen', s.nativeFit, (v) => s.update((x) => x.nativeFit = v)),
           _switch('Title', s.nativeShowTitle, (v) => s.update((x) => x.nativeShowTitle = v)),
           _switch('Date', s.nativeShowDate, (v) => s.update((x) => x.nativeShowDate = v)),
-          _switch('Song scribble while listening', s.songScribble, (v) => s.update((x) => x.songScribble = v)),
+          _dropdown(
+              'Song scribble',
+              s.songScribbleMode,
+              const {
+                'scribble': 'Pencil scribble (default)',
+                'wave': 'Simple wave (black, lighter)',
+                'off': 'Off',
+              },
+              (v) => s.update((x) => x.songScribbleMode = v)),
           _switch('Species and calls under the date', s.nativeTotals, (v) => s.update((x) => x.nativeTotals = v)),
           _switch('Heading in small capitals', s.nativeTitleCaps, (v) => s.update((x) => x.nativeTitleCaps = v)),
           _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
@@ -590,6 +669,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
               (v) => s.update((x) => x.nativePlateStyle = v)),
           _switch('Skulls, wings and eggs', s.nativeParts, (v) => s.update((x) => x.nativeParts = v)),
+          _switch('Show bird info on hover', s.nativeHoverInfo, (v) => s.update((x) => x.nativeHoverInfo = v)),
           _dropdown(
               'Limit species',
               '${s.nativeLimit}',

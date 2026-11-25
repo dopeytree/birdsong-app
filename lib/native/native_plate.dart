@@ -12,7 +12,6 @@ import '../app_state.dart';
 import '../main.dart' show caps, ink, madder, paper, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
-import '../engine/listen_engine.dart' show maxSessionSpecies;
 import '../ui/format.dart';
 import '../ui/plate_buttons.dart';
 import 'song_scribble.dart';
@@ -276,7 +275,6 @@ class _NativePlateState extends State<NativePlate> {
       x.mode = AppMode.station;
       x.stationId = picked;
     });
-    _say(s.station!.name, seconds: 2);
   }
 
   /// Look for the plates of [rows] not asked for yet.
@@ -314,7 +312,6 @@ class _NativePlateState extends State<NativePlate> {
       x.plateMode = next;
       if (mode.sizeBy != null) x.nativeSizeBy = mode.sizeBy!;
     });
-    _say(mode.name, seconds: 2);
   }
 
   AppState get app => widget.app;
@@ -329,8 +326,6 @@ class _NativePlateState extends State<NativePlate> {
         lib.close();
       }
     });
-    _sesId = app.engine.session?.id;
-    app.engine.addListener(_watchSession);
     WidgetsBinding.instance.addPostFrameCallback((_) => widget.onLoaded?.call());
   }
 
@@ -339,7 +334,6 @@ class _NativePlateState extends State<NativePlate> {
     _landmarks.dispose();
     _noteTimer?.cancel();
     _feed?.dispose();
-    app.engine.removeListener(_watchSession);
     _lib?.close();
     super.dispose();
   }
@@ -349,14 +343,16 @@ class _NativePlateState extends State<NativePlate> {
     if (f != null) {
       return [
         for (final s in f.species ?? const <StationSpecies>[])
-          _Row(s.sci, s.common)
-            ..count = s.count
-            ..last = s.last
+          if (!app.settings.isIgnoredSpecies(s.common, s.sci))
+            _Row(s.sci, s.common)
+              ..count = s.count
+              ..last = s.last
       ];
     }
     if (ses == null) return [];
     final by = <String, _Row>{};
     for (final d in app.store.forPlate(app.settings.plateModel, session: ses)) {
+      if (app.settings.isIgnoredSpecies(d.common, d.sci)) continue;
       final r = by[d.sci] ??= _Row(d.sci, d.common);
       r.count++;
       if (r.last == null || d.at.isAfter(r.last!)) r.last = d.at;
@@ -386,43 +382,6 @@ class _NativePlateState extends State<NativePlate> {
     });
   }
 
-  // Session started, ended, or full and carried on in a new one.
-  int? _sesId;
-  void _watchSession() {
-    final now = app.engine.session?.id;
-    if (now == _sesId) return;
-    final before = _sesId;
-    _sesId = now;
-    final store = app.store;
-    String number(int id) {
-      final i = store.sessions.indexWhere((x) => x.id == id);
-      return i < 0 ? '' : ' #${i + 1}';
-    }
-
-    if (before == null && now != null) {
-      _say('Listening: session${number(now)} started.');
-    } else if (before != null && now != null) {
-      _say('Session${number(before)} is full at $maxSessionSpecies species; '
-          'session${number(now)} started.', seconds: 5);
-    } else if (before != null) {
-      // The store closes (or drops) the session just after the engine stops.
-      Future.delayed(const Duration(milliseconds: 400), () {
-        final found = store.sessions.where((x) => x.id == before);
-        if (found.isEmpty) {
-          _say('Stopped. Nothing was heard, so no session was kept.');
-          return;
-        }
-        final ses = found.first;
-        final species = {
-          for (final d in store.forPlate(app.settings.plateModel, session: ses)) d.sci
-        }.length;
-        _say('Session${number(before)} ended: '
-            '${lasting((ses.end ?? DateTime.now()).difference(ses.start))}, '
-            '$species species.', seconds: 4);
-      });
-    }
-  }
-
   // ---- the walk on a map, in place of the collage --------------------------
 
   /// The map button: the walk on a map, or back to the plate (shared with
@@ -430,7 +389,6 @@ class _NativePlateState extends State<NativePlate> {
   void _toggleMap() {
     final on = !app.settings.showMap;
     app.settings.update((x) => x.showMap = on);
-    _say(on ? 'The walk, on a map.' : 'The plate.', seconds: 2);
   }
 
   /// The calendar button (day_picker.dart): a month with the days that
@@ -456,17 +414,16 @@ class _NativePlateState extends State<NativePlate> {
       return;
     }
     final store = app.store;
-    if (store.sessions.isEmpty) {
-      _say('Nothing recorded yet.', seconds: 2);
-      return;
-    }
     final model = app.settings.plateModel;
     final picked = await DayPicker.show(
       context,
       DayPicker(
         store: store,
         shown: store.selected,
-        speciesIn: (x) => {for (final d in store.forPlate(model, session: x)) d.sci}.length,
+        speciesIn: (x) => {
+          for (final d in store.forPlate(model, session: x))
+            if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d.sci
+        }.length,
       ),
     );
     if (picked == null || !mounted) return;
@@ -548,7 +505,11 @@ class _NativePlateState extends State<NativePlate> {
     final store = app.store, ses = store.selected;
     if (ses == null) return;
     final model = app.settings.plateModel;
-    final walk = [for (final x in store.walkOf(ses)) ...store.forPlate(model, session: x)];
+    final walk = [
+      for (final x in store.walkOf(ses))
+        for (final d in store.forPlate(model, session: x))
+          if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d
+    ];
     final r = _Row(sci, common);
     for (final d in walk) {
       if (d.sci != sci) continue;
@@ -656,14 +617,21 @@ class _NativePlateState extends State<NativePlate> {
       return;
     }
     final store = app.store, model = app.settings.plateModel;
-    heard ??= store.forPlate(model, session: store.selected);
+    heard ??= [
+      for (final d in store.forPlate(model, session: store.selected))
+        if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d
+    ];
+    final allModel = [
+      for (final d in store.forPlate(model))
+        if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d
+    ];
     BirdCard.show(
       context,
       BirdCard(
         lib: lib,
         style: _style,
         source: LocalCard(
-          BirdFacts.of(r.sci, r.common, heard, store.forPlate(model)),
+          BirdFacts.of(r.sci, r.common, heard, allModel),
           clipOf: (d) => d.hasClip ? store.clipFile(d.id) : null,
           spectrogramOf: (d) => d.hasClip ? store.spectrogramFile(d.id) : null,
         ),
@@ -691,11 +659,13 @@ class _NativePlateState extends State<NativePlate> {
         _ensure(onPlate);
         // the creature heard last (the page's newestSci)
         String? newest;
+        String? newestCommon;
         DateTime? latest;
         for (final r in all) {
           if (r.last != null && (latest == null || r.last!.isAfter(latest))) {
             latest = r.last;
             newest = r.sci;
+            newestCommon = r.common;
           }
         }
         final marked = app.settings.nativeMarkAt == 'none' ? null : newest;
@@ -862,7 +832,8 @@ class _NativePlateState extends State<NativePlate> {
                                     ? WalkMap(
                                         walk: feed != null
                                             ? Walk.station(feed.station.name, feed.place)
-                                            : Walk.of(store, ses!, app.settings.plateModel),
+                                            : Walk.of(store, ses!, app.settings.plateModel,
+                                                ignore: app.settings.isIgnoredSpecies),
                                         allBirds: app.settings.mapBirds == 'all',
                                         landmarks: app.settings.mapExtras ? _landmarks : null,
                                         settings: app.settings,
@@ -872,7 +843,8 @@ class _NativePlateState extends State<NativePlate> {
                                                 ? Walk.station(feed.station.name, feed.place)
                                                 : (store.selected == null
                                                     ? null
-                                                    : Walk.of(store, store.selected!, app.settings.plateModel)),
+                                                    : Walk.of(store, store.selected!, app.settings.plateModel,
+                                                        ignore: app.settings.isIgnoredSpecies)),
                                             rows),
                                         size: Size(box.maxWidth - 2 * plateSide,
                                             _plateHeight(box.maxWidth, box.maxHeight) - 12),
@@ -984,7 +956,7 @@ class _NativePlateState extends State<NativePlate> {
                             tooltip: 'Stations',
                             constraints: const BoxConstraints.tightFor(
                                 width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                            icon: const Icon(Icons.add),
+                            icon: Text('±', style: TextStyle(fontSize: 22, height: 1, color: red)),
                             color: red,
                             onPressed: () => _stationsTap(bc),
                           ),
@@ -1093,15 +1065,21 @@ class _NativePlateState extends State<NativePlate> {
                     child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
                         inline: true),
                   ),
-                // The song scribble between the buttons along the bottom:
-                // listening here only, not on a station.
-                if (feed == null && app.settings.songScribble)
+                // The song scribble between the buttons along the bottom: live
+                // mic when listening here, or the matching resting line with
+                // the latest heard species when on a remote station.
+                if (app.settings.songScribble)
                   Positioned(
                     left: 8 + 40 + 40 + 8,
                     right: (PlateShare.supported ? 8 + 40 + 40 : 8 + 40) + 8,
                     bottom: 8,
                     height: 40,
-                    child: SongScribble(engine: engine),
+                    child: SongScribble(
+                      engine: engine,
+                      simpleWave: app.settings.songScribbleMode == 'wave',
+                      remote: feed != null,
+                      remoteName: feed != null ? newestCommon : null,
+                    ),
                   ),
                 // The calendar, at the bottom right beside share (in the
                 // corner where there is no share).
@@ -1146,25 +1124,23 @@ class _NativePlateState extends State<NativePlate> {
                   ),
                 if (_note != null)
                   Positioned(
-                    left: 16,
-                    right: 16,
-                    top: 112,
+                    left: 0,
+                    right: 0,
+                    top: 0,
                     child: IgnorePointer(
                       ignoring: !_noteShown,
                       child: AnimatedOpacity(
                         opacity: _noteShown ? 1 : 0,
                         duration: const Duration(milliseconds: 250),
-                        child: Center(
-                          child: PlateNote(
-                            text: _note!,
-                            action: _noteAction,
-                            onAction: _noteDo == null
-                                ? null
-                                : () {
-                                    setState(() => _noteShown = false);
-                                    _noteDo!();
-                                  },
-                          ),
+                        child: PlateNote(
+                          text: _note!,
+                          action: _noteAction,
+                          onAction: _noteDo == null
+                              ? null
+                              : () {
+                                  setState(() => _noteShown = false);
+                                  _noteDo!();
+                                },
                         ),
                       ),
                     ),
@@ -1320,6 +1296,7 @@ class _NativePlateState extends State<NativePlate> {
       markAt: app.settings.nativeMarkAt,
       newest: newest,
       live: app.engine.liveSpecies,
+      showHoverInfo: app.settings.nativeHoverInfo,
       onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
     );
     return ZoomableCollage(

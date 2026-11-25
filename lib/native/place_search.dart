@@ -224,7 +224,7 @@ class _PlaceSearchState extends State<PlaceSearch> {
 
   @override
   Widget build(BuildContext context) {
-    // Engraved label: warm grey, a paper hairline inset, no hard outer border.
+    // Warm grey matching the zoom buttons on the left, with no extra inner border.
     // The list below stays paper, with the same slight radius.
     const bar = BoxDecoration(
       color: Color(0xFF8C877D),
@@ -248,8 +248,7 @@ class _PlaceSearchState extends State<PlaceSearch> {
           Container(
             height: 31,
             decoration: bar,
-            child: Stack(fit: StackFit.expand, children: [
-            Row(children: [
+            child: Row(children: [
               const Padding(
                 padding: EdgeInsetsDirectional.only(start: 7, end: 4),
                 child: Icon(Icons.search, size: 16, color: paper),
@@ -302,21 +301,6 @@ class _PlaceSearchState extends State<PlaceSearch> {
                     ),
                   ),
                 ),
-            ]),
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: Padding(
-                  padding: EdgeInsets.all(2),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.all(Radius.circular(3)),
-                      border: Border.fromBorderSide(BorderSide(color: Color(0x8CEEE5CE), width: 0.8)),
-                    ),
-                    child: SizedBox.expand(),
-                  ),
-                ),
-              ),
-            ),
             ]),
           ),
           if (_found.isNotEmpty || (_note != null && _focus.hasFocus))
