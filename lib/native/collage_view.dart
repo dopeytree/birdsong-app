@@ -91,17 +91,12 @@ class CollageView extends StatefulWidget {
   State<CollageView> createState() => _CollageViewState();
 }
 
-class _CollageViewState extends State<CollageView> with SingleTickerProviderStateMixin {
+class _CollageViewState extends State<CollageView> {
   String? _hover;
   Offset _pointer = Offset.zero;
-  SphereQuat _rot = SphereQuat.identity;
-  SphereQuat _rotFrom = SphereQuat.identity;
+  Offset _pan = Offset.zero;
   bool _dragging = false;
   Timer? _resetTimer;
-  late final AnimationController _resetAnim = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  )..addListener(_tickReset);
 
   // The first plateful comes in one after another; later arrivals at once.
   bool _first = true;
@@ -117,8 +112,7 @@ class _CollageViewState extends State<CollageView> with SingleTickerProviderStat
     super.didUpdateWidget(old);
     if (old.sizeBy != widget.sizeBy || old.size != widget.size) {
       _resetTimer?.cancel();
-      _resetAnim.stop();
-      _rot = SphereQuat.identity;
+      _pan = Offset.zero;
       _dragging = false;
     }
   }
@@ -126,39 +120,33 @@ class _CollageViewState extends State<CollageView> with SingleTickerProviderStat
   @override
   void dispose() {
     _resetTimer?.cancel();
-    _resetAnim.dispose();
     super.dispose();
-  }
-
-  void _tickReset() {
-    final t = Curves.easeInOutCubic.transform(_resetAnim.value);
-    setState(() => _rot = _rotFrom.slerp(SphereQuat.identity, t));
   }
 
   void _scheduleReset() {
     _resetTimer?.cancel();
-    if (_rot.isIdentity) return;
+    if (_pan == Offset.zero) return;
     _resetTimer = Timer(widget.resetAfter, () {
       if (!mounted) return;
-      _rotFrom = _rot;
-      _resetAnim.forward(from: 0);
+      setState(() => _pan = Offset.zero);
     });
   }
 
   void _onPanStart(DragStartDetails _) {
     _resetTimer?.cancel();
-    _resetAnim.stop();
     setState(() => _dragging = true);
     widget.onDragHold?.call(true);
   }
 
   void _onPanUpdate(DragUpdateDetails d) {
-    final radius = math.max(80.0, math.min(widget.size.width, widget.size.height) * 0.45);
-    final yaw = d.delta.dx / radius * 1.45;
-    final pitch = -d.delta.dy / radius * 1.45;
-    final qYaw = SphereQuat.axisAngle(0, 1, 0, yaw);
-    final qPitch = SphereQuat.axisAngle(1, 0, 0, pitch);
-    setState(() => _rot = qYaw * qPitch * _rot);
+    final maxX = widget.size.width * 0.45;
+    final maxY = widget.size.height * 0.45;
+    setState(() {
+      _pan = Offset(
+        (_pan.dx + d.delta.dx).clamp(-maxX, maxX).toDouble(),
+        (_pan.dy + d.delta.dy).clamp(-maxY, maxY).toDouble(),
+      );
+    });
   }
 
   void _onPanEnd() {
@@ -179,28 +167,22 @@ class _CollageViewState extends State<CollageView> with SingleTickerProviderStat
           'time' => (byTime.indexOf(b) + 1).toDouble(),
           _ => b.count.toDouble(),
         };
-    final places = layoutSphereCollage(
-      [
-        for (final b in birds)
-          CollageItem(b.sci, weight: weight(b), aspect: art[b.sci]?.aspect ?? 1.7, blank: art[b.sci] == null)
-      ],
-      widget.size,
-      rotation: _rot,
-    );
+    final basePlaces = layoutCollage([
+      for (final b in birds)
+        CollageItem(b.sci, weight: weight(b), aspect: art[b.sci]?.aspect ?? 1.7, blank: art[b.sci] == null)
+    ], widget.size);
+    final places = lensCollage(basePlaces, pan: _pan, box: widget.size);
     final bird = {for (final b in birds) b.sci: b};
     final newest = widget.markAt == 'none' ? null : widget.newest;
     // has-newest: the rest only stand back when the latest is on the plate
     final fadeRest = widget.markAt == 'fade' && bird.containsKey(newest);
 
-    // Back-to-front by 3D depth z; hovered front bird rises above the rest.
-    final order = [...places]..sort((a, b) {
-        if (a.id == _hover && a.z >= -0.15) return 1;
-        if (b.id == _hover && b.z >= -0.15) return -1;
-        return a.z.compareTo(b.z);
-      });
+    // Stacking: by how far down it sits, a name (z 4) over the figures, the
+    // one under the pointer (z 5) over everything.
+    int z(CollagePlace p) => p.id == _hover ? 1000 : (art[p.id] == null ? 900 : p.order);
+    final order = [...places]..sort((a, b) => z(a).compareTo(z(b)));
     final at = {for (var i = 0; i < places.length; i++) places[i].id: i};
     final tipFor = widget.showHoverInfo && _hover != null ? bird[_hover] : null;
-    final liveRot = _dragging || _resetAnim.isAnimating;
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -216,34 +198,28 @@ class _CollageViewState extends State<CollageView> with SingleTickerProviderStat
             for (final p in order)
               AnimatedPositioned(
                 key: ValueKey(p.id),
-                duration: liveRot ? Duration.zero : const Duration(milliseconds: 700),
-                curve: const Cubic(.2, .7, .2, 1),
+                duration: _dragging ? const Duration(milliseconds: 80) : const Duration(milliseconds: 700),
+                curve: _dragging ? Curves.easeOut : const Cubic(.2, .7, .2, 1),
                 left: p.rect.left,
                 top: p.rect.top,
                 width: p.rect.width,
                 height: p.rect.height,
-                child: IgnorePointer(
-                  ignoring: p.z < -0.15,
-                  child: Opacity(
-                    opacity: p.opacity,
-                    child: _Bird(
-                      bird: bird[p.id]!,
-                      art: art[p.id],
-                      width: p.rect.width,
-                      delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
-                      hovered: _hover == p.id && p.z >= -0.15,
-                      newest: p.id == newest,
-                      markBelow: widget.markAt == 'below',
-                      showDot: widget.markAt == 'centre' || widget.markAt == 'below',
-                      faded: fadeRest && p.id != newest,
-                      live: widget.live.contains(p.id),
-                      onHover: (where) => setState(() {
-                        _hover = where == null ? (_hover == p.id ? null : _hover) : p.id;
-                        if (where != null) _pointer = p.rect.topLeft + where;
-                      }),
-                      onTap: () => widget.onOpen(bird[p.id]!),
-                    ),
-                  ),
+                child: _Bird(
+                  bird: bird[p.id]!,
+                  art: art[p.id],
+                  width: p.rect.width,
+                  delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
+                  hovered: _hover == p.id,
+                  newest: p.id == newest,
+                  markBelow: widget.markAt == 'below',
+                  showDot: widget.markAt == 'centre' || widget.markAt == 'below',
+                  faded: fadeRest && p.id != newest,
+                  live: widget.live.contains(p.id),
+                  onHover: (where) => setState(() {
+                    _hover = where == null ? (_hover == p.id ? null : _hover) : p.id;
+                    if (where != null) _pointer = p.rect.topLeft + where;
+                  }),
+                  onTap: () => widget.onOpen(bird[p.id]!),
                 ),
               ),
             // The label that follows the pointer.

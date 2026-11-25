@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:birdsong_app/native/collage_layout.dart';
 import 'package:birdsong_app/native/collage_view.dart';
 import 'package:flutter/material.dart';
@@ -7,59 +5,54 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const box = Size(600, 400);
-  const items = [
-    CollageItem('top', weight: 100, aspect: 1.0),
-    CollageItem('mid1', weight: 50, aspect: 1.0),
-    CollageItem('mid2', weight: 30, aspect: 1.0),
-    CollageItem('mid3', weight: 20, aspect: 1.0),
-    CollageItem('mid4', weight: 15, aspect: 1.0),
-    CollageItem('mid5', weight: 10, aspect: 1.0),
-    CollageItem('mid6', weight: 8, aspect: 1.0),
-    CollageItem('mid7', weight: 5, aspect: 1.0),
-    CollageItem('rare', weight: 1, aspect: 1.0),
-  ];
+  final base = layoutCollage(const [
+    CollageItem('top', weight: 100, aspect: 1.2),
+    CollageItem('b', weight: 40, aspect: 1.0),
+    CollageItem('c', weight: 20, aspect: 1.3),
+    CollageItem('d', weight: 10, aspect: 0.9),
+    CollageItem('e', weight: 5, aspect: 1.1),
+    CollageItem('f', weight: 2, aspect: 1.0),
+  ], box);
 
-  test('at rest the highest-weight bird sits dead centre at hero size and full opacity', () {
-    final places = layoutSphereCollage(items, box);
-    final byId = {for (final p in places) p.id: p};
-    final top = byId['top']!;
-    final rare = byId['rare']!;
-    expect(top.z, closeTo(1.0, 1e-6));
-    expect(top.opacity, 1.0);
-    expect(top.rect.center.dx, closeTo(box.width / 2, 0.5));
-    expect(top.rect.center.dy, closeTo(box.height / 2, 0.5));
-    expect(top.rect.width, greaterThan(rare.rect.width * 2));
-    // Back-hemisphere bird fades gently
-    expect(rare.z, lessThan(0));
-    expect(rare.opacity, lessThan(0.5));
+  test('at rest (zero pan) returns the exact original layoutCollage', () {
+    expect(lensCollage(base, pan: Offset.zero, box: box), same(base));
   });
 
-  test('rotating the 3D sphere 180° brings a rare bird to equal hero size and fades the old hero behind', () {
-    final rest = {for (final p in layoutSphereCollage(items, box)) p.id: p};
-    final flipped = {
-      for (final p in layoutSphereCollage(items, box, rotation: SphereQuat.axisAngle(0, 1, 0, math.pi))) p.id: p
-    };
-    final rareFront = flipped['rare']!;
-    final topBack = flipped['top']!;
-    // Rare bird rotated to front grows large and opaque, matching hero scale
-    expect(rareFront.z, greaterThan(0.6));
-    expect(rareFront.opacity, 1.0);
-    expect(rareFront.rect.width, greaterThan(rest['rare']!.rect.width * 2));
-    // Old hero rotated to the back shrinks and fades gently
-    expect(topBack.z, closeTo(-1.0, 1e-6));
-    expect(topBack.opacity, lessThan(0.25));
-    expect(topBack.rect.width, lessThan(rest['top']!.rect.width * 0.4));
+  test('panning never overlaps any two birds and keeps every bird inside the box', () {
+    for (final pan in const [
+      Offset(80, 40),
+      Offset(-110, -70),
+      Offset(180, -120),
+      Offset(-200, 140),
+    ]) {
+      final moved = lensCollage(base, pan: pan, box: box);
+      for (var i = 0; i < moved.length; i++) {
+        final r = moved[i].rect;
+        expect(r.left, greaterThanOrEqualTo(-0.5));
+        expect(r.top, greaterThanOrEqualTo(-0.5));
+        expect(r.right, lessThanOrEqualTo(box.width + 0.5));
+        expect(r.bottom, lessThanOrEqualTo(box.height + 0.5));
+        for (var j = i + 1; j < moved.length; j++) {
+          expect(r.deflate(0.5).overlaps(moved[j].rect.deflate(0.5)), isFalse,
+              reason: 'birds ${moved[i].id} and ${moved[j].id} overlapped at pan $pan');
+        }
+      }
+    }
   });
 
-  test('slerp smoothly interpolates back to identity rotation', () {
-    final q = SphereQuat.axisAngle(0, 1, 0, 1.2) * SphereQuat.axisAngle(1, 0, 0, 0.6);
-    final mid = q.slerp(SphereQuat.identity, 0.5);
-    final end = q.slerp(SphereQuat.identity, 1.0);
-    expect(mid.isIdentity, isFalse);
-    expect(end.isIdentity, isTrue);
+  test('panning a peripheral bird toward the centre makes it grow relative to the others', () {
+    final center = Offset(box.width / 2, box.height / 2);
+    final edgeBird = base.last; // smallest peripheral bird
+    final panToCenter = center - edgeBird.rect.center;
+    final moved = lensCollage(base, pan: panToCenter, box: box);
+    final beforeById = {for (final p in base) p.id: p};
+    final afterById = {for (final p in moved) p.id: p};
+    final ratioBefore = beforeById[edgeBird.id]!.rect.width / beforeById['top']!.rect.width;
+    final ratioAfter = afterById[edgeBird.id]!.rect.width / afterById['top']!.rect.width;
+    expect(ratioAfter, greaterThan(ratioBefore));
   });
 
-  testWidgets('dragging rotates the 3D sphere, tapping opens a front bird, and idle resets after 10s', (tester) async {
+  testWidgets('dragging moves birds, tapping still opens, and idle resets after 10s', (tester) async {
     final birds = [
       CollageBird('Erithacus rubecula', 'European Robin', 40, DateTime(2026, 11, 25, 9, 0)),
       CollageBird('Turdus merula', 'Common Blackbird', 20, DateTime(2026, 11, 25, 9, 5)),
@@ -89,30 +82,27 @@ void main() {
 
     final robin = find.text('European Robin');
     final startPos = tester.getCenter(robin);
-    final startWidth = tester.getSize(robin).width;
 
-    // Drag across the collage to rotate the 3D sphere
-    await tester.timedDrag(find.byType(CollageView), const Offset(110, 40), const Duration(milliseconds: 300));
-    await tester.pump();
-    final rotatedPos = tester.getCenter(robin);
-    expect((rotatedPos - startPos).distance, greaterThan(15));
+    // Drag across the collage
+    await tester.timedDrag(find.byType(CollageView), const Offset(90, 50), const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect((tester.getCenter(robin) - startPos).distance, greaterThan(5));
 
-    // After 5s, still rotated (10s hasn't elapsed yet)
+    // After 5s, still displaced (10s hasn't elapsed yet)
     await tester.pump(const Duration(seconds: 5));
-    expect((tester.getCenter(robin) - startPos).distance, greaterThan(15));
+    expect((tester.getCenter(robin) - startPos).distance, greaterThan(5));
 
     // Another drag restarts the 10s countdown
     await tester.timedDrag(find.byType(CollageView), const Offset(20, 0), const Duration(milliseconds: 150));
     await tester.pump(const Duration(seconds: 6));
-    expect((tester.getCenter(robin) - startPos).distance, greaterThan(15));
+    expect((tester.getCenter(robin) - startPos).distance, greaterThan(5));
 
-    // 4+ more seconds (total 10s since last drag) -> smoothly slerps back to default
+    // 4+ more seconds (total 10s since last drag) -> glides smoothly back to default
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
-    expect((tester.getCenter(robin) - startPos).distance, lessThan(1.0));
-    expect(tester.getSize(robin).width, closeTo(startWidth, 1.0));
+    expect((tester.getCenter(robin) - startPos).distance, lessThan(0.5));
 
-    // Tapping the front hero bird opens its card
+    // Tapping a bird still opens its card
     await tester.tap(robin);
     await tester.pump();
     expect(opened?.sci, 'Erithacus rubecula');
