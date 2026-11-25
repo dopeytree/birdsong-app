@@ -40,16 +40,17 @@ void main() {
     }
   });
 
-  test('panning a peripheral bird toward the centre makes it grow relative to the others', () {
+  test('dragging a small peripheral bird to the centre overrides view weight and makes it the largest', () {
     final center = Offset(box.width / 2, box.height / 2);
-    final edgeBird = base.last; // smallest peripheral bird
+    final edgeBird = base.last; // smallest 2-call peripheral bird
     final panToCenter = center - edgeBird.rect.center;
     final moved = lensCollage(base, pan: panToCenter, box: box);
     final beforeById = {for (final p in base) p.id: p};
     final afterById = {for (final p in moved) p.id: p};
-    final ratioBefore = beforeById[edgeBird.id]!.rect.width / beforeById['top']!.rect.width;
-    final ratioAfter = afterById[edgeBird.id]!.rect.width / afterById['top']!.rect.width;
-    expect(ratioAfter, greaterThan(ratioBefore));
+    // At rest, 'top' is much larger than edgeBird
+    expect(beforeById['top']!.rect.width, greaterThan(beforeById[edgeBird.id]!.rect.width * 2));
+    // Once edgeBird is dragged to the centre, it becomes strictly larger than 'top'
+    expect(afterById[edgeBird.id]!.rect.width, greaterThan(afterById['top']!.rect.width));
   });
 
   testWidgets('dragging moves birds, tapping still opens, and idle resets after 10s', (tester) async {

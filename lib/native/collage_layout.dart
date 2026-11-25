@@ -99,11 +99,12 @@ class _Placed {
   double cy = 0;
 }
 
-/// Flat-panel interactive lens over [layoutCollage]: shifting the collage by
-/// [pan] moves birds across the panel while gently magnifying whichever birds
-/// enter the centre and shrinking those toward the edges. An iterative
-/// separation pass guarantees that **no two birds ever overlap** and every
-/// bird stays inside [box].
+/// Flat-panel interactive lens over [layoutCollage]: dragging by [pan] moves
+/// all birds together as a linked sheet and overrides the view's default
+/// weight so whichever bird nears the panel's centre grows to full hero size
+/// while the previous hero shrinks as it moves away. An iterative separation
+/// + cohesion pass keeps all birds reactively packed with **zero overlap**
+/// inside [box].
 ///
 /// With [pan] == [Offset.zero], returns [base] untouched.
 List<CollagePlace> lensCollage(
@@ -116,30 +117,51 @@ List<CollagePlace> lensCollage(
   }
   final center = Offset(box.width / 2, box.height / 2);
   final minDim = math.min(box.width, box.height);
-  final lensRadius = minDim * 0.42;
-  final strength = (pan.distance / (minDim * 0.18)).clamp(0.0, 1.0);
+  final focusRadius = minDim * 0.34;
+  // Smoothly hand over sizing from the resting layout to the centre magnifier
+  // as soon as the user drags.
+  final blend = (pan.distance / (minDim * 0.14)).clamp(0.0, 1.0);
   const gap = 4.0;
+
+  // Use the resting hero's area as the target hero area at dead centre so a
+  // small bird dragged to the middle grows as large as the #1 bird was.
+  var heroArea = 0.0;
+  for (final p in base) {
+    final a = p.rect.width * p.rect.height;
+    if (a > heroArea) heroArea = a;
+  }
 
   final nodes = <_LensNode>[];
   for (final p in base) {
-    final cx = p.rect.center.dx + pan.dx;
-    final cy = p.rect.center.dy + pan.dy;
-    final dist = (Offset(cx, cy) - center).distance;
-    final lens = math.exp(-(dist * dist) / (2 * lensRadius * lensRadius));
-    // Birds near the centre grow noticeably; birds further away gently recede.
-    // Smaller birds get a bit more boost near the centre so rare species can be
-    // inspected without giant birds dominating the whole panel.
-    final sizeRatio = (math.max(p.rect.width, p.rect.height) / minDim).clamp(0.1, 1.0);
-    final boost = (0.35 + 0.65 * (1.0 - sizeRatio)) * strength * lens;
-    final shrink = 0.16 * strength * (1.0 - lens);
-    final scale = (1.0 + boost - shrink).clamp(0.7, 1.85);
-    nodes.add(_LensNode(p.id, cx, cy, p.rect.width * scale, p.rect.height * scale));
+    final tx = p.rect.center.dx + pan.dx;
+    final ty = p.rect.center.dy + pan.dy;
+    final dist = (Offset(tx, ty) - center).distance;
+    final prox = math.exp(-(dist * dist) / (2 * focusRadius * focusRadius));
+    // Centre magnifier scale: 1.0 at dead centre, tapering smoothly to 0.28 away.
+    final lensScale = 0.28 + 0.72 * prox;
+    final restArea = math.max(1.0, p.rect.width * p.rect.height);
+    final lensArea = heroArea * lensScale * lensScale;
+    final targetArea = restArea + (lensArea - restArea) * blend;
+    final aspect = p.rect.width / math.max(1.0, p.rect.height);
+    final w = math.sqrt(targetArea * aspect);
+    final h = math.sqrt(targetArea / aspect);
+    nodes.add(_LensNode(p.id, tx, ty, tx, ty, w, h, prox));
   }
 
-  // Iterative AABB separation: push overlapping neighbours apart along the
-  // shallowest penetration axis so no two figures ever overlap.
-  for (var iter = 0; iter < 60; iter++) {
-    var moved = false;
+  // Reactive separation + gentle pull toward each bird's dragged target so the
+  // whole flock shifts and parts smoothly around the new centre hero without
+  // ever overlapping.
+  for (var iter = 0; iter < 80; iter++) {
+    var maxPen = 0.0;
+    // Gentle spring toward dragged target (only on early iterations so final
+    // iterations guarantee strict zero overlap).
+    if (iter < 40) {
+      const pull = 0.08;
+      for (final n in nodes) {
+        n.cx += (n.tx - n.cx) * pull;
+        n.cy += (n.ty - n.cy) * pull;
+      }
+    }
     for (var i = 0; i < nodes.length; i++) {
       final a = nodes[i];
       for (var j = i + 1; j < nodes.length; j++) {
@@ -149,25 +171,32 @@ List<CollagePlace> lensCollage(
         final ox = (a.w + b.w) / 2 + gap - dx.abs();
         final oy = (a.h + b.h) / 2 + gap - dy.abs();
         if (ox > 0 && oy > 0) {
-          moved = true;
+          final pen = math.min(ox, oy);
+          if (pen > maxPen) maxPen = pen;
+          // Bird closer to centre yields slightly less so the centre bird stays
+          // planted right in the middle while neighbours part around it.
+          final wa = 1.0 - 0.55 * a.prox;
+          final wb = 1.0 - 0.55 * b.prox;
+          final sum = wa + wb;
+          final fa = wa / sum, fb = wb / sum;
           if (ox < oy) {
-            final push = (ox / 2) + 0.1;
+            final push = ox + 0.15;
             final dir = dx == 0 ? (i < j ? 1.0 : -1.0) : dx.sign;
-            a.cx -= dir * push;
-            b.cx += dir * push;
+            a.cx -= dir * push * fa;
+            b.cx += dir * push * fb;
           } else {
-            final push = (oy / 2) + 0.1;
+            final push = oy + 0.15;
             final dir = dy == 0 ? (i < j ? 1.0 : -1.0) : dy.sign;
-            a.cy -= dir * push;
-            b.cy += dir * push;
+            a.cy -= dir * push * fa;
+            b.cy += dir * push * fb;
           }
         }
       }
     }
-    if (!moved) break;
+    if (maxPen == 0 && iter >= 40) break;
   }
 
-  // Fit the separated layout cleanly inside [box] while preserving zero overlap.
+  // Fit cleanly inside [box] while preserving zero overlap and proportions.
   var x0 = double.infinity, y0 = double.infinity, x1 = -double.infinity, y1 = -double.infinity;
   for (final n in nodes) {
     x0 = math.min(x0, n.cx - n.w / 2);
@@ -178,17 +207,8 @@ List<CollagePlace> lensCollage(
   final spanW = math.max(1.0, x1 - x0);
   final spanH = math.max(1.0, y1 - y0);
   final k = math.min(1.0, math.min(box.width / spanW, box.height / spanH));
-  // Keep the panned centre where the user moved it if it fits; otherwise fit inside box.
-  final minShiftX = -x0 * k;
-  final maxShiftX = box.width - x1 * k;
-  final minShiftY = -y0 * k;
-  final maxShiftY = box.height - y1 * k;
-  final shiftX = k < 1.0
-      ? (box.width - spanW * k) / 2 - x0 * k
-      : 0.0.clamp(math.min(minShiftX, maxShiftX), math.max(minShiftX, maxShiftX)).toDouble();
-  final shiftY = k < 1.0
-      ? (box.height - spanH * k) / 2 - y0 * k
-      : 0.0.clamp(math.min(minShiftY, maxShiftY), math.max(minShiftY, maxShiftY)).toDouble();
+  final shiftX = (box.width - spanW * k) / 2 - x0 * k;
+  final shiftY = (box.height - spanH * k) / 2 - y0 * k;
 
   return [
     for (final n in nodes)
@@ -206,11 +226,14 @@ List<CollagePlace> lensCollage(
 }
 
 class _LensNode {
-  _LensNode(this.id, this.cx, this.cy, this.w, this.h);
+  _LensNode(this.id, this.tx, this.ty, this.cx, this.cy, this.w, this.h, this.prox);
 
   final String id;
+  final double tx;
+  final double ty;
   double cx;
   double cy;
   final double w;
   final double h;
+  final double prox;
 }

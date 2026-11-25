@@ -139,8 +139,8 @@ class _CollageViewState extends State<CollageView> {
   }
 
   void _onPanUpdate(DragUpdateDetails d) {
-    final maxX = widget.size.width * 0.45;
-    final maxY = widget.size.height * 0.45;
+    final maxX = widget.size.width * 0.65;
+    final maxY = widget.size.height * 0.65;
     setState(() {
       _pan = Offset(
         (_pan.dx + d.delta.dx).clamp(-maxX, maxX).toDouble(),
