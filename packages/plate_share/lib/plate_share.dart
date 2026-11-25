@@ -46,4 +46,33 @@ class PlateShare {
     });
     return ok ?? false;
   }
+
+  /// Encodes a WAV audio file at [inputPath] into an AAC (.m4a) file at
+  /// [outputPath] using Apple's AVFoundation at [bitrate] bps (default 128 kbps).
+  /// Returns true on success.
+  static Future<bool> encodeAac(String inputPath, String outputPath, {int bitrate = 128000}) async {
+    if (!supported) return false;
+    final ok = await _channel.invokeMethod<bool>('encodeAac', {
+      'inputPath': inputPath,
+      'outputPath': outputPath,
+      'bitrate': bitrate,
+    });
+    return ok ?? false;
+  }
+
+  /// Returns the local filesystem path to the app's iCloud Documents folder,
+  /// or null if iCloud Drive is unavailable or not signed in.
+  static Future<String?> icloudContainerPath({String? containerId}) async {
+    if (!supported) return null;
+    return await _channel.invokeMethod<String>('icloudContainerPath', {
+      if (containerId != null) 'containerId': containerId,
+    });
+  }
+
+  /// Triggers downloading a cloud-only ubiquitous item at [path].
+  static Future<bool> icloudStartDownload(String path) async {
+    if (!supported) return false;
+    final ok = await _channel.invokeMethod<bool>('icloudStartDownload', {'path': path});
+    return ok ?? false;
+  }
 }

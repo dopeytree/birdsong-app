@@ -10,6 +10,7 @@ import UIKit
 import FlutterMacOS
 import AppKit
 #endif
+import AVFoundation
 import Photos
 import WebKit
 
@@ -36,6 +37,48 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       DispatchQueue.main.async { self.fullBleed(result: result) }
       return
     }
+    if call.method == "encodeAac" {
+      guard let inputPath = args["inputPath"] as? String,
+            let outputPath = args["outputPath"] as? String else {
+        result(false)
+        return
+      }
+      let bitrate = (args["bitrate"] as? Int) ?? 128000
+      DispatchQueue.global(qos: .utility).async {
+        self.encodeAac(inputPath: inputPath, outputPath: outputPath, bitrate: bitrate) { ok in
+          DispatchQueue.main.async { result(ok) }
+        }
+      }
+      return
+    }
+    if call.method == "icloudContainerPath" {
+      let containerId = args["containerId"] as? String
+      DispatchQueue.global(qos: .utility).async {
+        let url = FileManager.default.url(forUbiquityContainerIdentifier: containerId)
+        guard let docs = url?.appendingPathComponent("Documents") else {
+          DispatchQueue.main.async { result(nil) }
+          return
+        }
+        try? FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
+        DispatchQueue.main.async { result(docs.path) }
+      }
+      return
+    }
+    if call.method == "icloudStartDownload" {
+      guard let path = args["path"] as? String else {
+        result(false)
+        return
+      }
+      DispatchQueue.global(qos: .utility).async {
+        do {
+          try FileManager.default.startDownloadingUbiquitousItem(at: URL(fileURLWithPath: path))
+          DispatchQueue.main.async { result(true) }
+        } catch {
+          DispatchQueue.main.async { result(false) }
+        }
+      }
+      return
+    }
     guard call.method == "share" else {
       result(FlutterMethodNotImplemented)
       return
@@ -45,6 +88,91 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       x: (args["x"] as? Double) ?? 0, y: (args["y"] as? Double) ?? 0,
       width: (args["w"] as? Double) ?? 1, height: (args["h"] as? Double) ?? 1)
     DispatchQueue.main.async { self.share(text: text, anchor: anchor, png: png, result: result) }
+  }
+
+  /// Encodes a WAV file into an AAC (.m4a) file using AVAssetReader + AVAssetWriter.
+  private func encodeAac(inputPath: String, outputPath: String, bitrate: Int, done: @escaping (Bool) -> Void) {
+    let inputUrl = URL(fileURLWithPath: inputPath)
+    let outputUrl = URL(fileURLWithPath: outputPath)
+    let tmpUrl = outputUrl.deletingLastPathComponent()
+      .appendingPathComponent(".\(outputUrl.lastPathComponent).tmp.m4a")
+    try? FileManager.default.removeItem(at: tmpUrl)
+    let asset = AVURLAsset(url: inputUrl)
+    guard let track = asset.tracks(withMediaType: .audio).first else {
+      done(false)
+      return
+    }
+    var sampleRate: Double = 48000
+    var channels: Int = 1
+    if let desc = track.formatDescriptions.first {
+      let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(desc as! CMAudioFormatDescription)?.pointee
+      if let asbd = asbd {
+        if asbd.mSampleRate > 0 { sampleRate = asbd.mSampleRate }
+        if asbd.mChannelsPerFrame > 0 { channels = Int(asbd.mChannelsPerFrame) }
+      }
+    }
+    do {
+      let reader = try AVAssetReader(asset: asset)
+      let readerSettings: [String: Any] = [
+        AVFormatIDKey: kAudioFormatLinearPCM,
+        AVLinearPCMBitDepthKey: 16,
+        AVLinearPCMIsFloatKey: false,
+        AVLinearPCMIsBigEndianKey: false,
+        AVLinearPCMIsNonInterleaved: false,
+      ]
+      let readerOut = AVAssetReaderTrackOutput(track: track, outputSettings: readerSettings)
+      guard reader.canAdd(readerOut) else { done(false); return }
+      reader.add(readerOut)
+
+      let writer = try AVAssetWriter(outputURL: tmpUrl, fileType: .m4a)
+      let writerSettings: [String: Any] = [
+        AVFormatIDKey: kAudioFormatMPEG4AAC,
+        AVEncoderBitRateKey: bitrate,
+        AVSampleRateKey: sampleRate,
+        AVNumberOfChannelsKey: channels,
+      ]
+      let writerIn = AVAssetWriterInput(mediaType: .audio, outputSettings: writerSettings)
+      writerIn.expectsMediaDataInRealTime = false
+      guard writer.canAdd(writerIn) else { done(false); return }
+      writer.add(writerIn)
+
+      guard reader.startReading(), writer.startWriting() else {
+        try? FileManager.default.removeItem(at: tmpUrl)
+        done(false)
+        return
+      }
+      writer.startSession(atSourceTime: .zero)
+
+      let queue = DispatchQueue(label: "uk.co.edstone.birdsong.aac")
+      writerIn.requestMediaDataWhenReady(on: queue) {
+        while writerIn.isReadyForMoreMediaData {
+          if let buf = readerOut.copyNextSampleBuffer() {
+            writerIn.append(buf)
+          } else {
+            writerIn.markAsFinished()
+            writer.finishWriting {
+              if writer.status == .completed {
+                do {
+                  try? FileManager.default.removeItem(at: outputUrl)
+                  try FileManager.default.moveItem(at: tmpUrl, to: outputUrl)
+                  done(true)
+                } catch {
+                  try? FileManager.default.removeItem(at: tmpUrl)
+                  done(false)
+                }
+              } else {
+                try? FileManager.default.removeItem(at: tmpUrl)
+                done(false)
+              }
+            }
+            return
+          }
+        }
+      }
+    } catch {
+      try? FileManager.default.removeItem(at: tmpUrl)
+      done(false)
+    }
   }
 
   /// The picture to share or save: the one Flutter sent, else the web view's.

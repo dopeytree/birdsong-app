@@ -69,6 +69,19 @@ PHOTOS = "Birdsong saves pictures of your plates to Photos when you ask it to."
 
 
 BUNDLE = "uk.co.edstone.birdsongApp"
+ICLOUD_CONTAINER = f"iCloud.{BUNDLE}"
+UBIQUITOUS = {
+    ICLOUD_CONTAINER: {
+        "NSUbiquitousContainerIsDocumentScopePublic": True,
+        "NSUbiquitousContainerSupportedFolderLevels": "Any",
+        "NSUbiquitousContainerName": "Birdsong",
+    }
+}
+ICLOUD_ENTITLEMENTS = {
+    "com.apple.developer.icloud-container-identifiers": [ICLOUD_CONTAINER],
+    "com.apple.developer.icloud-services": ["CloudDocuments"],
+    "com.apple.developer.ubiquity-container-identifiers": [ICLOUD_CONTAINER],
+}
 
 
 def ios():
@@ -89,6 +102,7 @@ def ios():
         # the listening (lib/engine/listen_engine.dart _startTrack).
         "UIBackgroundModes": ["audio", "location"],
         "NSAppTransportSecurity": ATS,
+        "NSUbiquitousContainers": UBIQUITOUS,
         # no status bar from the first frame (lib/main.dart keeps it hidden)
         "UIStatusBarHidden": True,
     })
@@ -141,6 +155,7 @@ def macos():
         "NSLocationWhenInUseUsageDescription": LOC,
         "NSPhotoLibraryAddUsageDescription": PHOTOS,
         "NSAppTransportSecurity": ATS,
+        "NSUbiquitousContainers": UBIQUITOUS,
     })
     ent = {
         "com.apple.security.personal-information.photos-library": True,
@@ -150,8 +165,8 @@ def macos():
         "com.apple.security.device.audio-input": True,
         "com.apple.security.personal-information.location": True,
     }
-    for name in ("DebugProfile.entitlements", "Release.entitlements"):
-        patch_plist(ROOT / "macos/Runner" / name, ent)
+    patch_plist(ROOT / "macos/Runner/DebugProfile.entitlements", ent)
+    patch_plist(ROOT / "macos/Runner/Release.entitlements", {**ent, **ICLOUD_ENTITLEMENTS})
     patch_text(ROOT / "macos/Podfile", r"^#?\s*platform :osx, '[\d.]+'", "platform :osx, '14.0'", re.M)
     patch_text(ROOT / "macos/Runner.xcodeproj/project.pbxproj",
                r"MACOSX_DEPLOYMENT_TARGET = [^;]+;", "MACOSX_DEPLOYMENT_TARGET = 14.0;")

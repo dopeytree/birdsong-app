@@ -4,18 +4,34 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:plate_share/plate_share.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
 import '../engine/listen_engine.dart';
 import '../engine/model_catalog.dart';
-import '../main.dart' show sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../server/page_control.dart';
 import '../settings.dart';
 import 'format.dart';
 import 'splash.dart' show Cardinal, SupportQuote;
 import 'station_editor.dart';
 import 'station_history.dart';
+
+enum _SettingsTab {
+  display('Display', Icons.palette_outlined),
+  map('Map', Icons.map_outlined),
+  stations('Stations', Icons.sensors),
+  listening('Listening', Icons.mic_none_outlined),
+  models('Models', Icons.psychology_outlined),
+  location('Location', Icons.location_on_outlined),
+  data('Data', Icons.storage_outlined),
+  about('About', Icons.info_outline);
+
+  const _SettingsTab(this.label, this.icon);
+  final String label;
+  final IconData icon;
+}
 
 /// Everything that isn't the plate: where birds come from, listening,
 /// models, the location filter and stored data. Opened from the plate's
@@ -35,6 +51,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _lon;
   final _limit = TextEditingController();
   final _ignoreAdd = TextEditingController();
+  late _SettingsTab _tab = widget.app.engine.running ? _SettingsTab.listening : _SettingsTab.display;
+  bool _converting = false;
+  String? _convertNote;
 
   /// The page's version, from assets/web/UPSTREAM.json (tool/sync_web.py).
   late final Future<String?> _webVersion = rootBundle
@@ -90,17 +109,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        leading: widget.onOpenCalendar == null
+            ? null
+            : IconButton(
+                tooltip: 'Pick a day',
+                icon: const Icon(Icons.calendar_today_outlined),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  widget.onOpenCalendar!();
+                },
+              ),
         title: const Text('Settings'),
         actions: [
-          if (widget.onOpenCalendar != null)
-            IconButton(
-              tooltip: 'Pick a day',
-              icon: const Icon(Icons.calendar_today_outlined),
-              onPressed: () {
-                Navigator.of(context).pop();
-                widget.onOpenCalendar!();
-              },
-            ),
           IconButton(
             tooltip: 'Close',
             icon: const Icon(Icons.close),
@@ -108,72 +128,154 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      body: ListenableBuilder(
-        listenable: Listenable.merge([s, app.engine, app.models, app.store, app.updates]),
-        builder: (context, _) {
-          final listen = s.mode == AppMode.listen;
-          // On a wide window (a Mac, an iPad) the settings keep to a
-          // readable column in the middle.
-          final side = ((MediaQuery.sizeOf(context).width - 680) / 2).clamp(16.0, 400.0);
-          return ListView(
-            padding: EdgeInsets.fromLTRB(side, 4, side, 32),
-            children: [
-              // the same menu whether listening here or showing a station:
-              // the plate, the map and the experiments apply to both
-              s.webPlate ? _displaySection(context, listen) : _flutterDisplaySection(context),
-              _mapSection(context),
-              _section(
-                context,
-                'Experimental',
-                summary: s.webPlate ? 'The old web plate' : 'Nothing switched on',
-                [
-                  _switch('Use the old web plate', s.webPlate, (v) => s.update((x) => x.webPlate = v)),
-                  Text(
-                    'The plate as the web page drew it, before it was moved into Flutter. '
-                    'Its own Display options show above while it is on.',
-                    style: Theme.of(context).textTheme.bodySmall,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Use the actual panel width (e.g. 420 px inside the desktop sidebar,
+          // or full screen on mobile) so sidebar and mobile show the exact same
+          // settings without squishing.
+          final side = ((constraints.maxWidth - 680) / 2).clamp(16.0, 400.0);
+          return ListenableBuilder(
+            listenable: Listenable.merge([s, app.engine, app.models, app.store, app.updates, app.icloud]),
+            builder: (context, _) {
+              final listen = s.mode == AppMode.listen;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _iconBar(side),
+                  const Divider(height: 1, color: rule),
+                  Expanded(
+                    child: ListView(
+                      padding: EdgeInsets.fromLTRB(side, 12, side, 32),
+                      children: _tabBody(context, listen),
+                    ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 8),
-              // the saved stations, then listening here: both, either way
-              _remote(context),
-              _listening(context),
-              _models(context),
-              _location(context),
-              _data(context),
-              // what keeping the stations' days is doing (station_archive.dart)
-              if (s.stations.isNotEmpty)
-                _section(
-                  context,
-                  'Station history',
-                  summary: 'Days kept on this device, and the log',
-                  [StationHistory(root: app.store.root, stations: s.stations)],
-                ),
-              const Divider(height: 32),
-              _credits(context, listen),
-              const Divider(height: 1),
-              _support(context),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: app.engine.running
-                      ? null
-                      : () {
-                          s.update((x) => x.onboarded = false);
-                          Navigator.of(context).pop();
-                        },
-                  child: const Text('Show the welcome again'),
-                ),
-              ),
-            ],
+              );
+            },
           );
         },
       ),
     );
   }
+
+  Widget _iconBar(double side) {
+    return Container(
+      color: paper,
+      padding: EdgeInsets.symmetric(horizontal: side - 4, vertical: 6),
+      child: Wrap(
+        spacing: 2,
+        runSpacing: 4,
+        alignment: WrapAlignment.spaceBetween,
+        children: [
+          for (final tab in _SettingsTab.values)
+            _iconButton(tab),
+        ],
+      ),
+    );
+  }
+
+  Widget _iconButton(_SettingsTab tab) {
+    final active = _tab == tab;
+    final fg = active ? madder : sepia;
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: () => setState(() => _tab = tab),
+      child: Container(
+        width: 46,
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+        decoration: active
+            ? const BoxDecoration(
+                border: Border(bottom: BorderSide(color: madder, width: 2)),
+              )
+            : null,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(tab.icon, size: 20, color: fg),
+            const SizedBox(height: 2),
+            Text(
+              tab.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: caps,
+                fontSize: 9.5,
+                letterSpacing: 0.2,
+                color: active ? ink : sepia,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _tabBody(BuildContext context, bool listen) => switch (_tab) {
+        _SettingsTab.display => [
+            s.webPlate ? _displaySection(context, listen, open: true) : _flutterDisplaySection(context, open: true),
+            const Divider(height: 24, color: rule),
+            _section(
+              context,
+              'Experimental',
+              summary: s.webPlate ? 'The old web plate' : 'Nothing switched on',
+              [
+                _switch('Use the old web plate', s.webPlate, (v) => s.update((x) => x.webPlate = v)),
+                Text(
+                  'The plate as the web page drew it, before it was moved into Flutter. '
+                  'Its own Display options show above while it is on.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ],
+        _SettingsTab.map => [
+            _mapSection(context, open: true),
+          ],
+        _SettingsTab.stations => [
+            _remote(context),
+            if (s.stations.isNotEmpty) ...[
+              const Divider(height: 24, color: rule),
+              _section(
+                context,
+                'Station history',
+                summary: 'Days kept on this device, and the log',
+                open: true,
+                [StationHistory(root: app.store.root, stations: s.stations)],
+              ),
+            ],
+          ],
+        _SettingsTab.listening => [
+            _listening(context, open: true),
+          ],
+        _SettingsTab.models => [
+            _models(context, open: true),
+          ],
+        _SettingsTab.location => [
+            _location(context, open: true),
+          ],
+        _SettingsTab.data => [
+            _data(context, open: true),
+          ],
+        _SettingsTab.about => [
+            _credits(context, listen, open: true),
+            const Divider(height: 16, color: rule),
+            _support(context, open: true),
+            const Divider(height: 16, color: rule),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: app.engine.running
+                    ? null
+                    : () {
+                        s.update((x) => x.onboarded = false);
+                        Navigator.of(context).pop();
+                      },
+                child: const Text('Show the welcome again'),
+              ),
+            ),
+          ],
+      };
 
   // ---- sections -------------------------------------------------------------
 
@@ -273,7 +375,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok == true) s.removeStation(st.id);
   }
 
-  Widget _listening(BuildContext context) {
+  Widget _listening(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
     final engine = app.engine;
     final locked = engine.running;
@@ -283,7 +385,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       summary: engine.running
           ? 'Listening · ${engine.levelDb.toStringAsFixed(0)} dBFS'
           : '${(s.threshold * 100).round()}% · every ${s.hopSeconds.toStringAsFixed(1)} s',
-      open: engine.running,
+      open: open || engine.running,
       [
         if (engine.error != null)
           Text(engine.error!, style: TextStyle(color: theme.colorScheme.error)),
@@ -313,6 +415,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text('A change of microphone applies from the next recording.',
               style: theme.textTheme.bodySmall),
         const SizedBox(height: 8),
+        if (PlateShare.supported) ...[
+          _dropdown(
+            'Recording format',
+            s.clipFormat,
+            const {
+              'aac': 'AAC 128 kbps (.m4a, smaller)',
+              'wav': 'WAV (uncompressed)',
+            },
+            (v) => s.update((x) => x.clipFormat = v),
+          ),
+          Text(
+            'Saved clips include 2 seconds of pre-record before each detection.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+        ],
         _slider('Threshold ${(s.threshold * 100).round()}%', s.threshold, 0.05, 0.95, 18,
             (v) => s.update((x) => x.threshold = v)),
         _slider('Every ${s.hopSeconds.toStringAsFixed(1)} s', s.hopSeconds, 0.5, 5, 9,
@@ -392,7 +510,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _models(BuildContext context) {
+  Widget _models(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
     final m = app.models;
     final specs = effectiveCatalog(s.modelOverrides);
@@ -404,7 +522,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'Models',
       summary: '${s.activeModels.where((id) => installed.any((x) => x.id == id)).length} listening'
           ' · ${installed.length} downloaded',
-      open: installed.isEmpty,
+      open: open || installed.isEmpty,
       [
         if (locked)
           Text('Stop listening to change models.', style: theme.textTheme.bodySmall),
@@ -536,13 +654,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _location(BuildContext context) {
+  Widget _location(BuildContext context, {bool open = false}) {
     final m = app.models;
     final locked = app.engine.running;
     final geoReady = m.isInstalled(geomodel);
     return _section(
       context,
       'Location filter',
+      open: open,
       summary: s.useGeomodel
           ? (geoReady ? 'On' : 'On · geomodel not downloaded')
           : 'Off',
@@ -588,12 +707,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _data(BuildContext context) {
+  Future<void> _batchConvert() async {
+    if (_converting || !PlateShare.supported) return;
+    setState(() {
+      _converting = true;
+      _convertNote = 'Converting WAV recordings to AAC…';
+    });
+    final res = await app.store.batchConvertWavToAac(
+      (wav, m4a) => PlateShare.encodeAac(wav, m4a, bitrate: 128000),
+      onProgress: (done, total) {
+        if (!mounted) return;
+        setState(() => _convertNote = 'Converting $done of $total…');
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      _converting = false;
+      if (res.converted == 0 && res.failed == 0) {
+        _convertNote = 'No uncompressed WAV recordings found.';
+      } else {
+        final saved = megabytes(res.savedBytes);
+        _convertNote = 'Converted ${res.converted} recordings (saved $saved)'
+            '${res.failed > 0 ? ' · ${res.failed} failed' : ''}.';
+      }
+    });
+  }
+
+  Widget _data(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
     final store = app.store;
+    final icloud = app.icloud;
     return _section(
       context,
       'Data',
+      open: open,
       summary: '${store.sessions.length} sessions · ${store.all.length} detections',
       [
         FutureBuilder<int>(
@@ -601,7 +748,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (context, snap) =>
               Text('Recordings ${megabytes(snap.data ?? 0)}', style: theme.textTheme.bodySmall),
         ),
-        const SizedBox(height: 8),
+        if (PlateShare.supported) ...[
+          const SizedBox(height: 12),
+          FutureBuilder<int>(
+            future: store.wavClipCount(),
+            builder: (context, snap) {
+              final count = snap.data ?? 0;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _converting || app.engine.running || count == 0 ? null : _batchConvert,
+                    icon: const Icon(Icons.compress_outlined),
+                    label: Text(count > 0
+                        ? 'Convert $count WAV recordings to AAC'
+                        : 'All recordings compressed'),
+                  ),
+                  if (_convertNote != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(_convertNote!, style: theme.textTheme.bodySmall),
+                    ),
+                ],
+              );
+            },
+          ),
+          const Divider(height: 24, color: rule),
+          _switch('iCloud sync', s.icloudSync, (v) {
+            s.update((x) => x.icloudSync = v);
+            if (v) icloud.syncNow();
+          }),
+          Text(
+            'Syncs listening sessions and recordings via iCloud Drive so walks '
+            'recorded on iPhone appear on Mac and iPad.',
+            style: theme.textTheme.bodySmall,
+          ),
+          if (s.icloudSync) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: icloud.syncing ? null : () => icloud.syncNow(),
+                  icon: icloud.syncing
+                      ? const SizedBox.square(
+                          dimension: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.cloud_sync_outlined, size: 18),
+                  label: Text(icloud.syncing ? 'Syncing…' : 'Sync now'),
+                ),
+              ],
+            ),
+            if (icloud.status != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(icloud.status!, style: theme.textTheme.bodySmall),
+              ),
+            if (icloud.error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(icloud.error!, style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),
+              ),
+          ],
+        ],
+        const Divider(height: 24, color: rule),
         OutlinedButton.icon(
           onPressed: app.engine.running ? null : () => _confirmClear(context),
           icon: const Icon(Icons.delete_sweep_outlined),
@@ -623,9 +831,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// The Flutter plate's Display options (the web plate's, below, while
   /// Experimental > Use the old web plate is on).
-  Widget _flutterDisplaySection(BuildContext context) => _section(
+  Widget _flutterDisplaySection(BuildContext context, {bool open = false}) => _section(
         context,
         'Display',
+        open: open,
         summary: PageControl.sizeBy[s.nativeSizeBy] ?? '',
         [
           _switch('Fit on one screen', s.nativeFit, (v) => s.update((x) => x.nativeFit = v)),
@@ -675,10 +884,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
 
   /// The web plate's Display options, read from and set through the page.
-  Widget _displaySection(BuildContext context, bool listen) {
+  Widget _displaySection(BuildContext context, bool listen, {bool open = false}) {
     final d = _display;
     if (d == null) {
-      return _section(context, 'Display', summary: 'Open the plate first', const []);
+      return _section(context, 'Display', open: open, summary: 'Open the plate first', const []);
     }
     bool on(String k) => d[k] == true;
     String pick(String k, Map<String, String> from, String fallback) {
@@ -689,6 +898,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return _section(
       context,
       'Display',
+      open: open,
       summary: PageControl.sizeBy[pick('sizeBy', PageControl.sizeBy, 'calls')],
       [
         _switch('Fit on one screen', on('fit'), (v) => _setDisplay('fit', v)),
@@ -732,11 +942,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'all': 'Every call',
   };
 
-  Widget _mapSection(BuildContext context) {
+  Widget _mapSection(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
     return _section(
       context,
       'Map',
+      open: open,
       summary: s.showMap ? 'Showing the walk · ${mapBirds[s.mapBirds]}' : 'Showing the collage',
       [
         _switch('Show the walk on a map', s.showMap, (v) => s.update((x) => x.showMap = v)),
@@ -766,14 +977,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
 
   /// As the page's own Credits.
-  Widget _credits(BuildContext context, bool listen) {
+  Widget _credits(BuildContext context, bool listen, {bool open = false}) {
     final theme = Theme.of(context);
     final detections = listen
         ? 'BirdNET, run on this device (${effectiveById(s.plateModel, s.modelOverrides)?.family ?? 'the chosen model'})'
         : s.stationDigits.isNotEmpty
             ? 'BirdWeather'
             : 'BirdNET-Go';
-    return _section(context, 'Credits', [
+    return _section(context, 'Credits', open: open, [
       FutureBuilder<String?>(
         future: _webVersion,
         builder: (context, snap) => Text(
@@ -801,9 +1012,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   /// As the page's own Support.
-  Widget _support(BuildContext context) {
+  Widget _support(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
-    return _section(context, 'Support', [
+    return _section(context, 'Support', open: open, [
       const Center(child: Cardinal(height: 110)),
       const SizedBox(height: 12),
       const SupportQuote(size: 15),
@@ -821,13 +1032,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ValueChanged<String> onChanged) =>
       Row(
         children: [
-          SizedBox(width: 130, child: Text(label)),
-          DropdownButton<String>(
-            value: value,
-            items: [
-              for (final e in items.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
-            ],
-            onChanged: (v) => v == null ? null : onChanged(v),
+          SizedBox(width: 120, child: Text(label)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: value,
+              items: [
+                for (final e in items.entries)
+                  DropdownMenuItem(value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis)),
+              ],
+              onChanged: (v) => v == null ? null : onChanged(v),
+            ),
           ),
         ],
       );

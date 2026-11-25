@@ -37,7 +37,7 @@ class SettingsButton extends StatelessWidget {
         return Align(
           alignment: Alignment.centerRight,
           child: Container(
-            width: 390,
+            width: 420,
             decoration: const BoxDecoration(
               color: paper,
               border: Border(left: BorderSide(color: rule)),

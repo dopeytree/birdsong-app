@@ -104,6 +104,13 @@ class Settings extends ChangeNotifier {
   /// call quality too). Other apps' audio keeps playing either way.
   String micSource = 'phone';
 
+  /// Listen here: saved clip audio format — 'aac' (AAC 128 kbps .m4a, default)
+  /// or 'wav' (uncompressed PCM .wav).
+  String clipFormat = 'aac';
+
+  /// Sync sessions and settings via iCloud Drive on Apple devices.
+  bool icloudSync = false;
+
   /// Listen here: the same species from the same model within this many
   /// seconds counts as the same call.
   double repeatSeconds = 10.0;
@@ -336,6 +343,8 @@ class Settings extends ChangeNotifier {
     threshold = (j['threshold'] as num?)?.toDouble() ?? threshold;
     hopSeconds = (j['hopSeconds'] as num?)?.toDouble() ?? hopSeconds;
     micSource = j['micSource'] == 'headset' ? 'headset' : 'phone';
+    clipFormat = j['clipFormat'] == 'wav' ? 'wav' : 'aac';
+    icloudSync = (j['icloudSync'] as bool?) ?? icloudSync;
     repeatSeconds = (j['repeatSeconds'] as num?)?.toDouble() ?? repeatSeconds;
     animalsOnly = (j['animalsOnly'] as bool?) ?? animalsOnly;
     final ignored = j['ignoredSpecies'];
@@ -466,6 +475,8 @@ class Settings extends ChangeNotifier {
         'threshold': threshold,
         'hopSeconds': hopSeconds,
         'micSource': micSource,
+        'clipFormat': clipFormat,
+        'icloudSync': icloudSync,
         'repeatSeconds': repeatSeconds,
         'animalsOnly': animalsOnly,
         'ignoredSpecies': List<String>.of(ignoredSpecies),

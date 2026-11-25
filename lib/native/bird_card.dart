@@ -396,6 +396,64 @@ class _BirdCardState extends State<BirdCard> {
     );
   }
 
+  void _openFullImage(PlateArt art) {
+    final screen = MediaQuery.sizeOf(context);
+    showDialog<void>(
+      context: context,
+      barrierColor: const Color(0xE62A241C),
+      builder: (c) => Dialog.fullscreen(
+        backgroundColor: const Color(0xF22A241C),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(c).pop(),
+                  child: InteractiveViewer(
+                    minScale: 1,
+                    maxScale: 4,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 48, 16, 48),
+                        child: PlateImage(
+                          art: art,
+                          width: math.min(screen.width - 32, screen.height - 96),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  tooltip: 'Close',
+                  icon: const Icon(Icons.close),
+                  color: paper,
+                  onPressed: () => Navigator.of(c).pop(),
+                ),
+              ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 12,
+                child: IgnorePointer(
+                  child: Text(
+                    widget.source.common,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontFamily: serif, fontSize: 16, color: paper),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// The plate and its credit.
   Widget _artSection(TextStyle text, Size screen, bool narrow) {
     final art = _art;
@@ -404,9 +462,15 @@ class _BirdCardState extends State<BirdCard> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (art != null)
-          ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: screen.height * (narrow ? .42 : .52)),
-            child: PlateImage(art: art, width: math.min(500, screen.width * .9)),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => _openFullImage(art),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: screen.height * (narrow ? .42 : .52)),
+                child: PlateImage(art: art, width: math.min(500, screen.width * .9)),
+              ),
+            ),
           ),
         const SizedBox(height: 8),
         Text.rich(

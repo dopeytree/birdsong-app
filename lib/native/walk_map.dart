@@ -513,20 +513,31 @@ class _WalkMapState extends State<WalkMap> {
         for (final b in widget.walk?.birds ?? const <WalkBird>[]) b.at,
       ];
 
-  /// Fit as close to the bird detections as possible; fall back to the walk
-  /// trail or place when there are no placed birds.
+  bool _hasSpan(List<LatLng> pts) {
+    if (pts.length < 2) return false;
+    final first = pts.first;
+    for (var i = 1; i < pts.length; i++) {
+      if ((pts[i].latitude - first.latitude).abs() > 1e-6 ||
+          (pts[i].longitude - first.longitude).abs() > 1e-6) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Fit tightly to the walk trail and bird detections; fall back to the
+  /// session/station place when there are no trail or bird points.
   void _fit() {
     if (!mounted || !_ready) return;
     final w = widget.walk;
     _fittedTo = w?.key;
-    final birdPts = [for (final b in w?.birds ?? const <WalkBird>[]) b.at];
-    final pts = birdPts.isNotEmpty ? birdPts : _points;
+    final pts = _points;
     if (pts.isEmpty) {
       if (w?.place != null) _map.move(w!.place!, 15);
       return;
     }
     final pad = math.min(48.0, (math.min(widget.size.width, widget.size.height) / 7).roundToDouble());
-    if (pts.length == 1) {
+    if (!_hasSpan(pts)) {
       _map.move(pts.first, 17.5);
     } else {
       _map.fitCamera(CameraFit.coordinates(coordinates: pts, padding: EdgeInsets.all(pad), maxZoom: 18));
@@ -1278,13 +1289,15 @@ class _WalkMapState extends State<WalkMap> {
     final kit = _kit, w = widget.walk, note = _note();
     final layers = _layers();
     final pts = _points;
-    final initial = pts.length > 1
+    final hasSpan = _hasSpan(pts);
+    final pad = math.min(48.0, (math.min(widget.size.width, widget.size.height) / 7).roundToDouble());
+    final initial = hasSpan
         ? CameraFit.coordinates(
             coordinates: pts,
-            padding: EdgeInsets.all(math.min(60.0, (math.min(widget.size.width, widget.size.height) / 6).roundToDouble())),
-            maxZoom: 16)
+            padding: EdgeInsets.all(pad),
+            maxZoom: 18)
         : null;
-    final center = pts.length == 1 ? pts.first : (w?.place ?? const LatLng(52.5, -1.5));
+    final center = pts.isNotEmpty ? pts.first : (w?.place ?? const LatLng(52.5, -1.5));
     return Listener(
       onPointerDown: (e) {
         _fingers.add(e.pointer);
@@ -1308,16 +1321,18 @@ class _WalkMapState extends State<WalkMap> {
                   mapController: _map,
                   options: MapOptions(
                     initialCenter: center,
-                    initialZoom: pts.length == 1 ? 16 : (w?.place != null ? 14 : 5),
+                    initialZoom: pts.isNotEmpty && !hasSpan ? 17.5 : (w?.place != null ? 15 : 5),
                     initialCameraFit: initial,
                     maxZoom: 18,
                     backgroundColor: paper,
                     interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
                     onMapReady: () {
-                      // the camera exists: decide which bird names overlap (Ed, 23 Nov)
+                      // the camera exists: fit tightly to the trail and decide
+                      // which bird names overlap (Ed, 23 Nov)
                       if (!mounted) return;
+                      _ready = true;
+                      if (!_dragged) _fit();
                       setState(() {
-                        _ready = true;
                         _fittedTo = w?.key;
                         _zoom = _map.camera.zoom;
                       });

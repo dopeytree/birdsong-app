@@ -156,7 +156,7 @@ class LocalServer {
       final id = int.tryParse(path.split('/').last);
       final f = id == null ? null : store.clipFile(id);
       if (f == null || !await f.exists()) return _notFound(res);
-      return _file(req, f, 'audio/wav');
+      return _file(req, f, f.path.endsWith('.m4a') ? 'audio/mp4' : 'audio/wav');
     }
     if (path.startsWith('/api/v2/spectrogram/')) {
       final id = int.tryParse(path.split('/').last);

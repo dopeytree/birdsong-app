@@ -38,6 +38,7 @@ class Detection {
     this.windowSeconds,
     this.scores = const [],
     this.hasClip = false,
+    this.clipExt = 'wav',
     this.reviewStatus = 'unreviewed',
     this.lat,
     this.lon,
@@ -60,6 +61,9 @@ class Detection {
   List<RankedScore> scores;
   bool hasClip;
 
+  /// Audio clip file extension ('m4a' or 'wav').
+  String clipExt;
+
   /// unreviewed, correct, wrong or unsure.
   String reviewStatus;
 
@@ -69,7 +73,7 @@ class Detection {
   double? lon;
   bool get hasPlace => lat != null && lon != null;
 
-  String get clipPath => 'audio/$id.wav';
+  String get clipPath => 'audio/$id.$clipExt';
   String get spectrogramPath => 'spectrograms/$id.bmp';
 
   /// One line of detections.jsonl. Field names follow BirdNET Live's export.
@@ -111,6 +115,7 @@ class Detection {
             )
         ],
         hasClip: j['clip'] != null,
+        clipExt: (j['clip'] as String?)?.endsWith('.m4a') == true ? 'm4a' : 'wav',
         reviewStatus: (j['reviewStatus'] as String?) ?? 'unreviewed',
         lat: (j['latitude'] as num?)?.toDouble(),
         lon: (j['longitude'] as num?)?.toDouble(),
@@ -818,11 +823,88 @@ class DetectionStore extends ChangeNotifier {
   Future<int> clipBytes() async {
     var n = 0;
     await for (final e in sessionsDir.list(recursive: true)) {
-      if (e is File && (e.path.endsWith('.wav') || e.path.endsWith('.bmp'))) {
+      if (e is File &&
+          (e.path.endsWith('.wav') || e.path.endsWith('.m4a') || e.path.endsWith('.bmp'))) {
         n += await e.length();
       }
     }
     return n;
+  }
+
+  /// Number of saved WAV clips that can be compressed to AAC.
+  Future<int> wavClipCount() async {
+    var n = 0;
+    for (final d in all) {
+      if (d.hasClip && d.clipExt == 'wav' && await clipFile(d.id).exists()) {
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /// Convert all existing WAV recordings to compressed AAC (.m4a) using
+  /// [encode] (which takes inputPath and outputPath and returns true on
+  /// success). Updates detections.jsonl and deletes the WAV only after
+  /// encoding succeeds.
+  Future<({int converted, int failed, int savedBytes})> batchConvertWavToAac(
+    Future<bool> Function(String wavPath, String m4aPath) encode, {
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final targets = <Detection>[];
+    for (final d in all) {
+      if (d.hasClip && d.clipExt == 'wav' && await clipFile(d.id).exists()) {
+        targets.add(d);
+      }
+    }
+    var converted = 0, failed = 0, savedBytes = 0;
+    for (var i = 0; i < targets.length; i++) {
+      final d = targets[i];
+      final wavFile = clipFile(d.id);
+      if (!await wavFile.exists()) continue;
+      final wavSize = await wavFile.length();
+      final m4aPath = wavFile.path.replaceFirst(RegExp(r'\.wav$'), '.m4a');
+      final ok = await encode(wavFile.path, m4aPath);
+      final m4aFile = File(m4aPath);
+      if (ok && await m4aFile.exists() && await m4aFile.length() > 0) {
+        final m4aSize = await m4aFile.length();
+        savedBytes += max(0, wavSize - m4aSize);
+        d.clipExt = 'm4a';
+        final ses = sessionOf(d);
+        if (ses != null) _dirty.add(ses);
+        try {
+          await wavFile.delete();
+        } catch (e) {
+          debugPrint('batchConvert delete ${wavFile.path}: $e');
+        }
+        converted++;
+      } else {
+        failed++;
+      }
+      onProgress?.call(i + 1, targets.length);
+    }
+    await flush();
+    notifyListeners();
+    return (converted: converted, failed: failed, savedBytes: savedBytes);
+  }
+
+  /// Re-read all session folders from disk (e.g. after iCloud sync pulls in
+  /// sessions recorded on another device).
+  Future<void> reload() async {
+    await flush();
+    final keepSelected = _selectedId;
+    sessions.clear();
+    all.clear();
+    _nextId = 1;
+    _nextSessionId = 1;
+    await _load();
+    sessions.sort((a, b) => a.start.compareTo(b.start));
+    all.sort((a, b) => a.at.compareTo(b.at));
+    if (keepSelected != null && sessions.any((x) => x.id == keepSelected)) {
+      _selectedId = keepSelected;
+    } else {
+      _selectedId = null;
+    }
+    notifyListeners();
   }
 
   /// Forget everything except a session still listening (which is emptied).

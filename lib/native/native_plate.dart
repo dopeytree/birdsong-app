@@ -688,9 +688,6 @@ class _NativePlateState extends State<NativePlate> {
         final i = store.selectedIndex, n = store.sessions.length;
         final red = Theme.of(context).colorScheme.primary;
         final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
-        // The map opens directly in full screen rather than replacing the
-        // collage inline, so the plate always stays in its non-map view.
-        const mapOn = false;
         final single = mode.key == 'latest' || mode.key == 'top';
         final showPlate = mode.key != 'index', showIndex = mode.key != 'noindex';
         final showHeading = mode.key != 'index' && mode.key != 'noindex';
@@ -801,27 +798,9 @@ class _NativePlateState extends State<NativePlate> {
                       children: [
                         // the index alone sits in the middle of the window
                         if (!showPlate) SizedBox(height: _indexAloneTop(box.maxHeight)),
-                        // the map's extras: what the walk went by, above the map
-                        // (nothing at all when it passed nothing)
-                        if (showPlate && mapOn && app.settings.mapExtras)
-                          Center(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: fit ? double.infinity : 1248),
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(side, fit ? 4 : 12, side, 0),
-                                child: PassedView(
-                                  lookup: _landmarks,
-                                  fit: fit,
-                                  narrow: box.maxWidth <= 720,
-                                  about: app.settings.mapPassedAbout,
-                                  width: math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side,
-                                ),
-                              ),
-                            ),
-                          ),
                         if (!showPlate)
                           const SizedBox.shrink()
-                        else if (rows.isEmpty && !mapOn)
+                        else if (rows.isEmpty)
                           Padding(
                             key: _plateKey,
                             padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
@@ -855,34 +834,8 @@ class _NativePlateState extends State<NativePlate> {
                             children: [
                               Padding(
                                 padding: EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
-                                child: mapOn
-                                    ? WalkMap(
-                                        walk: feed != null
-                                            ? Walk.station(feed.station.name, feed.place)
-                                            : Walk.of(store, ses!, app.settings.plateModel,
-                                                ignore: app.settings.isIgnoredSpecies),
-                                        allBirds: app.settings.mapBirds == 'all',
-                                        landmarks: app.settings.mapExtras ? _landmarks : null,
-                                        settings: app.settings,
-                                        species: [for (final r in rows) (sci: r.sci, common: r.common)],
-                                        onFullScreen: () => _mapFullScreen(
-                                            () => feed != null
-                                                ? Walk.station(feed.station.name, feed.place)
-                                                : (store.selected == null
-                                                    ? null
-                                                    : Walk.of(store, store.selected!, app.settings.plateModel,
-                                                        ignore: app.settings.isIgnoredSpecies)),
-                                            rows),
-                                        size: Size(box.maxWidth - 2 * plateSide,
-                                            _plateHeight(box.maxWidth, box.maxHeight) - 12),
-                                        onBird: (sci, common) => _openFromMap(sci, common, rows),
-                                        onHold: (held) {
-                                          final want = held ? 'map' : null;
-                                          if (want != _holdFor && mounted) setState(() => _holdFor = want);
-                                        },
-                                      )
-                                    : _collage(ses, onPlate, newest, box.maxWidth - 2 * plateSide,
-                                        _plateHeight(box.maxWidth, box.maxHeight) - 12),
+                                child: _collage(ses, onPlate, newest, box.maxWidth - 2 * plateSide,
+                                    _plateHeight(box.maxWidth, box.maxHeight) - 12),
                               ),
                               // With no index there is no heading to carry the
                               // session arrows: the web plate's app draws a
@@ -916,14 +869,8 @@ class _NativePlateState extends State<NativePlate> {
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(16, 9.6, 16, 0),
                                 child: Text(
-                                  !mapOn
-                                      ? 'Each bird is drawn in proportion to how often it was heard. '
-                                          'Select one to see its plate and its hours.'
-                                      : app.settings.mapBirds == 'all'
-                                          ? 'The way you walked, with a cross wherever a bird was heard. '
-                                              'Select one to see its plate and its hours.'
-                                          : 'The way you walked, with a cross where each bird was first heard. '
-                                              'Select one to see its plate and its hours.',
+                                  'Each bird is drawn in proportion to how often it was heard. '
+                                  'Select one to see its plate and its hours.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                       fontFamily: serif,
@@ -1096,7 +1043,7 @@ class _NativePlateState extends State<NativePlate> {
                 if (app.settings.songScribble)
                   Positioned(
                     left: 8 + 40 + 40 + 8,
-                    right: (PlateShare.supported ? 8 + 40 + 40 : 8 + 40) + 8,
+                    right: (PlateShare.supported ? 8 + 40 : 8) + 8,
                     bottom: 8,
                     height: 40,
                     child: SongScribble(
@@ -1106,21 +1053,6 @@ class _NativePlateState extends State<NativePlate> {
                       remoteName: feed != null ? newestCommon : null,
                     ),
                   ),
-                // The calendar, at the bottom right beside share (in the
-                // corner where there is no share).
-                Positioned(
-                  right: PlateShare.supported ? 8 + 40 : 8,
-                  bottom: 8,
-                  child: IconButton(
-                    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                    padding: EdgeInsets.zero,
-                    iconSize: 22,
-                    tooltip: 'Pick a day',
-                    icon: const Icon(Icons.calendar_today_outlined),
-                    color: red,
-                    onPressed: _pickDay,
-                  ),
-                ),
                 // Share or save, out of the way at the bottom right.
                 if (PlateShare.supported)
                   Positioned(

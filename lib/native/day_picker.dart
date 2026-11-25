@@ -55,14 +55,68 @@ class _DayPickerState extends State<DayPicker> {
 
   List<Session> get _that => [for (final x in _sessions) if (sameDay(x.start, _picked)) x];
 
+  String _placeLabel(Session x) {
+    final town = !x.hasPlace
+        ? 'Place unknown'
+        : x.placeName == null
+            ? place(x.lat!, x.lon!)
+            : x.placeName!.isEmpty
+                ? place(x.lat!, x.lon!)
+                : x.placeName!;
+    final area = x.placeArea ?? '';
+    return area.isEmpty || area == town ? town : '$town – $area';
+  }
+
   Future<void> _confirmDelete(Session x, int number) async {
+    final detections = widget.store.inSession(x);
+    final speciesNames = <String>[];
+    final seen = <String>{};
+    for (final d in detections) {
+      if (seen.add(d.sci)) speciesNames.add(d.common);
+    }
+    speciesNames.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final when = x.end == null
+        ? '${day(x.start)} · ${clock(x.start)}'
+        : '${day(x.start)} · ${clock(x.start)}–${clock(x.end!)} (${lasting(x.end!.difference(x.start))})';
+    final where = _placeLabel(x);
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: paper,
         title: Text('Delete session #$number?'),
-        content: const Text(
-            'This permanently deletes this walk, its detections, and its recordings. This cannot be undone.'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(when, style: const TextStyle(fontFamily: serif, fontSize: 15, color: ink)),
+                const SizedBox(height: 4),
+                Text(where, style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14, color: sepia)),
+                const SizedBox(height: 10),
+                Text(
+                  speciesNames.isEmpty
+                      ? 'No species detected.'
+                      : '${speciesNames.length} species (${detections.length} calls):',
+                  style: const TextStyle(fontFamily: caps, fontSize: 13, letterSpacing: 0.6, color: ink),
+                ),
+                if (speciesNames.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    speciesNames.join(', '),
+                    style: const TextStyle(fontFamily: serif, fontSize: 14, height: 1.4, color: ink),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                const Text(
+                  'This permanently deletes this walk, its detections, and its recordings. This cannot be undone.',
+                  style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 13, color: sepia),
+                ),
+              ],
+            ),
+          ),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Delete')),
