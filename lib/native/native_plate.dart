@@ -15,6 +15,7 @@ import '../store/detection_store.dart';
 import '../engine/listen_engine.dart' show maxSessionSpecies;
 import '../ui/format.dart';
 import '../ui/plate_buttons.dart';
+import 'song_scribble.dart';
 import '../ui/settings_button.dart';
 import '../ui/station_editor.dart';
 import 'bird_card.dart';
@@ -478,7 +479,8 @@ class _NativePlateState extends State<NativePlate> {
   /// The map on a page of its own, the whole screen (for small screens):
   /// the same walk (kept up to date while listening), extras and search;
   /// its button or Escape closes it, and a bird's cross opens the bird's
-  /// card over it.
+  /// card over it. "Passed on the way" sits on the map at the bottom and
+  /// opens the list (Ed, 23 Nov).
   void _mapFullScreen(Walk? Function() walk, List<_Row> rows) {
     Navigator.of(context).push(PageRouteBuilder<void>(
       fullscreenDialog: true,
@@ -493,27 +495,44 @@ class _NativePlateState extends State<NativePlate> {
             backgroundColor: paper,
             body: SafeArea(
               child: ListenableBuilder(
-                listenable: Listenable.merge([app.store, app.settings]),
-                builder: (context, _) => Column(children: [
-                  Expanded(
-                    child: LayoutBuilder(
-                  builder: (context, box) => WalkMap(
-                    walk: walk(),
-                    allBirds: app.settings.mapBirds == 'all',
-                    size: box.biggest,
-                    // the card opens over the full-screen map; closing it
-                    // leaves the map full screen
-                    onBird: (sci, common) => _openFromMap(sci, common, rows),
-                    onHold: (_) {},
-                    landmarks: app.settings.mapExtras ? _landmarks : null,
-                    settings: app.settings,
-                    species: [for (final r in rows) (sci: r.sci, common: r.common)],
-                    fullScreen: true,
-                    onFullScreen: () => Navigator.of(context).maybePop(),
-                  ),
+                listenable: Listenable.merge([app.store, app.settings, _landmarks]),
+                builder: (context, _) {
+                  final passed =
+                      app.settings.mapExtras ? (_landmarks.walk?.passed ?? const <Passed>[]) : const <Passed>[];
+                  return Stack(children: [
+                    Positioned.fill(
+                      child: LayoutBuilder(
+                        builder: (context, box) => WalkMap(
+                          walk: walk(),
+                          allBirds: app.settings.mapBirds == 'all',
+                          size: box.biggest,
+                          // the card opens over the full-screen map; closing it
+                          // leaves the map full screen
+                          onBird: (sci, common) => _openFromMap(sci, common, rows),
+                          onHold: (_) {},
+                          landmarks: app.settings.mapExtras ? _landmarks : null,
+                          settings: app.settings,
+                          species: [for (final r in rows) (sci: r.sci, common: r.common)],
+                          fullScreen: true,
+                          onFullScreen: () => Navigator.of(context).maybePop(),
+                        ),
+                      ),
                     ),
-                  ),
-                ]),
+                    // on the map, not a strip below it; clear of the credit ⓘ (Ed, 23 Nov)
+                    if (passed.isNotEmpty)
+                      Positioned(
+                        left: 16,
+                        right: 40,
+                        bottom: 10,
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: _PassedOnMap(
+                            onTap: () => showPassed(context, _landmarks, about: app.settings.mapPassedAbout),
+                          ),
+                        ),
+                      ),
+                  ]);
+                },
               ),
             ),
           ),
@@ -1074,6 +1093,16 @@ class _NativePlateState extends State<NativePlate> {
                     child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
                         inline: true),
                   ),
+                // The song scribble between the buttons along the bottom:
+                // listening here only, not on a station.
+                if (feed == null && app.settings.songScribble)
+                  Positioned(
+                    left: 8 + 40 + 40 + 8,
+                    right: (PlateShare.supported ? 8 + 40 + 40 : 8 + 40) + 8,
+                    bottom: 8,
+                    height: 40,
+                    child: SongScribble(engine: engine),
+                  ),
                 // The calendar, at the bottom right beside share (in the
                 // corner where there is no share).
                 Positioned(
@@ -1414,6 +1443,58 @@ class _NativePlateState extends State<NativePlate> {
     // and the scroll view's padding above and below
     final others = all - plate + 2 * _fadeRoom;
     if (_others == null || (others - _others!).abs() > .5) setState(() => _others = others);
+  }
+}
+
+/// "Passed on the way" over the full-screen map: small caps between sepia
+/// rules, no box, a paper halo so it reads on the map (Ed, 23 Nov).
+class _PassedOnMap extends StatelessWidget {
+  const _PassedOnMap({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 15.0;
+    final style = TextStyle(fontFamily: caps, fontSize: size, letterSpacing: size * .06, height: 1.2);
+    final words = Stack(children: [
+      Text('Passed on the way',
+          style: style.copyWith(
+            foreground: Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 3.2
+              ..strokeJoin = StrokeJoin.round
+              ..color = paper,
+          )),
+      Text('Passed on the way', style: style.copyWith(color: ink)),
+    ]);
+    const rule = SizedBox(
+      width: 36,
+      height: 3,
+      child: Stack(alignment: Alignment.center, children: [
+        Positioned(left: 0, right: 0, height: 3, child: ColoredBox(color: paper)),
+        Positioned(left: 0, right: 0, height: 1, child: ColoredBox(color: sepia)),
+      ]),
+    );
+    return Semantics(
+      button: true,
+      label: 'Passed on the way',
+      hint: 'Show everything passed',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            rule,
+            const SizedBox(width: 10),
+            words,
+            const SizedBox(width: 10),
+            rule,
+          ]),
+        ),
+      ),
+    );
   }
 }
 

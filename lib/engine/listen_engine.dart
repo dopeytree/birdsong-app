@@ -16,6 +16,7 @@ import 'model_catalog.dart';
 import 'model_manager.dart';
 import 'resampler.dart';
 import 'ring_buffer.dart';
+import 'scribble_trace.dart';
 
 /// What one model made of the latest window.
 class ModelReport {
@@ -70,6 +71,9 @@ class ListenEngine extends ChangeNotifier {
   /// Input level, dBFS of the last chunk.
   double levelDb = -90;
 
+  /// The sound's shape for the song scribble along the bottom of the plate.
+  final scribble = ScribbleTrace(sampleRate: captureRate);
+
   /// Windows skipped because the models had not finished the last one.
   int skipped = 0;
 
@@ -101,6 +105,7 @@ class ListenEngine extends ChangeNotifier {
 
   // Species to when the plate's model last heard them above the threshold.
   final Map<String, DateTime> _lastHeard = {};
+  final Map<String, String> _commonOf = {};
 
   /// Species heard in the last couple of windows by the model the plate
   /// draws: these glow on the plate.
@@ -112,6 +117,20 @@ class ListenEngine extends ChangeNotifier {
       for (final e in _lastHeard.entries)
         if (now.difference(e.value) <= keep) e.key,
     };
+  }
+
+  /// The latest of [liveSpecies] to be heard, by its common name: the
+  /// name in the song scribble.
+  String? get liveName {
+    if (!running) return null;
+    final keep = Duration(milliseconds: (settings.hopSeconds * 2000 + 1500).round());
+    final now = DateTime.now();
+    MapEntry<String, DateTime>? best;
+    for (final e in _lastHeard.entries) {
+      if (now.difference(e.value) > keep) continue;
+      if (best == null || e.value.isAfter(best.value)) best = e;
+    }
+    return best == null ? null : _commonOf[best.key];
   }
 
   double? get _lat => settings.latitude ?? session?.lat;
@@ -133,6 +152,7 @@ class ListenEngine extends ChangeNotifier {
       }
       _raw.clear();
       _at32.clear();
+      scribble.reset();
       final headset = settings.micSource == 'headset';
       final stream =
           await rec.startStream(_recordConfig(headset, headset ? null : await _phoneMic(rec)));
@@ -167,6 +187,7 @@ class ListenEngine extends ChangeNotifier {
       await _recorder?.stop();
     } catch (_) {}
     running = false;
+    scribble.reset();
     await _stopTrack();
     // Wait for a window still in flight before closing its sessions.
     while (_busy) {
@@ -244,6 +265,7 @@ class ListenEngine extends ChangeNotifier {
     final samples = pcm16ToFloat(bytes);
     if (samples.isEmpty) return;
     _raw.add(samples);
+    scribble.add(samples);
     _at32.add(_to32.process(samples));
     var sum = 0.0;
     for (final s in samples) {
@@ -325,7 +347,10 @@ class ListenEngine extends ChangeNotifier {
     final onPlate = plate == 'all' || plate == m.spec.id;
     if (onPlate && _sessionFull(l.sci)) await _nextSession(now);
     final key = '${m.spec.id}|${l.sci}';
-    if (onPlate) _lastHeard[l.sci] = now;
+    if (onPlate) {
+      _lastHeard[l.sci] = now;
+      _commonOf[l.sci] = l.common;
+    }
     final open = _open[key];
     if (open != null &&
         now.difference(open.at).inMilliseconds < settings.repeatSeconds * 1000) {

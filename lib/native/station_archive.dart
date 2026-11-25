@@ -86,6 +86,16 @@ class StationArchive extends ChangeNotifier {
 
   StationDay? dayOf(DateTime d) => days[ymd(d)];
 
+  /// The species heard on [d], counted from the day's kept calls, or null
+  /// when that day hasn't been kept. The plate uses this rather than the
+  /// station's summary, which can leave species out.
+  Future<List<StationSpecies>?> speciesOn(DateTime d) async {
+    await _ready;
+    final f = File('${dir.path}/${ymd(d)}/detections.jsonl');
+    if (!await f.exists()) return null;
+    return speciesFromCalls(await f.readAsString());
+  }
+
   Future<void> _open() async {
     try {
       await dir.create(recursive: true);
@@ -334,8 +344,79 @@ Map<String, dynamic> stationCallJson(Station st, StationCall c) => {
         },
       ).toJson(),
       'stationDetectionId': c.id,
+      if (c.daysKnown > 0) 'daysSinceFirstSeen': c.daysKnown,
       if (c.audioUrl != null) 'audioUrl': c.audioUrl,
       if (c.spectrogramUrl != null) 'spectrogramUrl': c.spectrogramUrl,
       if (c.clip != null) 'clipStart': c.clip!.$1,
       if (c.clip != null) 'clipEnd': c.clip!.$2,
     };
+
+/// A day's species from its raw detections, one line of detections.jsonl
+/// each, most heard first. The plate shows this for a station day:
+/// BirdNET-Go's own daily summary drops bat species the raw list has, so
+/// the calls are counted here instead. A line that won't parse is skipped.
+List<StationSpecies> speciesFromCalls(String jsonl) {
+  final calls = <StationCall>[];
+  for (final line in jsonl.split('\n')) {
+    if (line.trim().isEmpty) continue;
+    try {
+      final j = jsonDecode(line);
+      if (j is Map) {
+        final c = stationCallFromJson(j);
+        if (c != null) calls.add(c);
+      }
+    } catch (_) {}
+  }
+  return speciesOfCalls(calls);
+}
+
+/// A kept call read back from its detections.jsonl line; null when the line
+/// has no species or no time.
+StationCall? stationCallFromJson(Map<dynamic, dynamic> j) {
+  final sci = '${j['scientificName'] ?? ''}';
+  final at = DateTime.tryParse('${j['timestamp'] ?? ''}');
+  if (sci.isEmpty || at == null) return null;
+  return StationCall(
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    at: at,
+    sci: sci,
+    common: '${j['commonName'] ?? sci}',
+    confidence: (j['confidence'] as num?)?.toDouble() ?? 0,
+    daysKnown: ((j['daysSinceFirstSeen'] ?? 0) as num).toInt(),
+  );
+}
+
+/// [calls] counted into species, most heard first.
+List<StationSpecies> speciesOfCalls(List<StationCall> calls) {
+  final by = <String, ({String common, int count, DateTime? first, DateTime? last, double max, double sum, int known, List<int> hours})>{};
+  for (final c in calls) {
+    final had = by[c.sci];
+    final hours = had?.hours ?? List.filled(24, 0);
+    hours[c.at.hour]++;
+    by[c.sci] = (
+      common: had?.common ?? c.common,
+      count: (had?.count ?? 0) + 1,
+      first: had == null || had.first == null || c.at.isBefore(had.first!) ? c.at : had.first,
+      last: had == null || had.last == null || c.at.isAfter(had.last!) ? c.at : had.last,
+      max: c.confidence > (had?.max ?? 0) ? c.confidence : (had?.max ?? 0),
+      sum: (had?.sum ?? 0) + c.confidence,
+      known: c.daysKnown > (had?.known ?? 0) ? c.daysKnown : (had?.known ?? 0),
+      hours: hours,
+    );
+  }
+  final out = [
+    for (final e in by.entries)
+      StationSpecies(
+        sci: e.key,
+        common: e.value.common,
+        count: e.value.count,
+        first: e.value.first,
+        last: e.value.last,
+        maxConf: e.value.max,
+        avgConf: e.value.count == 0 ? 0 : e.value.sum / e.value.count,
+        daysKnown: e.value.known,
+        hourly: e.value.hours,
+      ),
+  ]..sort((a, b) => b.count.compareTo(a.count));
+  return out;
+}

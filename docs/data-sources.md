@@ -97,3 +97,45 @@ From Settings → Station history, 48 days kept.
   (`station_archive.dart`), not the station.
 - So the station's own API is fast enough; a companion server isn't needed
   for speed. A time limit on one ask is worth adding.
+
+## Bats dropped from the daily summary (measured 23 Nov 2026)
+
+Ed's station runs two bat models, BSG-BAT v0.21 and BattyBirdNET v1.0.
+Every bat detection comes back with `modelType: "bat"`. For 23 Nov the raw
+detections list (`/api/v2/detections`) had 56 bat calls over four species,
+but the daily summary (`/api/v2/analytics/species/daily`) listed only the
+European Free-tailed Bat and dropped the Noctule, Leisler's bat and the
+Common pipistrelle. The all-time summary does list them (seven bat
+species), so it is the daily summary at fault, not the app. A note for the
+BirdNET-Go team is with Ed.
+
+The whole history that day was 29,068 detections back to 6 Oct, about
+32 MB at 1.1 KB each; one day about 2.3 MB, a thousand detections back in
+a quarter of a second. Small enough to keep in full.
+
+So a station's plate now counts a single day from the raw detections
+(`speciesOfCalls` in `station_feed.dart`), and keeps the summary only for a
+week, a month or all time. The kept day (`detections.jsonl`) was already the
+raw list.
+
+## Bat plates on Commons (measured 23 Nov 2026)
+
+The app asks Commons for `Category:<scientific name> (illustrations)`, then
+the genus, then the family. Those species categories do not exist for the
+bats the station hears. The plates are filed under the family, and under
+the old scientific names.
+
+- **Vespertilionidae illustrations:** 138 files. Usable old-name plates:
+  Noctule (`Vespertilio noctula`, `Vesperugo noctula`), Leisler's
+  (`Vesperugo leisleri`), common pipistrelle (`Vespertilio pipistrellus`),
+  barbastelle (`Synotus barbastellus`), Daubenton's (`Vespertilio
+  daubentonii`), serotine (`Vespertilio serotinus`). The app's scorer looks
+  for the modern name, so it misses these and can pick another bat.
+- **Greater horseshoe:** 17 files in its own category, including *A history
+  of British mammals* (1910) and *British mammals*.
+- **Rhinolophidae illustrations:** 17, including one file named for the
+  lesser horseshoe.
+- **Nothing whole for:** soprano and Nathusius' pipistrelles, both
+  long-eared bats, Alcathoe (skulls only), European free-tailed bat.
+  Molossidae illustrations (43) are other free-tailed bats, not *Tadarida
+  teniotis*.

@@ -9,6 +9,16 @@ Vintage natural history: paper, sepia ink, serif (IM Fell English),
 engraved plates. "Vintage illustrations, not modern cartoon." Show an idea
 or a small test before building it.
 
+## 23 Nov 2026
+
+- **Song scribble (on trial):** Ed asked for "a sort of almost pencil
+  scribble drawing but representing the organic noise", between the bottom
+  buttons, with the live species named in it. Stills shown first (sepia
+  pencil, a fainter second pass, loops tighter for high song and rounder
+  for low, the name in italic in a gap): "love it". Live sessions only for
+  now; a faint resting line when not listening; on by default with a
+  switch (Settings → Display).
+
 ## 22 Nov 2026
 
 - **Blackletter names and a symbol for every kind of ancient site: no.**
@@ -18,10 +28,24 @@ or a small test before building it.
   Calanais on Lewis ("the only other big one like that that I know of
   deserving its own illustration"). Built that way; "ok nice".
 - **Ancient woods:** his idea: "darker green than the normal woods,
-  something subtle to make it more obvious it's ancient".
+  something subtle to make it more obvious it's ancient". 23 Nov: "much
+  darker"; chose "C very deep" (#3F5A2A at 60%) from a swatch page.
 - **Session names:** keep the town and add where the walk was: "Ashcott –
-  RSPB Ham Wall", "Ashcott – Loxley Woods".
-- **Full-screen map:** no "Passed on the way" under it.
+  RSPB Ham Wall", "Ashcott – Loxley Woods". 23 Nov: an OS wood or moor
+  only within 0.5 km ("no good showing a nature reserve that's miles away").
+- **Full-screen map:** no "Passed on the way" strip under it. 23 Nov: the
+  words on the bottom of the map, a line either side, no background; a tap
+  opens the list.
+- **Map controls (23 Nov):** search bar and buttons mid grey (#8C877D) to
+  stand out on the yellowish map; the plain grey box "looks a bit 1990s",
+  so an "engraved label": radius 4, a paper hairline inside, a shadow
+  (chose A over a pill, a double-rule label and a cartouche). Full-screen
+  button to the right of the search.
+- **Map names (23 Nov):** where bird names overlap, show one; tapping a
+  name does what tapping its heart does.
+- **Search (23 Nov):** "this is about nature": places (isles, towns,
+  villages) first, then nature; no shops, pharmacies or addresses. A click
+  in the box clears the last search.
 - **Map timing readout:** a switch, off by default.
 - **Flutter plate as the default:** yes, with the web plate kept as a
   fallback and the options moved into Display.

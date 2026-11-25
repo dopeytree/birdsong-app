@@ -12,10 +12,19 @@ Tobermory).
 
 ## Controls
 
-- Search box top right (Photon), deduped.
-- + and −, and reset (↻).
-- Full screen (⛶): a bird card opens over it; Escape closes. No "Passed on
-  the way" under it (Ed, 22 Nov; `PassedStrip` kept, unused).
+- Controls are grey "engraved labels" (#8C877D, radius 4, paper hairline,
+  shadow; Ed 23 Nov).
+- Search box top right (Photon), deduped; places first, then nature;
+  shops, amenities, streets and addresses dropped (`placesOf`). A click
+  into it clears the last search.
+- + and −, reset (↻) and layers in one column, top left.
+- Full screen (⛶), right of the search: a bird card opens over it; Escape
+  closes. "Passed on the way" sits on the bottom of the full-screen map,
+  a line either side, no background; a tap opens the list (`_PassedOnMap`
+  in `native_plate.dart`; `PassedStrip` kept, unused). With the credit
+  opened on a narrow screen the two can overlap.
+- Bird names that would overlap: only the earliest heard keeps its name,
+  chosen again on zoom; a tap on a name opens the card, as the heart does.
 - Layers button: the "On the map" panel.
 - Taps are decided in one place, most particular first (`_tapped`).
 
@@ -53,8 +62,8 @@ default) showed 20–47 ms after.
 
 ## Ancient woods (22 Nov, not yet seen)
 
-A fill a shade deeper over the map's own woods (`_ancient`, `#4F6B35` at
-18%, no edge, no name). England only. Stockhill is a plantation, so not
+A fill over the map's own woods (`_ancient`, `#3F5A2A` at 60%, Ed 23 Nov;
+was `#4F6B35` at 18%; no edge, no name). England only. Stockhill is a plantation, so not
 tinted; Buddle's Wood and Loxley Wood are. Ed may want the shade tuned.
 Heavy in dense places (the Weald: 1,430 woods, 1.3 MB a view).
 

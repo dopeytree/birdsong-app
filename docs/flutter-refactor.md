@@ -50,7 +50,20 @@ Ed needs to run `Build on Mac.command` and look at:
 5. The map's timing readout off by default (Settings → Map, debug builds);
    no "Passed on the way" under the full-screen map.
 
-Details of 2 to 4 are in `map.md`.
+6. (23 Nov) Ancient woods much darker; map search and buttons grey
+   engraved labels, full screen beside the search; search clears on a
+   click and favours places and nature; overlapping bird names show one,
+   a tap on a name opens the card; "Passed on the way" on the bottom of
+   the full-screen map.
+
+7. (23 Nov) The song scribble: a sepia pencil line along the bottom
+   between the map and calendar buttons, drawn live from the mic while
+   listening here, with the bird being heard named in a gap; a faint
+   resting line otherwise. Settings → Display → Song scribble while
+   listening (on by default). `native/song_scribble.dart`,
+   `engine/scribble_trace.dart`. Not on stations yet.
+
+Details of 2 to 6 are in `map.md`; Ed's words in `decisions.md`.
 
 Also built 23 Nov: the model update strip along the top of the screen
 (Settings → Models → Check now to see it at once). Notes in `data-sources.md`
