@@ -457,6 +457,49 @@ class _NativePlateState extends State<NativePlate> {
   /// card over it. "Passed on the way" sits on the map at the bottom and
   /// opens the list (Ed, 23 Nov).
   Future<void> _mapFullScreen(Walk? Function() walk, List<_Row> rows) {
+    final mapShotKey = GlobalKey();
+    final mapShareKey = GlobalKey();
+    Future<Uint8List?> mapPicture() async {
+      final box = mapShotKey.currentContext?.findRenderObject();
+      if (box is! RenderRepaintBoundary) return null;
+      final image = await box.toImage(pixelRatio: MediaQuery.devicePixelRatioOf(context));
+      try {
+        final png = await image.toByteData(format: ui.ImageByteFormat.png);
+        return png?.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
+    }
+
+    Future<void> shareMap() async {
+      final box = mapShareKey.currentContext?.findRenderObject() as RenderBox?;
+      final from = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+      var ok = false;
+      try {
+        final png = await mapPicture();
+        if (png != null) ok = await PlateShare.share(text: 'Walk with Birdsong', from: from, png: png);
+      } catch (e) {
+        debugPrint('map share: $e');
+      }
+      if (!ok && mounted) _say("Couldn't take a picture of the map.");
+    }
+
+    Future<void> saveMap() async {
+      var r = 'failed';
+      try {
+        final png = await mapPicture();
+        if (png != null) r = await PlateShare.saveToPhotos(png: png);
+      } catch (e) {
+        debugPrint('map save: $e');
+      }
+      if (!mounted) return;
+      _say(switch (r) {
+        'saved' => 'Saved to Photos.',
+        'denied' => 'Birdsong may not add to Photos: allow it in Settings.',
+        _ => "Couldn't save the map.",
+      });
+    }
+
     return Navigator.of(context).push(PageRouteBuilder<void>(
       fullscreenDialog: true,
       transitionDuration: const Duration(milliseconds: 180),
@@ -476,25 +519,30 @@ class _NativePlateState extends State<NativePlate> {
                       app.settings.mapExtras ? (_landmarks.walk?.passed ?? const <Passed>[]) : const <Passed>[];
                   return Stack(children: [
                     Positioned.fill(
-                      child: LayoutBuilder(
-                        builder: (context, box) => WalkMap(
-                          walk: walk(),
-                          allBirds: app.settings.mapBirds == 'all',
-                          size: box.biggest,
-                          // the card opens over the full-screen map; closing it
-                          // leaves the map full screen
-                          onBird: (sci, common) => _openFromMap(sci, common, rows),
-                          onHold: (_) {},
-                          landmarks: app.settings.mapExtras ? _landmarks : null,
-                          settings: app.settings,
-                          species: [for (final r in rows) (sci: r.sci, common: r.common)],
-                          fullScreen: true,
-                          onFullScreen: () => Navigator.of(context).maybePop(),
+                      child: RepaintBoundary(
+                        key: mapShotKey,
+                        child: LayoutBuilder(
+                          builder: (context, box) => WalkMap(
+                            walk: walk(),
+                            allBirds: app.settings.mapBirds == 'all',
+                            size: box.biggest,
+                            // the card opens over the full-screen map; closing it
+                            // leaves the map full screen
+                            onBird: (sci, common) => _openFromMap(sci, common, rows),
+                            onHold: (_) {},
+                            landmarks: app.settings.mapExtras ? _landmarks : null,
+                            settings: app.settings,
+                            species: [for (final r in rows) (sci: r.sci, common: r.common)],
+                            fullScreen: true,
+                            onPoi: passed.isNotEmpty
+                                ? () => showPassed(context, _landmarks, about: app.settings.mapPassedAbout)
+                                : null,
+                          ),
                         ),
                       ),
                     ),
-                    // Bottom-left star icon on the map: closes the map and opens
-                    // Latest & most heard (same as top-right ✕).
+                    // Bottom-left owl icon on the map: closes the map and opens
+                    // Latest & most heard.
                     Positioned(
                       left: 10,
                       bottom: 10,
@@ -504,7 +552,7 @@ class _NativePlateState extends State<NativePlate> {
                           boxShadow: [BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10)],
                         ),
                         child: Material(
-                          color: const Color(0xFF8C877D),
+                          color: madder,
                           borderRadius: const BorderRadius.all(Radius.circular(4)),
                           clipBehavior: Clip.antiAlias,
                           child: InkWell(
@@ -513,23 +561,50 @@ class _NativePlateState extends State<NativePlate> {
                               width: 31,
                               height: 31,
                               child: Center(
-                                child: Icon(Icons.star_border_outlined, size: 19, color: paper),
+                                child: _OwlIcon(size: 19, color: paper),
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                    // on the map, not a strip below it; clear of the credit ⓘ (Ed, 23 Nov)
-                    if (passed.isNotEmpty)
+                    // Bottom-right share button on the map.
+                    if (PlateShare.supported)
                       Positioned(
-                        left: 16,
-                        right: 40,
+                        right: 10,
                         bottom: 10,
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          child: _PassedOnMap(
-                            onTap: () => showPassed(context, _landmarks, about: app.settings.mapPassedAbout),
+                        child: DecoratedBox(
+                          decoration: const BoxDecoration(
+                            borderRadius: BorderRadius.all(Radius.circular(4)),
+                            boxShadow: [BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10)],
+                          ),
+                          child: Material(
+                            color: madder,
+                            borderRadius: const BorderRadius.all(Radius.circular(4)),
+                            clipBehavior: Clip.antiAlias,
+                            child: PopupMenuButton<String>(
+                              key: mapShareKey,
+                              padding: EdgeInsets.zero,
+                              tooltip: 'Share or save the map',
+                              color: paper,
+                              onSelected: (v) => v == 'save' ? saveMap() : shareMap(),
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'share',
+                                  child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
+                                ),
+                                PopupMenuItem(
+                                  value: 'save',
+                                  child: ListTile(
+                                      leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
+                                ),
+                              ],
+                              child: const SizedBox(
+                                width: 31,
+                                height: 31,
+                                child: Center(child: Icon(Icons.ios_share, size: 17, color: paper)),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -866,8 +941,16 @@ class _NativePlateState extends State<NativePlate> {
                             children: [
                               Padding(
                                 padding: EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
-                                child: _collage(ses, onPlate, newest, box.maxWidth - 2 * plateSide,
-                                    _plateHeight(box.maxWidth, box.maxHeight) - 12),
+                                child: _collage(
+                                  ses,
+                                  onPlate,
+                                  newest,
+                                  box.maxWidth - 2 * plateSide,
+                                  _plateHeight(box.maxWidth, box.maxHeight) - 12,
+                                  sizeBy: mode.key == 'equal'
+                                      ? 'equal'
+                                      : (feed != null ? 'calls' : 'time'),
+                                ),
                               ),
                               // With no index there is no heading to carry the
                               // session arrows: the web plate's app draws a
@@ -1029,7 +1112,8 @@ class _NativePlateState extends State<NativePlate> {
                     child: _lightToggle(feed, app.settings.nativeHeadingInk ? ink : sepia, end: true),
                   ),
                 // Single bottom-left view cycle button:
-                // Most recent (map) -> Map (star / ✕) -> Latest & most heard (grid) -> No pecking order (mosaic) -> Most recent.
+                // Local:  Most recent (map) -> Map (owl) -> Latest & most heard (grid) -> No pecking order (mosaic) -> Most recent.
+                // Remote: Most heard (map)  -> Map (owl) -> Latest & most heard (grid) -> No pecking order (quilt)  -> Most heard.
                 Positioned(
                   left: 8,
                   bottom: 8,
@@ -1040,12 +1124,12 @@ class _NativePlateState extends State<NativePlate> {
                     tooltip: switch (mode.key) {
                       'time' => 'The walk on a map',
                       'spotlight' => 'No pecking order',
-                      _ => 'Recent ramblings',
+                      _ => feed != null ? 'Most heard' : 'Recent ramblings',
                     },
                     icon: Icon(switch (mode.key) {
                       'time' => Icons.map_outlined,
                       'spotlight' => Icons.grid_view_outlined,
-                      _ => Icons.auto_awesome_mosaic_outlined,
+                      _ => feed != null ? Icons.view_quilt_outlined : Icons.auto_awesome_mosaic_outlined,
                     }),
                     color: red,
                     onPressed: onDefaultView ? () => _openMap(feed, rows) : _nextMode,
@@ -1255,7 +1339,8 @@ class _NativePlateState extends State<NativePlate> {
   /// something asks them to: the sizing button, the window changing size, or
   /// a new bird joining while listening (it appears once its plate is
   /// ready, and the rest make room).
-  Widget _collage(Session? ses, List<_Row> rows, String? newest, double width, double height) {
+  Widget _collage(Session? ses, List<_Row> rows, String? newest, double width, double height,
+      {required String sizeBy}) {
     final showing = _showingFor(ses);
     final ready = [for (final r in rows) if (_art.containsKey(r.sci)) r];
     // Not before the height is known either (_measure), or they would be
@@ -1274,7 +1359,7 @@ class _NativePlateState extends State<NativePlate> {
       birds: [for (final r in ready) CollageBird(r.sci, r.common, r.count, r.last)],
       art: _art,
       size: Size(width, height),
-      sizeBy: app.settings.nativeSizeBy,
+      sizeBy: sizeBy,
       markAt: app.settings.nativeMarkAt,
       newest: newest,
       live: app.engine.liveSpecies,
@@ -1460,49 +1545,72 @@ class _NativePlateState extends State<NativePlate> {
   }
 }
 
-/// "Passed on the way" button over the full-screen map: same mid-grey style
-/// as the search bar and zoom/layers controls.
-class _PassedOnMap extends StatelessWidget {
-  const _PassedOnMap({required this.onTap});
+/// Crisp outlined owl icon matching Material Outlined stroke weight,
+/// used on the map's bottom-left button to open the Latest & most heard view.
+class _OwlIcon extends StatelessWidget {
+  const _OwlIcon({required this.size, required this.color});
 
-  final VoidCallback onTap;
+  final double size;
+  final Color color;
 
   @override
-  Widget build(BuildContext context) {
-    const radius = BorderRadius.all(Radius.circular(4));
-    return Semantics(
-      button: true,
-      label: 'Passed on the way',
-      hint: 'Show everything passed',
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          borderRadius: radius,
-          boxShadow: [BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10)],
-        ),
-        child: Material(
-          color: const Color(0xFF8C877D),
-          borderRadius: radius,
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: const SizedBox(
-              height: 31,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Center(
-                  widthFactor: 1,
-                  child: Text(
-                    'Passed on the way',
-                    style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: paper, height: 1.2),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  Widget build(BuildContext context) =>
+      CustomPaint(size: Size.square(size), painter: _OwlPainter(color));
+}
+
+class _OwlPainter extends CustomPainter {
+  const _OwlPainter(this.color);
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.085
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final fill = Paint()..color = color;
+
+    // Owl body + ear tufts
+    final body = Path()
+      ..moveTo(w * 0.24, h * 0.14) // left ear tuft
+      ..lineTo(w * 0.36, h * 0.24)
+      ..quadraticBezierTo(w * 0.50, h * 0.20, w * 0.64, h * 0.24)
+      ..lineTo(w * 0.76, h * 0.14) // right ear tuft
+      ..quadraticBezierTo(w * 0.84, h * 0.34, w * 0.82, h * 0.58)
+      ..quadraticBezierTo(w * 0.80, h * 0.86, w * 0.50, h * 0.89)
+      ..quadraticBezierTo(w * 0.20, h * 0.86, w * 0.18, h * 0.58)
+      ..quadraticBezierTo(w * 0.16, h * 0.34, w * 0.24, h * 0.14)
+      ..close();
+    canvas.drawPath(body, stroke);
+
+    // Two large round eyes + pupils
+    final eyeR = w * 0.125;
+    final leftEye = Offset(w * 0.37, h * 0.44);
+    final rightEye = Offset(w * 0.63, h * 0.44);
+    canvas.drawCircle(leftEye, eyeR, stroke);
+    canvas.drawCircle(rightEye, eyeR, stroke);
+    canvas.drawCircle(leftEye, w * 0.042, fill);
+    canvas.drawCircle(rightEye, w * 0.042, fill);
+
+    // Small beak
+    final beak = Path()
+      ..moveTo(w * 0.45, h * 0.54)
+      ..lineTo(w * 0.50, h * 0.63)
+      ..lineTo(w * 0.55, h * 0.54);
+    canvas.drawPath(beak, stroke);
+
+    // Subtle breast feather arc
+    final breast = Path()
+      ..moveTo(w * 0.36, h * 0.72)
+      ..quadraticBezierTo(w * 0.50, h * 0.79, w * 0.64, h * 0.72);
+    canvas.drawPath(breast, stroke);
   }
+
+  @override
+  bool shouldRepaint(_OwlPainter old) => old.color != color;
 }
 
 /// A small arrow at the plate's edge for the next or previous session; not

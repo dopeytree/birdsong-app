@@ -13,7 +13,7 @@ import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:url_launcher/url_launcher.dart';
 
-import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, paperDeep, sepia, serif;
 import '../settings.dart';
 import 'bird_records.dart';
 import 'engravings.dart';
@@ -236,6 +236,7 @@ class WalkMap extends StatefulWidget {
     required this.onHold,
     this.landmarks,
     this.onFullScreen,
+    this.onPoi,
     this.fullScreen = false,
     this.settings,
     this.species = const [],
@@ -252,6 +253,9 @@ class WalkMap extends StatefulWidget {
 
   /// Opens the map full screen, or (when [fullScreen]) closes it again.
   final VoidCallback? onFullScreen;
+
+  /// Optional POI ("Passed on the way") button beside Search at top left.
+  final VoidCallback? onPoi;
 
   /// This map is the full-screen one: its button closes it.
   final bool fullScreen;
@@ -1441,7 +1445,7 @@ class _WalkMapState extends State<WalkMap> {
               if (kit != null)
                 Positioned(
                   right: 10,
-                  bottom: 10,
+                  top: 10,
                   child: _ZoomButtons(
                     map: _map,
                     home: w == null || (w.trail.isEmpty && w.birds.isEmpty && w.place == null) ? null : _home,
@@ -1452,7 +1456,7 @@ class _WalkMapState extends State<WalkMap> {
               if (kit != null && _layersOpen && widget.settings != null)
                 Positioned(
                   right: 46,
-                  bottom: 10,
+                  top: 10,
                   child: _LayersPanel(
                     settings: widget.settings!,
                     species: widget.species,
@@ -1463,25 +1467,29 @@ class _WalkMapState extends State<WalkMap> {
                 Positioned(
                   left: 10,
                   top: 10,
-                  child: PlaceSearch(
-                    width: math.min(
-                      280.0,
-                      math.max(0.0, widget.size.width - 20 - (widget.onFullScreen == null ? 0 : 46)),
-                    ),
-                    near: () => _ready ? _map.camera.center : center,
-                    onPick: _goTo,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      PlaceSearch(
+                        width: math.min(
+                          220.0,
+                          math.max(100.0, widget.size.width - 20 - 39 - (widget.onPoi != null ? 58 : 0)),
+                        ),
+                        near: () => _ready ? _map.camera.center : center,
+                        onPick: _goTo,
+                      ),
+                      if (widget.onPoi != null) ...[
+                        const SizedBox(width: 6),
+                        _PoiButton(onTap: widget.onPoi!),
+                      ],
+                    ],
                   ),
-                ),
-              if (kit != null && widget.onFullScreen != null)
-                Positioned(
-                  right: 10,
-                  top: 10,
-                  child: _CloseMapButton(onTap: widget.onFullScreen!),
                 ),
               if (kit != null)
                 Positioned(
                     left: widget.fullScreen ? 48 : 6,
-                    bottom: 6,
+                    bottom: 10,
                     child: _Credit(_credit +
                         (widget.landmarks != null ? _extrasCredit() : '') +
                         (_recordsKey != null ? '\nBird records: GBIF.org' : '') +
@@ -1813,8 +1821,8 @@ class _StartFinishPainter extends CustomPainter {
   bool shouldRepaint(_StartFinishPainter old) => old.start != start;
 }
 
-/// Engraved grey for the map's controls (Ed, 23 Nov; was paper).
-const _controlFill = Color(0xFF8C877D);
+/// Madder red for the map's controls, matching the rest of the app's buttons.
+const _controlFill = madder;
 const _controlRule = Color(0x59EEE5CE);
 const _controlRadius = BorderRadius.all(Radius.circular(4));
 const _controlShadow = BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10);
@@ -1902,20 +1910,19 @@ class _ZoomButtons extends StatelessWidget {
   }
 }
 
-/// Close button (✕) at the top right of the full-screen map, matching the
-/// search bar and zoom buttons' mid-grey style.
-class _CloseMapButton extends StatelessWidget {
-  const _CloseMapButton({required this.onTap});
+/// POI ("Passed on the way") button beside Search at the top of the map.
+class _PoiButton extends StatelessWidget {
+  const _PoiButton({required this.onTap});
 
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: 'Close map',
+      message: 'Points of interest passed on the way',
       child: Semantics(
         button: true,
-        label: 'Close map',
+        label: 'POI',
         child: DecoratedBox(
           decoration: const BoxDecoration(borderRadius: _controlRadius, boxShadow: [_controlShadow]),
           child: Material(
@@ -1925,10 +1932,16 @@ class _CloseMapButton extends StatelessWidget {
             child: InkWell(
               onTap: onTap,
               child: const SizedBox(
-                width: 31,
                 height: 31,
-                child: Center(
-                  child: Icon(Icons.close, size: 19, color: paper),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Center(
+                    widthFactor: 1,
+                    child: Text(
+                      'POI',
+                      style: TextStyle(fontFamily: caps, fontSize: 13, letterSpacing: 0.8, color: paper, height: 1.1),
+                    ),
+                  ),
                 ),
               ),
             ),

@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:latlong2/latlong.dart' hide Path;
 
-import '../main.dart' show ink, paper, paperDeep, sepia, serif;
+import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
 
 /// A place found by the map's search: its name, a line saying where it is,
 /// its point, and its extent when it has one.
@@ -224,10 +224,10 @@ class _PlaceSearchState extends State<PlaceSearch> {
 
   @override
   Widget build(BuildContext context) {
-    // Warm grey matching the zoom buttons on the left, with no extra inner border.
+    // Madder matching the app's other buttons and map controls, with no extra inner border.
     // The list below stays paper, with the same slight radius.
     const bar = BoxDecoration(
-      color: Color(0xFF8C877D),
+      color: madder,
       borderRadius: BorderRadius.all(Radius.circular(4)),
       boxShadow: [BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10)],
     );
@@ -275,7 +275,7 @@ class _PlaceSearchState extends State<PlaceSearch> {
                     decoration: InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
-                      hintText: 'Search for a place',
+                      hintText: 'Search',
                       hintStyle: TextStyle(
                         fontFamily: serif,
                         fontStyle: FontStyle.italic,

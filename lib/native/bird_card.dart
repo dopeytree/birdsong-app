@@ -400,9 +400,9 @@ class _BirdCardState extends State<BirdCard> {
     final screen = MediaQuery.sizeOf(context);
     showDialog<void>(
       context: context,
-      barrierColor: const Color(0xE62A241C),
+      barrierColor: const Color(0x8C2A241C),
       builder: (c) => Dialog.fullscreen(
-        backgroundColor: const Color(0xF22A241C),
+        backgroundColor: paper,
         child: SafeArea(
           child: Stack(
             children: [
@@ -431,7 +431,7 @@ class _BirdCardState extends State<BirdCard> {
                 child: IconButton(
                   tooltip: 'Close',
                   icon: const Icon(Icons.close),
-                  color: paper,
+                  color: ink,
                   onPressed: () => Navigator.of(c).pop(),
                 ),
               ),
@@ -443,7 +443,7 @@ class _BirdCardState extends State<BirdCard> {
                   child: Text(
                     widget.source.common,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontFamily: serif, fontSize: 16, color: paper),
+                    style: const TextStyle(fontFamily: serif, fontSize: 16, color: ink),
                   ),
                 ),
               ),
