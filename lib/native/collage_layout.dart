@@ -99,57 +99,174 @@ class _Placed {
   double cy = 0;
 }
 
-/// Applies a user drag [drag] (in logical pixels) to [places], moving birds
-/// differently depending on the active view [sizeBy] ('calls', 'time', or
-/// 'equal') while keeping every figure inside [box].
-///
-/// [rank] maps each bird's id to its normalized position 0..1 in the current
-/// view (for 'calls': 0 = least heard, 1 = most heard; for 'time': 0 = oldest,
-/// 1 = most recent; for 'equal': index fraction).
-List<CollagePlace> displaceCollage(
-  List<CollagePlace> places,
-  Map<String, double> rank, {
-  required String sizeBy,
-  required Offset drag,
-  required Size box,
-}) {
-  if (places.isEmpty || drag == Offset.zero || box.width <= 0 || box.height <= 0) {
-    return places;
+/// Unit quaternion for smooth, gimbal-lock-free 3D trackball rotation.
+class SphereQuat {
+  const SphereQuat(this.w, this.x, this.y, this.z);
+
+  static const identity = SphereQuat(1, 0, 0, 0);
+
+  final double w, x, y, z;
+
+  bool get isIdentity => (w.abs() - 1).abs() < 1e-4 && x.abs() < 1e-4 && y.abs() < 1e-4 && z.abs() < 1e-4;
+
+  /// Rotation of [angle] radians around unit axis ([ax], [ay], [az]).
+  factory SphereQuat.axisAngle(double ax, double ay, double az, double angle) {
+    final half = angle / 2;
+    final s = math.sin(half);
+    return SphereQuat(math.cos(half), ax * s, ay * s, az * s).normalized();
   }
-  final center = Offset(box.width / 2, box.height / 2);
-  final maxSpan = math.max(1.0, math.min(box.width, box.height));
-  final dragMag = (drag.distance / maxSpan).clamp(0.0, 1.0);
 
-  return [
-    for (var i = 0; i < places.length; i++)
-      () {
-        final p = places[i];
-        final r = (rank[p.id] ?? 0.5).clamp(0.0, 1.0);
-        // How strongly this bird follows the drag depends on the view mode:
-        // - calls: most-heard birds stay steadier (anchor), rarer birds glide further
-        // - time: most-recent birds lead the drag, older birds trail behind
-        // - equal: birds glide evenly together with subtle organic spread
-        final factor = switch (sizeBy) {
-          'calls' => 1.25 - 0.8 * r,
-          'time' => 0.45 + 0.8 * r,
-          _ => 0.85 + 0.25 * math.sin(i * 1.7),
-        };
-        // Gentle radial breathing room while dragging so tucked-away birds peek out
-        final fromCenter = p.rect.center - center;
-        final spread = fromCenter * (0.08 * dragMag);
-        final dx = drag.dx * factor + spread.dx;
-        final dy = drag.dy * factor + spread.dy;
+  SphereQuat normalized() {
+    final len = math.sqrt(w * w + x * x + y * y + z * z);
+    if (len < 1e-9) return identity;
+    return SphereQuat(w / len, x / len, y / len, z / len);
+  }
 
-        // Keep every bird's centre comfortably inside the collage box so even
-        // large figures glide freely while never disappearing off-screen.
-        final minLeft = -p.rect.width * 0.25;
-        final maxLeft = box.width - p.rect.width * 0.75;
-        final minTop = -p.rect.height * 0.25;
-        final maxTop = box.height - p.rect.height * 0.75;
-        final left = (p.rect.left + dx).clamp(math.min(minLeft, maxLeft), math.max(minLeft, maxLeft)).toDouble();
-        final top = (p.rect.top + dy).clamp(math.min(minTop, maxTop), math.max(minTop, maxTop)).toDouble();
-        final moved = Rect.fromLTWH(left, top, p.rect.width, p.rect.height);
-        return CollagePlace(p.id, moved, 1 + (moved.center.dy / maxSpan * 10).round());
-      }()
-  ];
+  SphereQuat operator *(SphereQuat o) => SphereQuat(
+        w * o.w - x * o.x - y * o.y - z * o.z,
+        w * o.x + x * o.w + y * o.z - z * o.y,
+        w * o.y - x * o.z + y * o.w + z * o.x,
+        w * o.z + x * o.y - y * o.x + z * o.w,
+      ).normalized();
+
+  /// Rotate 3D point ([px], [py], [pz]).
+  (double, double, double) rotate(double px, double py, double pz) {
+    final tx = 2 * (y * pz - z * py);
+    final ty = 2 * (z * px - x * pz);
+    final tz = 2 * (x * py - y * px);
+    return (
+      px + w * tx + (y * tz - z * ty),
+      py + w * ty + (z * tx - x * tz),
+      pz + w * tz + (x * ty - y * tx),
+    );
+  }
+
+  /// Spherical linear interpolation from `this` to [to] at [t] in 0..1.
+  SphereQuat slerp(SphereQuat to, double t) {
+    var dot = w * to.w + x * to.x + y * to.y + z * to.z;
+    var tw = to.w, tx = to.x, ty = to.y, tz = to.z;
+    if (dot < 0) {
+      dot = -dot;
+      tw = -tw;
+      tx = -tx;
+      ty = -ty;
+      tz = -tz;
+    }
+    if (dot > 0.9995) {
+      return SphereQuat(
+        w + (tw - w) * t,
+        x + (tx - x) * t,
+        y + (ty - y) * t,
+        z + (tz - z) * t,
+      ).normalized();
+    }
+    final theta = math.acos(dot.clamp(-1.0, 1.0));
+    final sinT = math.sin(theta);
+    final a = math.sin((1 - t) * theta) / sinT;
+    final b = math.sin(t * theta) / sinT;
+    return SphereQuat(
+      w * a + tw * b,
+      x * a + tx * b,
+      y * a + ty * b,
+      z * a + tz * b,
+    ).normalized();
+  }
+}
+
+/// One billboarded bird projected from the 3D sphere onto the 2D collage box.
+class SpherePlace {
+  const SpherePlace(this.id, this.rect, {required this.z, required this.opacity});
+
+  final String id;
+  final Rect rect;
+
+  /// Depth after rotation: +1 is dead-centre front, -1 is far back.
+  final double z;
+
+  /// 1.0 on the front hemisphere, gently faded as birds pass behind.
+  final double opacity;
+}
+
+/// Places [items] on a 3D golden-angle sphere (first item at the front pole
+/// `(0, 0, +1)`), rotates the sphere by [rotation], and projects each item as
+/// an upright billboard facing the user inside [box].
+///
+/// Whichever bird rotates to the front centre (`z -> +1`) grows to equal hero
+/// size; birds toward the edge shrink, and birds on the back hemisphere shrink
+/// further and fade gently so the page stays airy.
+List<SpherePlace> layoutSphereCollage(
+  List<CollageItem> items,
+  Size box, {
+  SphereQuat rotation = SphereQuat.identity,
+}) {
+  if (items.isEmpty || box.width <= 0 || box.height <= 0) return [];
+  final n = items.length;
+  // Items ordered by weight descending so the view's hero sits at the front pole.
+  final ordered = [...items]..sort((a, b) => b.weight.compareTo(a.weight));
+
+  // Keep small groups mostly on the front/sides so a 2-5 bird walk doesn't hide
+  // birds behind at rest; larger flocks wrap smoothly around the full sphere.
+  final zSpan = n <= 4 ? 0.95 : (n <= 8 ? 1.35 : 1.82);
+  final minDim = math.min(box.width, box.height);
+  final heroBase = minDim * (n <= 3 ? 0.56 : (n <= 10 ? 0.46 : 0.40));
+  final rxScale = box.width * 0.37;
+  final ryScale = box.height * 0.36;
+  final cx0 = box.width / 2;
+  final cy0 = box.height / 2;
+
+  final out = <SpherePlace>[];
+  for (var i = 0; i < n; i++) {
+    final it = ordered[i];
+    final double px, py, pz;
+    if (n == 1) {
+      px = 0;
+      py = 0;
+      pz = 1;
+    } else {
+      pz = 1.0 - (i / (n - 1)) * zSpan;
+      final r = math.sqrt(math.max(0.0, 1.0 - pz * pz));
+      final theta = i * 2.399963229728653; // golden angle
+      px = r * math.cos(theta);
+      py = r * math.sin(theta);
+    }
+
+    final (rx, ry, rz) = rotation.rotate(px, py, pz);
+    // Subtle perspective foreshortening without tilting the upright engraving.
+    final persp = 2.6 / (2.6 - rz * 0.65);
+    final sx = cx0 + rx * rxScale * persp;
+    final sy = cy0 + ry * ryScale * persp;
+
+    // Equal hero size at the front centre (rz -> +1), shrinking smoothly away.
+    final front = ((rz + 1.0) / 2.0).clamp(0.0, 1.0);
+    final scale = 0.26 + 0.74 * math.pow(front, 1.65).toDouble();
+    final aspect = it.aspect.clamp(0.55, 2.2);
+    final base = it.blank ? heroBase * 0.55 : heroBase;
+    var w = base * scale * math.sqrt(aspect);
+    var h = base * scale / math.sqrt(aspect);
+    // Keep very wide or very tall plates inside the box comfortably.
+    final maxW = box.width * 0.72, maxH = box.height * 0.78;
+    if (w > maxW) {
+      final k = maxW / w;
+      w *= k;
+      h *= k;
+    }
+    if (h > maxH) {
+      final k = maxH / h;
+      w *= k;
+      h *= k;
+    }
+
+    // Front hemisphere crisp (1.0), gently fading behind to keep the page airy.
+    final opacity = rz >= 0.05
+        ? 1.0
+        : (0.14 + 0.86 * ((rz + 0.85) / 0.90).clamp(0.0, 1.0));
+
+    out.add(SpherePlace(
+      it.id,
+      Rect.fromCenter(center: Offset(sx, sy), width: w, height: h),
+      z: rz,
+      opacity: opacity,
+    ));
+  }
+  return out;
 }
