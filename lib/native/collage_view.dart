@@ -107,8 +107,6 @@ class _CollageViewState extends State<CollageView> {
   String? _focusedSci;
   List<CollagePlace> _lastPlaces = const [];
   DateTime _lastSwitch = DateTime.fromMillisecondsSinceEpoch(0);
-  String? _lastTapSci;
-  DateTime _lastTapAt = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _resetTimer;
 
   // The first plateful comes in one after another; later arrivals at once.
@@ -173,20 +171,6 @@ class _CollageViewState extends State<CollageView> {
 
   void _onPanEnd() {
     widget.onDragHold?.call(false);
-    _scheduleReset();
-  }
-
-  void _onTapBird(CollageBird b, bool isCenter) {
-    final now = DateTime.now();
-    final isDoubleTap =
-        _lastTapSci == b.sci && now.difference(_lastTapAt) < const Duration(milliseconds: 400);
-    _lastTapSci = b.sci;
-    _lastTapAt = now;
-    if (isCenter || isDoubleTap) {
-      widget.onOpen(b);
-      return;
-    }
-    setState(() => _focusedSci = b.sci);
     _scheduleReset();
   }
 
@@ -273,7 +257,7 @@ class _CollageViewState extends State<CollageView> {
                     _hover = where == null ? (_hover == p.id ? null : _hover) : p.id;
                     if (where != null) _pointer = p.rect.topLeft + where;
                   }),
-                  onTap: () => _onTapBird(bird[p.id]!, p.id == centerSci),
+                  onTap: () => widget.onOpen(bird[p.id]!),
                   onLongPress: () => widget.onOpen(bird[p.id]!),
                 ),
               ),

@@ -27,7 +27,24 @@ void main() {
         ),
       );
 
-  testWidgets('2-stage tap: first tap brings a bird to the centre with +, second tap opens card, idle resets after 10s',
+  testWidgets('tap on any bird opens its card directly without moving it', (tester) async {
+    CollageBird? opened;
+    await tester.pumpWidget(buildCollage((b) => opened = b));
+    await tester.pumpAndSettle();
+
+    final blueTit = find.byKey(const ValueKey('Cyanistes caeruleus'));
+    final robin = find.byKey(const ValueKey('Erithacus rubecula'));
+
+    await tester.tap(blueTit);
+    await tester.pump();
+    expect(opened?.sci, 'Cyanistes caeruleus');
+
+    await tester.tap(robin);
+    await tester.pump();
+    expect(opened?.sci, 'Erithacus rubecula');
+  });
+
+  testWidgets('dragging promotes the bird under pointer to the centre without opening card, then resets after 10s',
       (tester) async {
     CollageBird? opened;
     await tester.pumpWidget(buildCollage((b) => opened = b));
@@ -37,49 +54,20 @@ void main() {
     final blueTit = find.byKey(const ValueKey('Cyanistes caeruleus'));
     final startBlueWidth = tester.getSize(blueTit).width;
 
-    // Centre bird shows the + indicator
-    expect(find.text('+'), findsOneWidget);
-
-    // 1st tap on non-centre Blue Tit promotes it to centre, does NOT open card yet
-    await tester.tap(blueTit);
+    // Drag starting on peripheral Blue Tit -> moves it to centre, does NOT open card
+    await tester.timedDrag(blueTit, const Offset(30, 10), const Duration(milliseconds: 250));
     await tester.pumpAndSettle();
     expect(opened, isNull);
     expect(tester.getSize(blueTit).width, greaterThan(startBlueWidth * 1.5));
     expect(tester.getSize(blueTit).width, greaterThan(tester.getSize(robin).width));
 
-    // 2nd tap on Blue Tit (now in centre) opens its card
-    await tester.tap(blueTit);
-    await tester.pump();
-    expect(opened?.sci, 'Cyanistes caeruleus');
+    // After 5s, still promoted
+    await tester.pump(const Duration(seconds: 5));
+    expect(tester.getSize(blueTit).width, greaterThan(tester.getSize(robin).width));
 
-    // After 10s idle, layout glides back to default (Robin in centre)
-    await tester.pump(const Duration(seconds: 11));
+    // After 10s total idle, resets smoothly back to default
+    await tester.pump(const Duration(seconds: 6));
     await tester.pumpAndSettle();
     expect(tester.getSize(blueTit).width, closeTo(startBlueWidth, 1.0));
-  });
-
-  testWidgets('long-press and double-tap on a non-centre bird open its card directly', (tester) async {
-    CollageBird? opened;
-    await tester.pumpWidget(buildCollage((b) => opened = b));
-    await tester.pumpAndSettle();
-
-    final blackbird = find.byKey(const ValueKey('Turdus merula'));
-    final greatTit = find.byKey(const ValueKey('Parus major'));
-
-    // Long press opens card directly
-    await tester.longPress(blackbird);
-    await tester.pump();
-    expect(opened?.sci, 'Turdus merula');
-
-    // Fast double-tap on another non-centre bird opens card directly
-    opened = null;
-    await tester.tap(greatTit);
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.tap(greatTit);
-    await tester.pump();
-    expect(opened?.sci, 'Parus major');
-
-    // Let the 10s timer flush cleanly before test ends
-    await tester.pump(const Duration(seconds: 11));
   });
 }
