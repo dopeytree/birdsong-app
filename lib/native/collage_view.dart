@@ -459,13 +459,13 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                                   height: 22,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: madder.withValues(alpha: 0.9),
+                                    color: Colors.black.withValues(alpha: 0.88),
                                     boxShadow: const [BoxShadow(color: Color(0x333C280A), blurRadius: 4)],
                                   ),
                                   alignment: Alignment.center,
                                   child: const Text(
                                     '+',
-                                    style: TextStyle(fontSize: 15, height: 1, color: paper),
+                                    style: TextStyle(fontSize: 15, height: 1, color: Colors.white),
                                   ),
                                 )
                               : Container(
@@ -476,10 +476,10 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                                   ),
                                   decoration: BoxDecoration(
                                     color: widget.isCenter
-                                        ? madder.withValues(alpha: 0.9)
+                                        ? Colors.black.withValues(alpha: 0.88)
                                         : paper.withValues(alpha: 0.86),
                                     border: widget.isCenter
-                                        ? Border.all(color: paper.withValues(alpha: 0.35), width: 0.8)
+                                        ? Border.all(color: Colors.white.withValues(alpha: 0.25), width: 0.8)
                                         : Border.all(color: rule, width: 0.85),
                                     boxShadow: const [BoxShadow(color: Color(0x283C280A), blurRadius: 4)],
                                   ),
@@ -496,13 +496,13 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                                             fontStyle: FontStyle.italic,
                                             fontSize: widget.isCenter ? 13.5 : (widget.width < 90 ? 10.5 : 12),
                                             height: 1.15,
-                                            color: widget.isCenter ? paper : ink,
+                                            color: widget.isCenter ? Colors.white : ink,
                                           ),
                                         ),
                                       ),
                                       if (widget.isCenter) ...[
                                         const SizedBox(width: 5),
-                                        const Text('+', style: TextStyle(fontSize: 14, height: 1, color: paper)),
+                                        const Text('+', style: TextStyle(fontSize: 14, height: 1, color: Colors.white)),
                                       ],
                                     ],
                                   ),
