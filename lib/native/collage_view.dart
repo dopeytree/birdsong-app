@@ -94,8 +94,14 @@ class CollageView extends StatefulWidget {
 class _CollageViewState extends State<CollageView> {
   String? _hover;
   Offset _pointer = Offset.zero;
-  Offset _pan = Offset.zero;
-  bool _dragging = false;
+
+  /// Purely visual virtual focus: while the user drags across the collage, the
+  /// bird under their finger/pointer is given the top weight so [layoutCollage]
+  /// glides it into the centre as the largest bird (nothing saved to disk).
+  /// Resets to null after [widget.resetAfter] with no drag.
+  String? _focusedSci;
+  List<CollagePlace> _lastPlaces = const [];
+  DateTime _lastSwitch = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _resetTimer;
 
   // The first plateful comes in one after another; later arrivals at once.
@@ -112,8 +118,7 @@ class _CollageViewState extends State<CollageView> {
     super.didUpdateWidget(old);
     if (old.sizeBy != widget.sizeBy || old.size != widget.size) {
       _resetTimer?.cancel();
-      _pan = Offset.zero;
-      _dragging = false;
+      _focusedSci = null;
     }
   }
 
@@ -125,32 +130,41 @@ class _CollageViewState extends State<CollageView> {
 
   void _scheduleReset() {
     _resetTimer?.cancel();
-    if (_pan == Offset.zero) return;
+    if (_focusedSci == null) return;
     _resetTimer = Timer(widget.resetAfter, () {
       if (!mounted) return;
-      setState(() => _pan = Offset.zero);
+      setState(() => _focusedSci = null);
     });
   }
 
-  void _onPanStart(DragStartDetails _) {
+  void _focusAt(Offset local, {bool force = false}) {
+    CollagePlace? hit;
+    // Prefer a direct hit on a bird's current box (checking top-most first).
+    for (var i = _lastPlaces.length - 1; i >= 0; i--) {
+      if (_lastPlaces[i].rect.contains(local)) {
+        hit = _lastPlaces[i];
+        break;
+      }
+    }
+    if (hit == null || hit.id == _focusedSci) return;
+    final now = DateTime.now();
+    if (!force && now.difference(_lastSwitch) < const Duration(milliseconds: 280)) return;
+    _lastSwitch = now;
+    setState(() => _focusedSci = hit!.id);
+    _scheduleReset();
+  }
+
+  void _onPanStart(DragStartDetails d) {
     _resetTimer?.cancel();
-    setState(() => _dragging = true);
     widget.onDragHold?.call(true);
+    _focusAt(d.localPosition, force: true);
   }
 
   void _onPanUpdate(DragUpdateDetails d) {
-    final maxX = widget.size.width * 0.65;
-    final maxY = widget.size.height * 0.65;
-    setState(() {
-      _pan = Offset(
-        (_pan.dx + d.delta.dx).clamp(-maxX, maxX).toDouble(),
-        (_pan.dy + d.delta.dy).clamp(-maxY, maxY).toDouble(),
-      );
-    });
+    _focusAt(d.localPosition);
   }
 
   void _onPanEnd() {
-    setState(() => _dragging = false);
     widget.onDragHold?.call(false);
     _scheduleReset();
   }
@@ -162,16 +176,31 @@ class _CollageViewState extends State<CollageView> {
     // Sized by time it is the order that counts, not the gap: a morning's
     // birds would otherwise come out all of a size.
     final byTime = [...birds]..sort((a, b) => (a.last ?? DateTime(0)).compareTo(b.last ?? DateTime(0)));
-    double weight(CollageBird b) => switch (widget.sizeBy) {
+    double baseWeight(CollageBird b) => switch (widget.sizeBy) {
           'equal' => 1,
           'time' => (byTime.indexOf(b) + 1).toDouble(),
           _ => b.count.toDouble(),
         };
-    final basePlaces = layoutCollage([
+    final maxWeight = birds.map(baseWeight).reduce(math.max);
+    // Purely visual virtual boost for the dragged/focused bird so layoutCollage
+    // promotes it to the centre at hero size using the exact standard layout.
+    double weight(CollageBird b) {
+      if (_focusedSci != null && b.sci == _focusedSci) {
+        return widget.sizeBy == 'equal' ? 3.0 : maxWeight * 1.15;
+      }
+      return baseWeight(b);
+    }
+
+    final places = layoutCollage([
       for (final b in birds)
-        CollageItem(b.sci, weight: weight(b), aspect: art[b.sci]?.aspect ?? 1.7, blank: art[b.sci] == null)
+        CollageItem(
+          b.sci,
+          weight: weight(b),
+          aspect: art[b.sci]?.aspect ?? 1.7,
+          blank: art[b.sci] == null && b.sci != _focusedSci,
+        )
     ], widget.size);
-    final places = lensCollage(basePlaces, pan: _pan, box: widget.size);
+    _lastPlaces = places;
     final bird = {for (final b in birds) b.sci: b};
     final newest = widget.markAt == 'none' ? null : widget.newest;
     // has-newest: the rest only stand back when the latest is on the plate
@@ -198,8 +227,8 @@ class _CollageViewState extends State<CollageView> {
             for (final p in order)
               AnimatedPositioned(
                 key: ValueKey(p.id),
-                duration: _dragging ? const Duration(milliseconds: 80) : const Duration(milliseconds: 700),
-                curve: _dragging ? Curves.easeOut : const Cubic(.2, .7, .2, 1),
+                duration: const Duration(milliseconds: 700),
+                curve: const Cubic(.2, .7, .2, 1),
                 left: p.rect.left,
                 top: p.rect.top,
                 width: p.rect.width,
