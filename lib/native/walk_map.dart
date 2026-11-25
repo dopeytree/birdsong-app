@@ -505,22 +505,23 @@ class _WalkMapState extends State<WalkMap> {
         for (final b in widget.walk?.birds ?? const <WalkBird>[]) b.at,
       ];
 
-  /// The page's fitWalk(): the trail and the crosses, with a margin, no
-  /// closer than zoom 16; just the place at 14 when that is all there is.
+  /// Fit as close to the bird detections as possible; fall back to the walk
+  /// trail or place when there are no placed birds.
   void _fit() {
     if (!mounted || !_ready) return;
     final w = widget.walk;
     _fittedTo = w?.key;
-    final pts = _points;
+    final birdPts = [for (final b in w?.birds ?? const <WalkBird>[]) b.at];
+    final pts = birdPts.isNotEmpty ? birdPts : _points;
     if (pts.isEmpty) {
-      if (w?.place != null) _map.move(w!.place!, 14);
+      if (w?.place != null) _map.move(w!.place!, 15);
       return;
     }
-    final pad = math.min(60.0, (math.min(widget.size.width, widget.size.height) / 6).roundToDouble());
+    final pad = math.min(48.0, (math.min(widget.size.width, widget.size.height) / 7).roundToDouble());
     if (pts.length == 1) {
-      _map.move(pts.first, 16);
+      _map.move(pts.first, 17.5);
     } else {
-      _map.fitCamera(CameraFit.coordinates(coordinates: pts, padding: EdgeInsets.all(pad), maxZoom: 16));
+      _map.fitCamera(CameraFit.coordinates(coordinates: pts, padding: EdgeInsets.all(pad), maxZoom: 18));
     }
   }
 
@@ -1352,8 +1353,8 @@ class _WalkMapState extends State<WalkMap> {
                 ),
               if (kit != null)
                 Positioned(
-                  left: 10,
-                  top: 10,
+                  right: 10,
+                  bottom: 10,
                   child: _ZoomButtons(
                     map: _map,
                     home: w == null || (w.trail.isEmpty && w.birds.isEmpty && w.place == null) ? null : _home,
@@ -1363,8 +1364,8 @@ class _WalkMapState extends State<WalkMap> {
                 ),
               if (kit != null && _layersOpen && widget.settings != null)
                 Positioned(
-                  left: 46,
-                  top: 10,
+                  right: 46,
+                  bottom: 10,
                   child: _LayersPanel(
                     settings: widget.settings!,
                     species: widget.species,
@@ -1373,33 +1374,27 @@ class _WalkMapState extends State<WalkMap> {
                 ),
               if (kit != null)
                 Positioned(
+                  left: 10,
+                  top: 10,
+                  child: PlaceSearch(
+                    width: math.min(
+                      280.0,
+                      math.max(0.0, widget.size.width - 20 - (widget.onFullScreen == null ? 0 : 46)),
+                    ),
+                    near: () => _ready ? _map.camera.center : center,
+                    onPick: _goTo,
+                  ),
+                ),
+              if (kit != null && widget.onFullScreen != null)
+                Positioned(
                   right: 10,
                   top: 10,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      PlaceSearch(
-                        // 70 for the zoom column and margins; 36 more (31 + a
-                        // 5 px gap) when full screen sits to the right (Ed, 23 Nov).
-                        width: math.min(
-                          280.0,
-                          math.max(0.0, widget.size.width - 70 - (widget.onFullScreen == null ? 0 : 36)),
-                        ),
-                        near: () => _ready ? _map.camera.center : center,
-                        onPick: _goTo,
-                      ),
-                      if (widget.onFullScreen != null) ...[
-                        const SizedBox(width: 5),
-                        _FullScreenButton(isFull: widget.fullScreen, onTap: widget.onFullScreen!),
-                      ],
-                    ],
-                  ),
+                  child: _CloseMapButton(onTap: widget.onFullScreen!),
                 ),
               if (kit != null)
                 Positioned(
-                    right: 0,
-                    bottom: 0,
+                    left: 6,
+                    bottom: 6,
                     child: _Credit(_credit +
                         (widget.landmarks != null ? _extrasCredit() : '') +
                         (_recordsKey != null ? '\nBird records: GBIF.org' : '') +
@@ -1820,23 +1815,20 @@ class _ZoomButtons extends StatelessWidget {
   }
 }
 
-/// Full screen, to the right of the search: the same grey style as the
-/// zoom buttons on the left.
-class _FullScreenButton extends StatelessWidget {
-  const _FullScreenButton({required this.isFull, required this.onTap});
+/// Close button (✕) at the top right of the full-screen map, matching the
+/// search bar and zoom buttons' mid-grey style.
+class _CloseMapButton extends StatelessWidget {
+  const _CloseMapButton({required this.onTap});
 
-  final bool isFull;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final tip = isFull ? 'Close the full-screen map' : 'Full screen';
-    final label = isFull ? 'Close the full-screen map' : 'Show the map full screen';
     return Tooltip(
-      message: tip,
+      message: 'Close map',
       child: Semantics(
         button: true,
-        label: label,
+        label: 'Close map',
         child: DecoratedBox(
           decoration: const BoxDecoration(borderRadius: _controlRadius, boxShadow: [_controlShadow]),
           child: Material(
@@ -1845,11 +1837,11 @@ class _FullScreenButton extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: onTap,
-              child: SizedBox(
+              child: const SizedBox(
                 width: 31,
                 height: 31,
                 child: Center(
-                  child: Icon(isFull ? Icons.fullscreen_exit : Icons.fullscreen, size: 19, color: paper),
+                  child: Icon(Icons.close, size: 19, color: paper),
                 ),
               ),
             ),

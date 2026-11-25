@@ -21,9 +21,10 @@ import 'station_history.dart';
 /// models, the location filter and stored data. Opened from the plate's
 /// menu button.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.app});
+  const SettingsScreen({super.key, required this.app, this.onOpenCalendar});
 
   final AppState app;
+  final VoidCallback? onOpenCalendar;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -91,6 +92,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         automaticallyImplyLeading: false,
         title: const Text('Settings'),
         actions: [
+          if (widget.onOpenCalendar != null)
+            IconButton(
+              tooltip: 'Pick a day',
+              icon: const Icon(Icons.calendar_today_outlined),
+              onPressed: () {
+                Navigator.of(context).pop();
+                widget.onOpenCalendar!();
+              },
+            ),
           IconButton(
             tooltip: 'Close',
             icon: const Icon(Icons.close),
@@ -124,27 +134,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
-              ),
-              const SizedBox(height: 8),
-              SegmentedButton<AppMode>(
-                segments: const [
-                  ButtonSegment(
-                      value: AppMode.listen,
-                      icon: Icon(Icons.mic_none_outlined),
-                      label: Text('Listen here & now')),
-                  ButtonSegment(
-                      value: AppMode.station, icon: Icon(Icons.sensors), label: Text('Remote station')),
-                ],
-                selected: {s.mode},
-                showSelectedIcon: false,
-                onSelectionChanged: (v) {
-                  // a remote station with none saved yet: ask for one
-                  if (v.first == AppMode.station && s.stations.isEmpty) {
-                    editStation(context, s);
-                    return;
-                  }
-                  s.update((x) => x.mode = v.first);
-                },
               ),
               const SizedBox(height: 8),
               // the saved stations, then listening here: both, either way

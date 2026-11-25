@@ -11,10 +11,11 @@ import 'settings_screen.dart';
 /// on closing. No shadow and no disc behind the icon: plain paper, as the
 /// rest of the plate.
 class SettingsButton extends StatelessWidget {
-  const SettingsButton({super.key, required this.app, required this.color});
+  const SettingsButton({super.key, required this.app, required this.color, this.onOpenCalendar});
 
   final AppState app;
   final Color color;
+  final VoidCallback? onOpenCalendar;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +36,7 @@ class SettingsButton extends StatelessWidget {
         color: color,
         onPressed: open,
       ),
-      openBuilder: (context, _) => SettingsScreen(app: app),
+      openBuilder: (context, _) => SettingsScreen(app: app, onOpenCalendar: onOpenCalendar),
     );
   }
 }

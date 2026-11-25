@@ -368,6 +368,9 @@ class _NativePlateState extends State<NativePlate> {
   bool _noteShown = false;
   Timer? _noteTimer;
 
+  /// Tap the top-left heading to hide it; tap that corner again to reshow it.
+  bool _headingHidden = false;
+
   void _say(String text, {String? action, VoidCallback? onAction, int seconds = 3}) {
     if (!mounted) return;
     _noteTimer?.cancel();
@@ -384,11 +387,22 @@ class _NativePlateState extends State<NativePlate> {
 
   // ---- the walk on a map, in place of the collage --------------------------
 
-  /// The map button: the walk on a map, or back to the plate (shared with
-  /// the web plate, Settings.showMap).
-  void _toggleMap() {
-    final on = !app.settings.showMap;
-    app.settings.update((x) => x.showMap = on);
+  /// The map button: opens the walk or station directly in full-screen map
+  /// mode, zoomed close to the bird detections. Closing with ✕ returns to the
+  /// plate.
+  void _openMap(StationFeed? feed, List<_Row> rows) {
+    final store = app.store;
+    if (feed == null && store.selected == null) return;
+    if (app.settings.showMap) app.settings.update((x) => x.showMap = false);
+    _mapFullScreen(
+      () => feed != null
+          ? Walk.station(feed.station.name, feed.place)
+          : (store.selected == null
+              ? null
+              : Walk.of(store, store.selected!, app.settings.plateModel,
+                  ignore: app.settings.isIgnoredSpecies)),
+      rows,
+    );
   }
 
   /// The calendar button (day_picker.dart): a month with the days that
@@ -674,12 +688,11 @@ class _NativePlateState extends State<NativePlate> {
         final i = store.selectedIndex, n = store.sessions.length;
         final red = Theme.of(context).colorScheme.primary;
         final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
-        // views d and e show one bird, unless the map is on: then the map
-        // is drawn as in the other views
-        final mapOn = app.settings.showMap && (ses != null || feed != null);
-        final single = (mode.key == 'latest' || mode.key == 'top') && !mapOn;
-        // the map takes the collage's place, and has one even in view c
-        final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
+        // The map opens directly in full screen rather than replacing the
+        // collage inline, so the plate always stays in its non-map view.
+        const mapOn = false;
+        final single = mode.key == 'latest' || mode.key == 'top';
+        final showPlate = mode.key != 'index', showIndex = mode.key != 'noindex';
         final showHeading = mode.key != 'index' && mode.key != 'noindex';
         final fit = app.settings.nativeFit;
         _bottomRoom = 40 + 8 + 6.0;
@@ -737,8 +750,22 @@ class _NativePlateState extends State<NativePlate> {
                                 if (showHeading)
                                   Padding(
                                     padding: EdgeInsets.fromLTRB(headSide, _padTop, headSide, 0),
-                                    child: _heading(ses, i, n, all.length, calls, outer.maxWidth - headSide,
-                                        totals: mode.key != 'index', feed: feed),
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => setState(() => _headingHidden = !_headingHidden),
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(minWidth: 160, minHeight: 56),
+                                        child: AnimatedOpacity(
+                                          opacity: _headingHidden ? 0.0 : 1.0,
+                                          duration: const Duration(milliseconds: 220),
+                                          child: IgnorePointer(
+                                            ignoring: _headingHidden,
+                                            child: _heading(ses, i, n, all.length, calls, outer.maxWidth - headSide,
+                                                totals: mode.key != 'index', feed: feed),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   )
                                 else
                                   const SizedBox(height: _buttonsTop),
@@ -976,7 +1003,7 @@ class _NativePlateState extends State<NativePlate> {
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SettingsButton(app: app, color: red),
+                          SettingsButton(app: app, color: red, onOpenCalendar: _pickDay),
                         ],
                       ),
                     ],
@@ -1044,12 +1071,10 @@ class _NativePlateState extends State<NativePlate> {
                         constraints: const BoxConstraints.tightFor(width: 40, height: 40),
                         padding: EdgeInsets.zero,
                         iconSize: 22,
-                        tooltip: app.settings.showMap ? 'Back to the plate' : 'The walk on a map',
-                        // the same picture on and off, so it is plain what it does
+                        tooltip: 'The walk on a map',
                         icon: const Icon(Icons.map_outlined),
-                        isSelected: app.settings.showMap,
                         color: red,
-                        onPressed: _toggleMap,
+                        onPressed: () => _openMap(feed, rows),
                       ),
                     ],
                   ),
@@ -1428,8 +1453,8 @@ class _NativePlateState extends State<NativePlate> {
   }
 }
 
-/// "Passed on the way" over the full-screen map: small caps between sepia
-/// rules, no box, a paper halo so it reads on the map (Ed, 23 Nov).
+/// "Passed on the way" button over the full-screen map: same mid-grey style
+/// as the search bar and zoom/layers controls.
 class _PassedOnMap extends StatelessWidget {
   const _PassedOnMap({required this.onTap});
 
@@ -1437,43 +1462,36 @@ class _PassedOnMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const size = 15.0;
-    final style = TextStyle(fontFamily: caps, fontSize: size, letterSpacing: size * .06, height: 1.2);
-    final words = Stack(children: [
-      Text('Passed on the way',
-          style: style.copyWith(
-            foreground: Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 3.2
-              ..strokeJoin = StrokeJoin.round
-              ..color = paper,
-          )),
-      Text('Passed on the way', style: style.copyWith(color: ink)),
-    ]);
-    const rule = SizedBox(
-      width: 36,
-      height: 3,
-      child: Stack(alignment: Alignment.center, children: [
-        Positioned(left: 0, right: 0, height: 3, child: ColoredBox(color: paper)),
-        Positioned(left: 0, right: 0, height: 1, child: ColoredBox(color: sepia)),
-      ]),
-    );
+    const radius = BorderRadius.all(Radius.circular(4));
     return Semantics(
       button: true,
       label: 'Passed on the way',
       hint: 'Show everything passed',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            rule,
-            const SizedBox(width: 10),
-            words,
-            const SizedBox(width: 10),
-            rule,
-          ]),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          borderRadius: radius,
+          boxShadow: [BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10)],
+        ),
+        child: Material(
+          color: const Color(0xFF8C877D),
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: const SizedBox(
+              height: 31,
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Center(
+                  widthFactor: 1,
+                  child: Text(
+                    'Passed on the way',
+                    style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: paper, height: 1.2),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
