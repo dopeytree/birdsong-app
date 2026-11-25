@@ -49,6 +49,7 @@ class Settings extends ChangeNotifier {
         if (x.mode == AppMode.listen) {
           x.mode = AppMode.station;
           x.stationId = x.station!.id;
+          x.plateMode = defaultPlateMode;
           return;
         }
         final i = x.stations.indexWhere((st) => st.id == x.station?.id);
@@ -305,6 +306,10 @@ class Settings extends ChangeNotifier {
   /// decoration (from the map's own tiles; nothing looked up).
   bool mapWildlife = true;
 
+  /// Map button appearance: 'paper' (round warm paper background with madder
+  /// icons, default), 'ink' (all-black icons), or 'madder' (solid madder).
+  String mapButtonStyle = 'paper';
+
   static Future<Settings> load(Directory dir) async {
     final s = Settings._(File('${dir.path}/settings.json'));
     try {
@@ -440,6 +445,9 @@ class Settings extends ChangeNotifier {
     mapShowHides = (j['mapShowHides'] as bool?) ?? mapShowHides;
     mapRecordsSci = (j['mapRecordsSci'] as String?) ?? mapRecordsSci;
     mapWildlife = (j['mapWildlife'] as bool?) ?? mapWildlife;
+    mapButtonStyle = const ['paper', 'ink', 'madder'].contains(j['mapButtonStyle'])
+        ? j['mapButtonStyle'] as String
+        : mapButtonStyle;
     // Settings saved before defaults v2 still carry the first test build's
     // defaults (3 s, 50 %); move those, and only those, to the new ones.
     if (((j['defaults'] as num?) ?? 1) < 2) {
@@ -524,6 +532,7 @@ class Settings extends ChangeNotifier {
         'mapShowHides': mapShowHides,
         'mapRecordsSci': mapRecordsSci,
         'mapWildlife': mapWildlife,
+        'mapButtonStyle': mapButtonStyle,
       };
 
   void update(void Function(Settings s) change) {

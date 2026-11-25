@@ -517,6 +517,18 @@ class _NativePlateState extends State<NativePlate> {
                 builder: (context, _) {
                   final passed =
                       app.settings.mapExtras ? (_landmarks.walk?.passed ?? const <Passed>[]) : const <Passed>[];
+                  final btnStyle = app.settings.mapButtonStyle;
+                  final isMadder = btnStyle == 'madder';
+                  final isInk = btnStyle == 'ink';
+                  final btnBg = isMadder
+                      ? madder
+                      : isInk
+                          ? paper.withValues(alpha: 0.85)
+                          : paper.withValues(alpha: 0.94);
+                  final btnFg = isMadder ? paper : (isInk ? ink : madder);
+                  final btnShape = isMadder
+                      ? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4)))
+                      : const CircleBorder(side: BorderSide(color: rule));
                   return Stack(children: [
                     Positioned.fill(
                       child: RepaintBoundary(
@@ -544,25 +556,21 @@ class _NativePlateState extends State<NativePlate> {
                     // Bottom-left owl icon on the map: closes the map and opens
                     // Latest & most heard.
                     Positioned(
-                      left: 10,
-                      bottom: 10,
-                      child: DecoratedBox(
-                        decoration: const BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(4)),
-                          boxShadow: [BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10)],
-                        ),
-                        child: Material(
-                          color: madder,
-                          borderRadius: const BorderRadius.all(Radius.circular(4)),
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: () => Navigator.of(context).maybePop(),
-                            child: const SizedBox(
-                              width: 31,
-                              height: 31,
-                              child: Center(
-                                child: _OwlIcon(size: 19, color: paper),
-                              ),
+                      left: 8,
+                      bottom: 8,
+                      child: Material(
+                        color: btnBg,
+                        elevation: 2,
+                        shadowColor: const Color(0x4D3C280A),
+                        shape: btnShape,
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => Navigator.of(context).maybePop(),
+                          child: SizedBox(
+                            width: 38,
+                            height: 38,
+                            child: Center(
+                              child: _OwlIcon(size: 21, color: btnFg),
                             ),
                           ),
                         ),
@@ -571,39 +579,35 @@ class _NativePlateState extends State<NativePlate> {
                     // Bottom-right share button on the map.
                     if (PlateShare.supported)
                       Positioned(
-                        right: 10,
-                        bottom: 10,
-                        child: DecoratedBox(
-                          decoration: const BoxDecoration(
-                            borderRadius: BorderRadius.all(Radius.circular(4)),
-                            boxShadow: [BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10)],
-                          ),
-                          child: Material(
-                            color: madder,
-                            borderRadius: const BorderRadius.all(Radius.circular(4)),
-                            clipBehavior: Clip.antiAlias,
-                            child: PopupMenuButton<String>(
-                              key: mapShareKey,
-                              padding: EdgeInsets.zero,
-                              tooltip: 'Share or save the map',
-                              color: paper,
-                              onSelected: (v) => v == 'save' ? saveMap() : shareMap(),
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                  value: 'share',
-                                  child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
-                                ),
-                                PopupMenuItem(
-                                  value: 'save',
-                                  child: ListTile(
-                                      leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
-                                ),
-                              ],
-                              child: const SizedBox(
-                                width: 31,
-                                height: 31,
-                                child: Center(child: Icon(Icons.ios_share, size: 17, color: paper)),
+                        right: 8,
+                        bottom: 8,
+                        child: Material(
+                          color: btnBg,
+                          elevation: 2,
+                          shadowColor: const Color(0x4D3C280A),
+                          shape: btnShape,
+                          clipBehavior: Clip.antiAlias,
+                          child: PopupMenuButton<String>(
+                            key: mapShareKey,
+                            padding: EdgeInsets.zero,
+                            tooltip: 'Share or save the map',
+                            color: paper,
+                            onSelected: (v) => v == 'save' ? saveMap() : shareMap(),
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'share',
+                                child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
                               ),
+                              PopupMenuItem(
+                                value: 'save',
+                                child: ListTile(
+                                    leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
+                              ),
+                            ],
+                            child: SizedBox(
+                              width: 38,
+                              height: 38,
+                              child: Center(child: Icon(Icons.ios_share, size: 19, color: btnFg)),
                             ),
                           ),
                         ),
@@ -698,8 +702,8 @@ class _NativePlateState extends State<NativePlate> {
         seconds: 6);
   }
 
-  // The pill's sensors half: show the remote station last shown (that is
-  // still the web plate). With none saved yet, it asks for one.
+  // The pill's sensors half: show the remote station last shown, always
+  // landing on the default view (Most heard). With none saved yet, ask for one.
   void _toRemote() {
     final s = app.settings;
     if (s.stations.isEmpty) {
@@ -709,6 +713,8 @@ class _NativePlateState extends State<NativePlate> {
     s.update((x) {
       x.mode = AppMode.station;
       x.stationId = x.station!.id;
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = 'calls';
     });
   }
 
@@ -1057,7 +1063,11 @@ class _NativePlateState extends State<NativePlate> {
                         child: SourcePill(
                           listen: feed == null,
                           stationName: app.settings.station?.name,
-                          onListen: () => app.settings.update((x) => x.mode = AppMode.listen),
+                          onListen: () => app.settings.update((x) {
+                            x.mode = AppMode.listen;
+                            x.plateMode = defaultPlateMode;
+                            x.nativeSizeBy = 'time';
+                          }),
                           onRemote: _toRemote,
                         ),
                       ),
@@ -1320,6 +1330,25 @@ class _NativePlateState extends State<NativePlate> {
                     ],
                   ),
                 ),
+              // Heart outline + total species count (achievements / life-list preview)
+              () {
+                final lifeCount = feed != null
+                    ? species
+                    : {
+                        for (final d in app.store.all)
+                          if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d.sci
+                      }.length;
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 5),
+                      child: Icon(Icons.favorite_border, size: 15, color: madder),
+                    ),
+                    Text(thousands(lifeCount), style: sub),
+                  ],
+                );
+              }(),
               if (feed != null && feed.lightNote != null && feed.light != Light.all)
                 Text(feed.lightNote!, style: sub.copyWith(color: sepia)),
               ],

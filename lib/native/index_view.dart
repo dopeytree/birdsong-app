@@ -172,7 +172,7 @@ class IndexView extends StatelessWidget {
 
   /// ‹ —— Index of species —— ›
   Widget _heading({double rules = 56, double pad = 12, double gap = 14.4, double? titleSize}) {
-    Widget step(int by, String glyph, String label, bool on) => Visibility(
+    Widget step(int by, IconData icon, String label, bool on) => Visibility(
           visible: on,
           maintainSize: true,
           maintainAnimation: true,
@@ -184,13 +184,9 @@ class IndexView extends StatelessWidget {
               radius: 22,
               onTap: () => onStep(by),
               child: Padding(
-                // a finger's worth of room about a small glyph
-                padding: EdgeInsets.symmetric(horizontal: pad, vertical: 8),
-                child: ExcludeSemantics(
-                  child: Text(glyph,
-                      style: TextStyle(
-                          fontFamily: serif, fontSize: (fit ? 16 : 20) * 1.25, height: 1, color: sepia)),
-                ),
+                // a finger's worth of room about the chevron
+                padding: EdgeInsets.symmetric(horizontal: math.max(6.0, pad - 4), vertical: 6),
+                child: Icon(icon, size: fit ? 20 : 22, color: sepia),
               ),
             ),
           ),
@@ -201,7 +197,7 @@ class IndexView extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (steps) step(-1, '‹', 'Earlier session', canPrev),
+        if (steps) step(-1, Icons.chevron_left, 'Earlier session', canPrev),
         Flexible(
           child: Semantics(
             button: foldable,
@@ -230,7 +226,7 @@ class IndexView extends StatelessWidget {
             ),
           ),
         ),
-        if (steps) step(1, '›', 'Later session', canNext),
+        if (steps) step(1, Icons.chevron_right, 'Later session', canNext),
       ],
     );
   }

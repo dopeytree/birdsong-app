@@ -316,6 +316,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => s.update((x) {
                 x.stationId = st.id;
                 x.mode = AppMode.station;
+                x.plateMode = defaultPlateMode;
               }),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -951,6 +952,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       summary: s.showMap ? 'Showing the walk · ${mapBirds[s.mapBirds]}' : 'Showing the collage',
       [
         _switch('Show the walk on a map', s.showMap, (v) => s.update((x) => x.showMap = v)),
+        _dropdown(
+          'Map buttons',
+          s.mapButtonStyle,
+          const {
+            'paper': 'Paper circle, madder icons',
+            'ink': 'All black icons',
+            'madder': 'Solid madder',
+          },
+          (v) => s.update((x) => x.mapButtonStyle = v),
+        ),
         _dropdown('Crosses', s.mapBirds, mapBirds, (v) => s.update((x) => x.mapBirds = v)),
         _switch('Landmarks, heritage and nature sites', s.mapExtras,
             (v) => s.update((x) => x.mapExtras = v)),

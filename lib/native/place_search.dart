@@ -140,11 +140,18 @@ Future<List<FoundPlace>> searchPlaces(String q, LatLng near) async {
 /// (from three letters, after a pause), Enter takes the first, Escape or ×
 /// clears. [near] is where to look first; [onPick] moves the map.
 class PlaceSearch extends StatefulWidget {
-  const PlaceSearch({super.key, required this.width, required this.near, required this.onPick});
+  const PlaceSearch({
+    super.key,
+    required this.width,
+    required this.near,
+    required this.onPick,
+    this.style = 'paper',
+  });
 
   final double width;
   final LatLng Function() near;
   final ValueChanged<FoundPlace> onPick;
+  final String style;
 
   @override
   State<PlaceSearch> createState() => _PlaceSearchState();
@@ -224,12 +231,20 @@ class _PlaceSearchState extends State<PlaceSearch> {
 
   @override
   Widget build(BuildContext context) {
-    // Madder matching the app's other buttons and map controls, with no extra inner border.
-    // The list below stays paper, with the same slight radius.
-    const bar = BoxDecoration(
-      color: madder,
-      borderRadius: BorderRadius.all(Radius.circular(4)),
-      boxShadow: [BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10)],
+    final isMadder = widget.style == 'madder';
+    final isInk = widget.style == 'ink';
+    final bg = isMadder
+        ? madder
+        : isInk
+            ? paper.withValues(alpha: 0.85)
+            : paper.withValues(alpha: 0.94);
+    final fg = isMadder ? paper : (isInk ? ink : madder);
+    final radius = BorderRadius.all(Radius.circular(isMadder ? 4 : 16));
+    final bar = BoxDecoration(
+      color: bg,
+      borderRadius: radius,
+      border: isMadder ? null : Border.all(color: paperDeep),
+      boxShadow: const [BoxShadow(color: Color(0x4D3C280A), offset: Offset(0, 2), blurRadius: 8)],
     );
     const box = BoxDecoration(
       color: paper,
@@ -246,12 +261,12 @@ class _PlaceSearchState extends State<PlaceSearch> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            height: 31,
+            height: 32,
             decoration: bar,
             child: Row(children: [
-              const Padding(
-                padding: EdgeInsetsDirectional.only(start: 7, end: 4),
-                child: Icon(Icons.search, size: 16, color: paper),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 9, end: 4),
+                child: Icon(Icons.search, size: 16, color: fg),
               ),
               Expanded(
                 child: CallbackShortcuts(
@@ -270,8 +285,8 @@ class _PlaceSearchState extends State<PlaceSearch> {
                       if (_found.isNotEmpty) _pick(_found.first);
                     },
                     textInputAction: TextInputAction.search,
-                    style: const TextStyle(fontFamily: serif, fontSize: 15, color: paper, height: 1.2),
-                    cursorColor: paper,
+                    style: TextStyle(fontFamily: serif, fontSize: 15, color: fg, height: 1.2),
+                    cursorColor: fg,
                     decoration: InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
@@ -281,7 +296,7 @@ class _PlaceSearchState extends State<PlaceSearch> {
                         fontStyle: FontStyle.italic,
                         fontSize: 15,
                         letterSpacing: 0.3,
-                        color: paper.withValues(alpha: 0.85),
+                        color: fg.withValues(alpha: 0.78),
                       ),
                       contentPadding: const EdgeInsets.symmetric(vertical: 7),
                     ),
@@ -295,9 +310,9 @@ class _PlaceSearchState extends State<PlaceSearch> {
                   child: InkResponse(
                     radius: 16,
                     onTap: _clear,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('×', style: TextStyle(fontSize: 18, height: 1, color: paper)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text('×', style: TextStyle(fontSize: 18, height: 1, color: fg)),
                     ),
                   ),
                 ),

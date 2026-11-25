@@ -415,10 +415,31 @@ class _BirdCardState extends State<BirdCard> {
                     maxScale: 4,
                     child: Center(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 48, 16, 48),
-                        child: PlateImage(
-                          art: art,
-                          width: math.min(screen.width - 32, screen.height - 96),
+                        padding: const EdgeInsets.fromLTRB(20, 48, 20, 24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ConstrainedBox(
+                              constraints: BoxConstraints(maxHeight: screen.height * 0.72),
+                              child: PlateImage(
+                                art: art,
+                                width: math.min(screen.width - 40, screen.height * 0.72),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              widget.source.common,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontFamily: serif, fontSize: 20, height: 1.2, color: ink),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.source.sci,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -433,18 +454,6 @@ class _BirdCardState extends State<BirdCard> {
                   icon: const Icon(Icons.close),
                   color: ink,
                   onPressed: () => Navigator.of(c).pop(),
-                ),
-              ),
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 12,
-                child: IgnorePointer(
-                  child: Text(
-                    widget.source.common,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontFamily: serif, fontSize: 16, color: ink),
-                  ),
                 ),
               ),
             ],
