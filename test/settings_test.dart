@@ -102,6 +102,8 @@ void main() {
     expect(custom.isIgnoredSpecies('Herring Gull'), isTrue);
     expect(custom.isIgnoredSpecies('Human vocal'), isFalse);
     expect(custom.toJson()['ignoredSpecies'], ['Gull']);
+    expect(custom.nativeAllNameTickets, isFalse);
+    expect((await loadWith({'nativeAllNameTickets': true})).toJson()['nativeAllNameTickets'], isTrue);
   });
 
   test('removing the station on show moves to the next, or back here', () async {

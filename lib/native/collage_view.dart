@@ -51,6 +51,7 @@ class CollageView extends StatefulWidget {
     required this.live,
     required this.onOpen,
     this.showHoverInfo = false,
+    this.showAllNameTickets = false,
     this.onDragHold,
     this.resetAfter = const Duration(seconds: 10),
   });
@@ -79,6 +80,10 @@ class CollageView extends StatefulWidget {
   /// Whether hovering over a bird shows the info ticket (off by default to
   /// encourage clicking to open the bird card, matching touch devices).
   final bool showHoverInfo;
+
+  /// Whether all birds in the collage show a name ticket (off by default; only
+  /// the centred bird shows the madder ticket with a + symbol).
+  final bool showAllNameTickets;
 
   /// Called when the user begins/ends dragging the collage so the outer scroll
   /// view can pause while dragging.
@@ -258,6 +263,7 @@ class _CollageViewState extends State<CollageView> {
                   delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
                   hovered: _hover == p.id,
                   isCenter: p.id == centerSci,
+                  showNameTicket: p.id == centerSci || widget.showAllNameTickets,
                   newest: p.id == newest,
                   markBelow: widget.markAt == 'below',
                   showDot: widget.markAt == 'centre' || widget.markAt == 'below',
@@ -303,6 +309,7 @@ class _Bird extends StatefulWidget {
     required this.delay,
     required this.hovered,
     required this.isCenter,
+    required this.showNameTicket,
     required this.newest,
     required this.markBelow,
     required this.showDot,
@@ -319,6 +326,7 @@ class _Bird extends StatefulWidget {
   final Duration delay;
   final bool hovered;
   final bool isCenter;
+  final bool showNameTicket;
   final bool newest;
   final bool markBelow;
   final bool showDot;
@@ -437,7 +445,7 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                     curve: Curves.easeOut,
                     child: figure,
                   ),
-                  if (widget.isCenter)
+                  if (widget.showNameTicket && (art != null || widget.isCenter))
                     Align(
                       alignment: art == null ? Alignment.center : const Alignment(0, 0.82),
                       child: Transform.translate(
@@ -451,22 +459,28 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                                   height: 22,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: paper.withValues(alpha: 0.82),
-                                    border: Border.all(color: rule, width: 0.9),
-                                    boxShadow: const [BoxShadow(color: Color(0x283C280A), blurRadius: 4)],
+                                    color: madder.withValues(alpha: 0.9),
+                                    boxShadow: const [BoxShadow(color: Color(0x333C280A), blurRadius: 4)],
                                   ),
                                   alignment: Alignment.center,
                                   child: const Text(
                                     '+',
-                                    style: TextStyle(fontSize: 15, height: 1, color: sepia),
+                                    style: TextStyle(fontSize: 15, height: 1, color: paper),
                                   ),
                                 )
                               : Container(
-                                  constraints: BoxConstraints(maxWidth: math.max(60, widget.width - 12)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  constraints: BoxConstraints(maxWidth: math.max(54, widget.width - 10)),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: widget.isCenter ? 8 : 6,
+                                    vertical: widget.isCenter ? 2.5 : 1.5,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: paper.withValues(alpha: 0.88),
-                                    border: Border.all(color: rule, width: 0.9),
+                                    color: widget.isCenter
+                                        ? madder.withValues(alpha: 0.9)
+                                        : paper.withValues(alpha: 0.86),
+                                    border: widget.isCenter
+                                        ? Border.all(color: paper.withValues(alpha: 0.35), width: 0.8)
+                                        : Border.all(color: rule, width: 0.85),
                                     boxShadow: const [BoxShadow(color: Color(0x283C280A), blurRadius: 4)],
                                   ),
                                   child: Row(
@@ -477,17 +491,19 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                                           b.common,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontFamily: serif,
                                             fontStyle: FontStyle.italic,
-                                            fontSize: 13.5,
+                                            fontSize: widget.isCenter ? 13.5 : (widget.width < 90 ? 10.5 : 12),
                                             height: 1.15,
-                                            color: ink,
+                                            color: widget.isCenter ? paper : ink,
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(width: 5),
-                                      const Text('+', style: TextStyle(fontSize: 14, height: 1, color: sepia)),
+                                      if (widget.isCenter) ...[
+                                        const SizedBox(width: 5),
+                                        const Text('+', style: TextStyle(fontSize: 14, height: 1, color: paper)),
+                                      ],
                                     ],
                                   ),
                                 ),

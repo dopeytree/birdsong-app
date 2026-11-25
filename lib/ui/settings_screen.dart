@@ -670,6 +670,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               (v) => s.update((x) => x.nativePlateStyle = v)),
           _switch('Skulls, wings and eggs', s.nativeParts, (v) => s.update((x) => x.nativeParts = v)),
           _switch('Show bird info on hover', s.nativeHoverInfo, (v) => s.update((x) => x.nativeHoverInfo = v)),
+          _switch('Name tickets on all birds', s.nativeAllNameTickets,
+              (v) => s.update((x) => x.nativeAllNameTickets = v)),
           _dropdown(
               'Limit species',
               '${s.nativeLimit}',

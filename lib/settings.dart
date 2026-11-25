@@ -252,6 +252,10 @@ class Settings extends ChangeNotifier {
   /// default so clicking opens the bird card, as on touch devices).
   bool nativeHoverInfo = false;
 
+  /// The Flutter plate: show name tickets on all birds in the collage (off by
+  /// default, so only the centred hero bird carries its name + badge).
+  bool nativeAllNameTickets = false;
+
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
 
@@ -409,6 +413,7 @@ class Settings extends ChangeNotifier {
     nativeTitleCaps = (j['nativeTitleCaps'] as bool?) ?? nativeTitleCaps;
     nativeHeadingInk = (j['nativeHeadingInk'] as bool?) ?? nativeHeadingInk;
     nativeHoverInfo = (j['nativeHoverInfo'] as bool?) ?? nativeHoverInfo;
+    nativeAllNameTickets = (j['nativeAllNameTickets'] as bool?) ?? nativeAllNameTickets;
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -493,6 +498,7 @@ class Settings extends ChangeNotifier {
         'nativeTitleCaps': nativeTitleCaps,
         'nativeHeadingInk': nativeHeadingInk,
         'nativeHoverInfo': nativeHoverInfo,
+        'nativeAllNameTickets': nativeAllNameTickets,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,

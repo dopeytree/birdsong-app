@@ -1297,6 +1297,7 @@ class _NativePlateState extends State<NativePlate> {
       newest: newest,
       live: app.engine.liveSpecies,
       showHoverInfo: app.settings.nativeHoverInfo,
+      showAllNameTickets: app.settings.nativeAllNameTickets,
       onDragHold: (held) {
         final want = held ? showing : null;
         if (want != _holdFor && mounted) setState(() => _holdFor = want);
