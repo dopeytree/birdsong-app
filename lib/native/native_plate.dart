@@ -1001,10 +1001,8 @@ class _NativePlateState extends State<NativePlate> {
                     right: 8 + 12,
                     child: _lightToggle(feed, app.settings.nativeHeadingInk ? ink : sepia, end: true),
                   ),
-                // Single bottom-left view cycle button:
-                // On View 1 (Most recent), shows the Map icon -> opens Map.
-                // Closing the Map advances to No pecking order (View icon),
-                // then Latest & most heard (View icon), then back to View 1.
+                // Single bottom-left view cycle button (order: Most recent -> Map -> No pecking order -> Latest & most heard):
+                // Each icon previews the next view in the cycle.
                 Positioned(
                   left: 8,
                   bottom: 8,
@@ -1012,8 +1010,16 @@ class _NativePlateState extends State<NativePlate> {
                     constraints: const BoxConstraints.tightFor(width: 40, height: 40),
                     padding: EdgeInsets.zero,
                     iconSize: 22,
-                    tooltip: onDefaultView ? 'The walk on a map' : 'Next view',
-                    icon: Icon(onDefaultView ? Icons.map_outlined : Icons.dashboard_outlined),
+                    tooltip: switch (mode.key) {
+                      'time' => 'The walk on a map',
+                      'equal' => 'Latest & most heard',
+                      _ => 'Recent ramblings',
+                    },
+                    icon: Icon(switch (mode.key) {
+                      'time' => Icons.map_outlined,
+                      'equal' => Icons.star_border_outlined,
+                      _ => Icons.auto_awesome_mosaic_outlined,
+                    }),
                     color: red,
                     onPressed: onDefaultView ? () => _openMap(feed, rows) : _nextMode,
                   ),
