@@ -360,11 +360,12 @@ class Settings extends ChangeNotifier {
     geoThreshold = (j['geoThreshold'] as num?)?.toDouble() ?? geoThreshold;
     useCoreMl = (j['useCoreMl'] as bool?) ?? useCoreMl;
     recordWeather = (j['recordWeather'] as bool?) ?? recordWeather;
-    // plateView, by key; or plateMode, its number in the first order (1 to 7).
+    // plateView, by key; or legacy plateMode numbers from the old 7-view list.
     const firstOrder = ['calls', 'time', 'equal', 'noindex', 'index', 'latest', 'top'];
     final oldN = (j['plateMode'] as num?)?.toInt();
-    final key = j['plateView'] as String? ??
+    var key = j['plateView'] as String? ??
         (oldN != null && oldN >= 1 && oldN <= firstOrder.length ? firstOrder[oldN - 1] : null);
+    if (key == 'latest' || key == 'top') key = 'spotlight';
     final at = plateModes.indexWhere((m) => m.key == key);
     if (at >= 0) plateMode = at + 1;
     final active = j['activeModels'];
@@ -486,7 +487,7 @@ class Settings extends ChangeNotifier {
         'geoThreshold': geoThreshold,
         'useCoreMl': useCoreMl,
         'recordWeather': recordWeather,
-        'plateView': plateModes[plateMode - 1].key,
+        'plateView': plateModes[(plateMode - 1).clamp(0, plateModes.length - 1)].key,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
         'modelCheckAt': modelCheckAt,
@@ -578,15 +579,10 @@ class PlateMode {
 }
 
 const plateModes = <PlateMode>[
-  PlateMode('calls', 'Noisiest species', sizeBy: 'calls'),                       // a
-  PlateMode('latest', 'The latest bird, and when',                                // b
+  PlateMode('time', 'Recent ramblings', sizeBy: 'time'),                           // a (default): Most recent -> Map
+  PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                         // b: Equal size (after Map closes)
+  PlateMode('spotlight', 'Latest & most heard',                                    // c: Combined Latest + Most heard
       query: 'view=latest&show=time,title,date', currentOnly: true),
-  PlateMode('top', 'Most heard this session',                                     // c
-      query: 'view=top&show=title,date', currentOnly: true),
-  PlateMode('index', 'The index alone', query: 'view=index&show=title,date'),     // d
-  PlateMode('noindex', 'The collage, no index', query: 'hide=index'),             // e
-  PlateMode('time', 'Recent ramblings', sizeBy: 'time'),                          // f
-  PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                        // g
 ];
 
 /// The view the app opens on until another is chosen: recent ramblings.

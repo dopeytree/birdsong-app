@@ -9,7 +9,7 @@ import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
 import 'package:plate_share/plate_share.dart';
 
 import '../app_state.dart';
-import '../main.dart' show caps, ink, madder, paper, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
 import '../ui/format.dart';
@@ -387,14 +387,17 @@ class _NativePlateState extends State<NativePlate> {
 
   // ---- the walk on a map, in place of the collage --------------------------
 
-  /// The map button: opens the walk or station directly in full-screen map
-  /// mode, zoomed close to the bird detections. Closing with ✕ returns to the
-  /// plate.
-  void _openMap(StationFeed? feed, List<_Row> rows) {
+  /// The map step of the view cycle: opens the walk or station in full-screen
+  /// map mode, zoomed close to the trail. Closing with ✕ advances to the next
+  /// plate view (No pecking order).
+  Future<void> _openMap(StationFeed? feed, List<_Row> rows) async {
     final store = app.store;
-    if (feed == null && store.selected == null) return;
+    if (feed == null && store.selected == null) {
+      _nextMode();
+      return;
+    }
     if (app.settings.showMap) app.settings.update((x) => x.showMap = false);
-    _mapFullScreen(
+    await _mapFullScreen(
       () => feed != null
           ? Walk.station(feed.station.name, feed.place)
           : (store.selected == null
@@ -403,6 +406,7 @@ class _NativePlateState extends State<NativePlate> {
                   ignore: app.settings.isIgnoredSpecies)),
       rows,
     );
+    if (mounted) _nextMode();
   }
 
   /// The calendar button (day_picker.dart): a month with the days that
@@ -452,8 +456,8 @@ class _NativePlateState extends State<NativePlate> {
   /// its button or Escape closes it, and a bird's cross opens the bird's
   /// card over it. "Passed on the way" sits on the map at the bottom and
   /// opens the list (Ed, 23 Nov).
-  void _mapFullScreen(Walk? Function() walk, List<_Row> rows) {
-    Navigator.of(context).push(PageRouteBuilder<void>(
+  Future<void> _mapFullScreen(Walk? Function() walk, List<_Row> rows) {
+    return Navigator.of(context).push(PageRouteBuilder<void>(
       fullscreenDialog: true,
       transitionDuration: const Duration(milliseconds: 180),
       reverseTransitionDuration: const Duration(milliseconds: 140),
@@ -688,16 +692,17 @@ class _NativePlateState extends State<NativePlate> {
         final i = store.selectedIndex, n = store.sessions.length;
         final red = Theme.of(context).colorScheme.primary;
         final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
-        final single = mode.key == 'latest' || mode.key == 'top';
-        final showPlate = mode.key != 'index', showIndex = mode.key != 'noindex';
-        final showHeading = mode.key != 'index' && mode.key != 'noindex';
+        final spotlight = mode.key == 'spotlight';
+        final onDefaultView = mode.key == 'time';
+        final showPlate = true, showIndex = true;
+        final showHeading = true;
         final fit = app.settings.nativeFit;
         _bottomRoom = 40 + 8 + 6.0;
         // the folded index's heading has a row above the buttons
         // Folded away, the index's heading moves into the row along the
         // bottom, between the map and share buttons, and the plate takes
         // the room; opened, the list is where it always was.
-        final foldedInline = showIndex && showPlate && !single && app.settings.nativeIndexFolded;
+        final foldedInline = showIndex && showPlate && !spotlight && app.settings.nativeIndexFolded;
         if (foldedInline) _bottomRoom += 40 + 24;
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
               entries: [
@@ -730,8 +735,8 @@ class _NativePlateState extends State<NativePlate> {
               key: _shotKey,
               child: PaperBackground(
                 child: SafeArea(
-                  child: single
-                      ? _single(mode, rows, newest)
+                  child: spotlight
+                      ? _spotlight(rows, newest)
                       // The heading stays put beside the buttons at the top; the
                       // rest scrolls between it and the buttons along the bottom,
                       // never under either, fading out at both edges.
@@ -996,34 +1001,21 @@ class _NativePlateState extends State<NativePlate> {
                     right: 8 + 12,
                     child: _lightToggle(feed, app.settings.nativeHeadingInk ? ink : sepia, end: true),
                   ),
-                // Along the bottom at the left, quick things to do: the plate's
-                // view (a to g) in the corner, so it never moves while
-                // stepping through the views, then the map.
+                // Single bottom-left view cycle button:
+                // On View 1 (Most recent), shows the Map icon -> opens Map.
+                // Closing the Map advances to No pecking order (View icon),
+                // then Latest & most heard (View icon), then back to View 1.
                 Positioned(
                   left: 8,
                   bottom: 8,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                        padding: EdgeInsets.zero,
-                        iconSize: 22,
-                        tooltip: 'Plate: ${mode.name}',
-                        icon: const Icon(Icons.dashboard_outlined),
-                        color: red,
-                        onPressed: _nextMode,
-                      ),
-                      IconButton(
-                        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                        padding: EdgeInsets.zero,
-                        iconSize: 22,
-                        tooltip: 'The walk on a map',
-                        icon: const Icon(Icons.map_outlined),
-                        color: red,
-                        onPressed: () => _openMap(feed, rows),
-                      ),
-                    ],
+                  child: IconButton(
+                    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                    padding: EdgeInsets.zero,
+                    iconSize: 22,
+                    tooltip: onDefaultView ? 'The walk on a map' : 'Next view',
+                    icon: Icon(onDefaultView ? Icons.map_outlined : Icons.dashboard_outlined),
+                    color: red,
+                    onPressed: onDefaultView ? () => _openMap(feed, rows) : _nextMode,
                   ),
                 ),
                 // The folded index's heading, on a row of its own just above
@@ -1042,7 +1034,7 @@ class _NativePlateState extends State<NativePlate> {
                 // the latest heard species when on a remote station.
                 if (app.settings.songScribble)
                   Positioned(
-                    left: 8 + 40 + 40 + 8,
+                    left: 8 + 40 + 8,
                     right: (PlateShare.supported ? 8 + 40 : 8) + 8,
                     bottom: 8,
                     height: 40,
@@ -1285,70 +1277,120 @@ class _NativePlateState extends State<NativePlate> {
     return math.max(0.0, (room - pad - _indexH) / 2);
   }
 
-  /// Views d and e: one bird, as large as the screen allows, with its name,
-  /// scientific name, and when it was last heard (d) or how often (e). A
-  /// tap on it opens its card. The page's #latest.
-  Widget _single(PlateMode mode, List<_Row> rows, String? newest) {
-    final _Row? r = rows.isEmpty
-        ? null
-        : mode.key == 'top'
-            ? rows.first
-            : rows.firstWhere((x) => x.sci == newest, orElse: () => rows.first);
-    if (r != null) _ensure([r]);
-    final art = r == null ? null : _art[r.sci];
-    final width = MediaQuery.sizeOf(context).width;
-    final last = r?.last;
-    final line = r == null
+  /// Combined Latest & Most heard view: stacked one above the other on mobile
+  /// (width <= 720), side by side on larger screens.
+  Widget _spotlight(List<_Row> rows, String? newest) {
+    if (rows.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(24, 64, 24, 16 + _bottomRoom),
+          child: const Text(
+            'Nothing heard yet. Press record to listen.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 18, color: sepia),
+          ),
+        ),
+      );
+    }
+    final mostHeard = rows.first;
+    final latestRow = rows.firstWhere((x) => x.sci == newest, orElse: () => rows.first);
+    _ensure([latestRow, mostHeard]);
+
+    final last = latestRow.last;
+    final latestDetail = last == null
         ? ''
-        : mode.key == 'latest'
-            ? (last == null ? '' : (sameDay(last, DateTime.now()) ? clock(last) : '${dayMonth(last)}, ${clock(last)}'))
-            // "since records began" is this session, in Listen here
-            : '${calls(r.count)} this session';
-    return Padding(
-      // clear of the buttons at the top
-      padding: EdgeInsets.fromLTRB(16, 64, 16, 16 + _bottomRoom),
-      child: Column(
-        children: [
-          Expanded(
-            child: r == null || art == null
-                ? const SizedBox.expand()
-                : GestureDetector(
-                    onTap: () => _openCard(r),
-                    child: Semantics(
-                      button: true,
-                      label: '${r.common}: open its card',
-                      child: SizedBox.expand(child: PlateImage(art: art, width: width)),
+        : (sameDay(last, DateTime.now()) ? clock(last) : '${dayMonth(last)}, ${clock(last)}');
+    final mostDetail = '${calls(mostHeard.count)} this session';
+
+    return LayoutBuilder(
+      builder: (context, box) {
+        final narrow = box.maxWidth <= 720;
+        final panelWidth = narrow ? box.maxWidth - 32 : (box.maxWidth - 65) / 2;
+        final latestPanel = _spotlightPanel('Most recent', latestRow, latestDetail, panelWidth, narrow);
+        final mostPanel = _spotlightPanel('Most heard', mostHeard, mostDetail, panelWidth, narrow);
+        return Padding(
+          padding: EdgeInsets.fromLTRB(16, 64, 16, 16 + _bottomRoom),
+          child: narrow
+              ? Column(
+                  children: [
+                    Expanded(child: latestPanel),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Divider(height: 1, color: rule),
                     ),
-                  ),
-          ),
-          const SizedBox(height: 6.4),
-          GestureDetector(
-            onTap: r == null ? null : () => _openCard(r),
-            child: Column(
-              children: [
-                Text(r?.common ?? 'Nothing heard yet.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontFamily: serif, fontSize: (width * .034).clamp(20.8, 33.6), height: 1.25, color: ink)),
-                if (r != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 1.6),
-                    child: Text(r.sci,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 18, color: sepia)),
-                  ),
-                if (line.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2.4),
-                    child: Text(line,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontFamily: serif, fontSize: 18, color: madder)),
-                  ),
-              ],
+                    Expanded(child: mostPanel),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: latestPanel),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: VerticalDivider(width: 1, color: rule),
+                    ),
+                    Expanded(child: mostPanel),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _spotlightPanel(String heading, _Row r, String detail, double width, bool narrow) {
+    final art = _art[r.sci];
+    final titleSize = narrow ? (width * .052).clamp(18.0, 24.0) : (width * .048).clamp(20.0, 30.0);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openCard(r),
+      child: Semantics(
+        button: true,
+        label: '$heading: ${r.common}, open its card',
+        child: Column(
+          children: [
+            Text(
+              heading,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: caps, fontSize: 13, letterSpacing: 1.1, color: sepia),
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Expanded(
+              child: art == null
+                  ? const SizedBox.expand()
+                  : SizedBox.expand(child: PlateImage(art: art, width: width)),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              r.common,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontFamily: serif, fontSize: titleSize, height: 1.18, color: ink),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 1.5),
+              child: Text(
+                r.sci,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontFamily: serif,
+                    fontStyle: FontStyle.italic,
+                    fontSize: narrow ? 14.5 : 17,
+                    color: sepia),
+              ),
+            ),
+            if (detail.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  detail,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: serif, fontSize: narrow ? 14.5 : 17, color: madder),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
