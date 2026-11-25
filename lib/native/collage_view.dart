@@ -439,27 +439,58 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                   ),
                   if (widget.isCenter)
                     Align(
-                      alignment: Alignment.center,
+                      alignment: art == null ? Alignment.center : const Alignment(0, 0.82),
                       child: Transform.translate(
-                        offset: widget.newest && widget.showDot && !widget.markBelow
+                        offset: art == null && widget.newest && widget.showDot && !widget.markBelow
                             ? const Offset(0, 18)
                             : Offset.zero,
                         child: IgnorePointer(
-                          child: Container(
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: paper.withValues(alpha: 0.82),
-                              border: Border.all(color: rule, width: 0.9),
-                              boxShadow: const [BoxShadow(color: Color(0x283C280A), blurRadius: 4)],
-                            ),
-                            alignment: Alignment.center,
-                            child: const Text(
-                              '+',
-                              style: TextStyle(fontSize: 15, height: 1, color: sepia),
-                            ),
-                          ),
+                          child: art == null
+                              ? Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: paper.withValues(alpha: 0.82),
+                                    border: Border.all(color: rule, width: 0.9),
+                                    boxShadow: const [BoxShadow(color: Color(0x283C280A), blurRadius: 4)],
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Text(
+                                    '+',
+                                    style: TextStyle(fontSize: 15, height: 1, color: sepia),
+                                  ),
+                                )
+                              : Container(
+                                  constraints: BoxConstraints(maxWidth: math.max(60, widget.width - 12)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: paper.withValues(alpha: 0.88),
+                                    border: Border.all(color: rule, width: 0.9),
+                                    boxShadow: const [BoxShadow(color: Color(0x283C280A), blurRadius: 4)],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          b.common,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontFamily: serif,
+                                            fontStyle: FontStyle.italic,
+                                            fontSize: 13.5,
+                                            height: 1.15,
+                                            color: ink,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      const Text('+', style: TextStyle(fontSize: 14, height: 1, color: sepia)),
+                                    ],
+                                  ),
+                                ),
                         ),
                       ),
                     ),
