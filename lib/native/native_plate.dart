@@ -1297,6 +1297,10 @@ class _NativePlateState extends State<NativePlate> {
       newest: newest,
       live: app.engine.liveSpecies,
       showHoverInfo: app.settings.nativeHoverInfo,
+      onDragHold: (held) {
+        final want = held ? showing : null;
+        if (want != _holdFor && mounted) setState(() => _holdFor = want);
+      },
       onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
     );
     return ZoomableCollage(

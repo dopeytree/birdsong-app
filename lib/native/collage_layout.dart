@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'dart:ui' show Rect, Size;
+import 'dart:ui' show Offset, Rect, Size;
 
 /// One figure to place on the collage.
 class CollageItem {
@@ -97,4 +97,59 @@ class _Placed {
   final double h;
   double cx = 0;
   double cy = 0;
+}
+
+/// Applies a user drag [drag] (in logical pixels) to [places], moving birds
+/// differently depending on the active view [sizeBy] ('calls', 'time', or
+/// 'equal') while keeping every figure inside [box].
+///
+/// [rank] maps each bird's id to its normalized position 0..1 in the current
+/// view (for 'calls': 0 = least heard, 1 = most heard; for 'time': 0 = oldest,
+/// 1 = most recent; for 'equal': index fraction).
+List<CollagePlace> displaceCollage(
+  List<CollagePlace> places,
+  Map<String, double> rank, {
+  required String sizeBy,
+  required Offset drag,
+  required Size box,
+}) {
+  if (places.isEmpty || drag == Offset.zero || box.width <= 0 || box.height <= 0) {
+    return places;
+  }
+  final center = Offset(box.width / 2, box.height / 2);
+  final maxSpan = math.max(1.0, math.min(box.width, box.height));
+  final dragMag = (drag.distance / maxSpan).clamp(0.0, 1.0);
+
+  return [
+    for (var i = 0; i < places.length; i++)
+      () {
+        final p = places[i];
+        final r = (rank[p.id] ?? 0.5).clamp(0.0, 1.0);
+        // How strongly this bird follows the drag depends on the view mode:
+        // - calls: most-heard birds stay steadier (anchor), rarer birds glide further
+        // - time: most-recent birds lead the drag, older birds trail behind
+        // - equal: birds glide evenly together with subtle organic spread
+        final factor = switch (sizeBy) {
+          'calls' => 1.25 - 0.8 * r,
+          'time' => 0.45 + 0.8 * r,
+          _ => 0.85 + 0.25 * math.sin(i * 1.7),
+        };
+        // Gentle radial breathing room while dragging so tucked-away birds peek out
+        final fromCenter = p.rect.center - center;
+        final spread = fromCenter * (0.08 * dragMag);
+        final dx = drag.dx * factor + spread.dx;
+        final dy = drag.dy * factor + spread.dy;
+
+        // Keep every bird's centre comfortably inside the collage box so even
+        // large figures glide freely while never disappearing off-screen.
+        final minLeft = -p.rect.width * 0.25;
+        final maxLeft = box.width - p.rect.width * 0.75;
+        final minTop = -p.rect.height * 0.25;
+        final maxTop = box.height - p.rect.height * 0.75;
+        final left = (p.rect.left + dx).clamp(math.min(minLeft, maxLeft), math.max(minLeft, maxLeft)).toDouble();
+        final top = (p.rect.top + dy).clamp(math.min(minTop, maxTop), math.max(minTop, maxTop)).toDouble();
+        final moved = Rect.fromLTWH(left, top, p.rect.width, p.rect.height);
+        return CollagePlace(p.id, moved, 1 + (moved.center.dy / maxSpan * 10).round());
+      }()
+  ];
 }

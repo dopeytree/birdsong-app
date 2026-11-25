@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -50,6 +51,8 @@ class CollageView extends StatefulWidget {
     required this.live,
     required this.onOpen,
     this.showHoverInfo = false,
+    this.onDragHold,
+    this.resetAfter = const Duration(seconds: 10),
   });
 
   /// The creatures to draw, most heard first. Only those in [art].
@@ -77,6 +80,13 @@ class CollageView extends StatefulWidget {
   /// encourage clicking to open the bird card, matching touch devices).
   final bool showHoverInfo;
 
+  /// Called when the user begins/ends dragging the collage so the outer scroll
+  /// view can pause while dragging.
+  final ValueChanged<bool>? onDragHold;
+
+  /// How long after the last drag before the collage glides back to default.
+  final Duration resetAfter;
+
   @override
   State<CollageView> createState() => _CollageViewState();
 }
@@ -84,6 +94,9 @@ class CollageView extends StatefulWidget {
 class _CollageViewState extends State<CollageView> {
   String? _hover;
   Offset _pointer = Offset.zero;
+  Offset _drag = Offset.zero;
+  bool _dragging = false;
+  Timer? _resetTimer;
 
   // The first plateful comes in one after another; later arrivals at once.
   bool _first = true;
@@ -92,6 +105,54 @@ class _CollageViewState extends State<CollageView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _first = false);
+  }
+
+  @override
+  void didUpdateWidget(CollageView old) {
+    super.didUpdateWidget(old);
+    if (old.sizeBy != widget.sizeBy || old.size != widget.size) {
+      _resetTimer?.cancel();
+      _drag = Offset.zero;
+      _dragging = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _resetTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleReset() {
+    _resetTimer?.cancel();
+    if (_drag == Offset.zero) return;
+    _resetTimer = Timer(widget.resetAfter, () {
+      if (!mounted) return;
+      setState(() => _drag = Offset.zero);
+    });
+  }
+
+  void _onPanStart(DragStartDetails _) {
+    _resetTimer?.cancel();
+    setState(() => _dragging = true);
+    widget.onDragHold?.call(true);
+  }
+
+  void _onPanUpdate(DragUpdateDetails d) {
+    final maxX = widget.size.width * 0.45;
+    final maxY = widget.size.height * 0.45;
+    setState(() {
+      _drag = Offset(
+        (_drag.dx + d.delta.dx).clamp(-maxX, maxX).toDouble(),
+        (_drag.dy + d.delta.dy).clamp(-maxY, maxY).toDouble(),
+      );
+    });
+  }
+
+  void _onPanEnd() {
+    setState(() => _dragging = false);
+    widget.onDragHold?.call(false);
+    _scheduleReset();
   }
 
   @override
@@ -106,10 +167,27 @@ class _CollageViewState extends State<CollageView> {
           'time' => (byTime.indexOf(b) + 1).toDouble(),
           _ => b.count.toDouble(),
         };
-    final places = layoutCollage([
+    final basePlaces = layoutCollage([
       for (final b in birds)
         CollageItem(b.sci, weight: weight(b), aspect: art[b.sci]?.aspect ?? 1.7, blank: art[b.sci] == null)
     ], widget.size);
+    final maxCalls = birds.map((b) => b.count).reduce(math.max);
+    final minCalls = birds.map((b) => b.count).reduce(math.min);
+    final rank = <String, double>{
+      for (var i = 0; i < birds.length; i++)
+        birds[i].sci: switch (widget.sizeBy) {
+          'calls' => maxCalls == minCalls ? 0.5 : (birds[i].count - minCalls) / (maxCalls - minCalls),
+          'time' => birds.length <= 1 ? 1.0 : byTime.indexOf(birds[i]) / (birds.length - 1),
+          _ => birds.length <= 1 ? 0.5 : i / (birds.length - 1),
+        }
+    };
+    final places = displaceCollage(
+      basePlaces,
+      rank,
+      sizeBy: widget.sizeBy,
+      drag: _drag,
+      box: widget.size,
+    );
     final bird = {for (final b in birds) b.sci: b};
     final newest = widget.markAt == 'none' ? null : widget.newest;
     // has-newest: the rest only stand back when the latest is on the plate
@@ -122,54 +200,61 @@ class _CollageViewState extends State<CollageView> {
     final at = {for (var i = 0; i < places.length; i++) places[i].id: i};
     final tipFor = widget.showHoverInfo && _hover != null ? bird[_hover] : null;
 
-    return SizedBox.fromSize(
-      size: widget.size,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          for (final p in order)
-            AnimatedPositioned(
-              key: ValueKey(p.id),
-              duration: const Duration(milliseconds: 700),
-              curve: const Cubic(.2, .7, .2, 1),
-              left: p.rect.left,
-              top: p.rect.top,
-              width: p.rect.width,
-              height: p.rect.height,
-              child: _Bird(
-                bird: bird[p.id]!,
-                art: art[p.id],
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: _onPanStart,
+      onPanUpdate: _onPanUpdate,
+      onPanEnd: (_) => _onPanEnd(),
+      onPanCancel: _onPanEnd,
+      child: SizedBox.fromSize(
+        size: widget.size,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (final p in order)
+              AnimatedPositioned(
+                key: ValueKey(p.id),
+                duration: _dragging ? const Duration(milliseconds: 60) : const Duration(milliseconds: 700),
+                curve: _dragging ? Curves.easeOut : const Cubic(.2, .7, .2, 1),
+                left: p.rect.left,
+                top: p.rect.top,
                 width: p.rect.width,
-                delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
-                hovered: _hover == p.id,
-                newest: p.id == newest,
-                markBelow: widget.markAt == 'below',
-                showDot: widget.markAt == 'centre' || widget.markAt == 'below',
-                faded: fadeRest && p.id != newest,
-                live: widget.live.contains(p.id),
-                onHover: (where) => setState(() {
-                  _hover = where == null ? (_hover == p.id ? null : _hover) : p.id;
-                  if (where != null) _pointer = p.rect.topLeft + where;
-                }),
-                onTap: () => widget.onOpen(bird[p.id]!),
+                height: p.rect.height,
+                child: _Bird(
+                  bird: bird[p.id]!,
+                  art: art[p.id],
+                  width: p.rect.width,
+                  delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
+                  hovered: _hover == p.id,
+                  newest: p.id == newest,
+                  markBelow: widget.markAt == 'below',
+                  showDot: widget.markAt == 'centre' || widget.markAt == 'below',
+                  faded: fadeRest && p.id != newest,
+                  live: widget.live.contains(p.id),
+                  onHover: (where) => setState(() {
+                    _hover = where == null ? (_hover == p.id ? null : _hover) : p.id;
+                    if (where != null) _pointer = p.rect.topLeft + where;
+                  }),
+                  onTap: () => widget.onOpen(bird[p.id]!),
+                ),
               ),
-            ),
-          // The label that follows the pointer.
-          Positioned(
-            left: _pointer.dx,
-            top: _pointer.dy - 18,
-            child: IgnorePointer(
-              child: FractionalTranslation(
-                translation: const Offset(-.5, -1),
-                child: AnimatedOpacity(
-                  opacity: tipFor == null ? 0 : 1,
-                  duration: const Duration(milliseconds: 120),
-                  child: tipFor == null ? const SizedBox() : _Tip(tipFor),
+            // The label that follows the pointer.
+            Positioned(
+              left: _pointer.dx,
+              top: _pointer.dy - 18,
+              child: IgnorePointer(
+                child: FractionalTranslation(
+                  translation: const Offset(-.5, -1),
+                  child: AnimatedOpacity(
+                    opacity: tipFor == null ? 0 : 1,
+                    duration: const Duration(milliseconds: 120),
+                    child: tipFor == null ? const SizedBox() : _Tip(tipFor),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
