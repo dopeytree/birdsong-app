@@ -627,14 +627,13 @@ class DetectionStore extends ChangeNotifier {
     return x;
   }
 
-  /// Close a session. One that heard nothing and lasted under a minute is
-  /// dropped, folder and all, so a mistaken tap on the microphone leaves no
-  /// trace.
+  /// Close a session. One that heard nothing is dropped, folder and all, so
+  /// empty recordings never clutter the calendar.
   Future<void> endSession(Session x, {DateTime? at, String reason = 'manual'}) async {
     x.end = at ?? DateTime.now();
     x.stopReason = reason;
     final heard = all.any((d) => x.contains(d.at));
-    if (!heard && x.end!.difference(x.start) < const Duration(minutes: 1)) {
+    if (!heard) {
       sessions.remove(x);
       _dirty.remove(x);
       if (_selectedId == x.id) _selectedId = null;
@@ -644,6 +643,20 @@ class DetectionStore extends ChangeNotifier {
       _dirty.remove(x);
       await _write(x);
     }
+    notifyListeners();
+  }
+
+  /// Permanently delete a session, its detections, and its recordings folder.
+  Future<void> deleteSession(Session x) async {
+    if (x.live) return;
+    sessions.remove(x);
+    _dirty.remove(x);
+    all.removeWhere((d) => x.contains(d.at));
+    if (_selectedId == x.id) {
+      _selectedId = sessions.isEmpty ? null : sessions.last.id;
+    }
+    final dir = dirOf(x);
+    if (await dir.exists()) await dir.delete(recursive: true);
     notifyListeners();
   }
 

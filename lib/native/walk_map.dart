@@ -193,6 +193,14 @@ Rect birdNameBox(Offset heart, String name) {
   return Rect.fromLTWH(heart.dx - width / 2, heart.dy + 15, width, height);
 }
 
+/// Approximate box of a bird's name placed above the heart when below is taken.
+@visibleForTesting
+Rect birdNameBoxAbove(Offset heart, String name) {
+  const height = 15.0;
+  final width = name.length * 6.2 + 6;
+  return Rect.fromLTWH(heart.dx - width / 2, heart.dy - 15 - height, width, height);
+}
+
 /// Which names to keep when their boxes may overlap. [boxes] are in order
 /// (earliest heard first): the first of a cluster is kept, and a later
 /// name is dropped only when it overlaps one already kept (Ed, 23 Nov).
@@ -768,34 +776,108 @@ class _WalkMapState extends State<WalkMap> {
             }(),
       ];
 
-  List<Marker> _ends() {
+  /// Decide which bird names show (and whether below or above their heart), plus
+  /// the screen rects of all bird hearts and placed bird names so Start/End
+  /// labels can dodge or hide when overlapped.
+  ({Map<String, bool> placement, List<Rect> obstacles}) _birdLabelLayout() {
+    final birds = widget.walk?.birds ?? const <WalkBird>[];
+    final seen = <String>{};
+    final earliest = <WalkBird>[];
+    for (final b in birds) {
+      if (seen.add(b.sci)) earliest.add(b);
+    }
+    final placement = <String, bool>{}; // sci -> true (below) / false (above)
+    final obstacles = <Rect>[];
+    if (!_ready) {
+      for (final b in earliest) {
+        placement[b.sci] = true;
+      }
+      return (placement: placement, obstacles: obstacles);
+    }
+    final heartRects = [
+      for (final b in earliest)
+        Rect.fromCenter(center: _map.camera.latLngToScreenOffset(b.at), width: 22, height: 22),
+    ];
+    obstacles.addAll(heartRects);
+    final placedNames = <Rect>[];
+    for (var i = 0; i < earliest.length; i++) {
+      final b = earliest[i];
+      final pt = _map.camera.latLngToScreenOffset(b.at);
+      final below = birdNameBox(pt, b.common);
+      final above = birdNameBoxAbove(pt, b.common);
+      bool collides(Rect r) {
+        if (placedNames.any(r.overlaps)) return true;
+        for (var j = 0; j < heartRects.length; j++) {
+          if (j != i && heartRects[j].overlaps(r)) return true;
+        }
+        return false;
+      }
+
+      if (!collides(below)) {
+        placement[b.sci] = true;
+        placedNames.add(below);
+        obstacles.add(below);
+      } else if (!collides(above)) {
+        placement[b.sci] = false;
+        placedNames.add(above);
+        obstacles.add(above);
+      }
+    }
+    return (placement: placement, obstacles: obstacles);
+  }
+
+  List<Marker> _ends(List<Rect> birdObstacles) {
     final w = widget.walk;
     if (w == null) return const [];
     final line = w.trail;
     final a = line.isNotEmpty ? line.first : w.place;
     String time(DateTime? t) => t == null ? '' : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-    Marker end(LatLng at, bool start, String label, String when, {bool station = false}) => Marker(
-          point: at,
-          width: 80,
-          height: 56,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              GestureDetector(
-                onTapUp: (d) {
-                  final box = context.findRenderObject() as RenderBox?;
-                  final local = box?.globalToLocal(d.globalPosition) ?? Offset.zero;
-                  _say(local, label, when);
-                },
-                // Start +, finish ✕, in ink (Ed, Nov 2026); a station keeps its ring.
-                child: CustomPaint(
-                    size: const Size.square(22),
-                    painter: station ? const _EndPainter(false) : _StartFinishPainter(start)),
+    Marker end(LatLng at, bool start, String label, String when, {bool station = false}) {
+      // Check if a bird heart or bird name covers the Start/End label:
+      // try below, then above, else hide the word cleanly.
+      bool? labelBelow = true;
+      if (!station && _ready && birdObstacles.isNotEmpty) {
+        final pt = _map.camera.latLngToScreenOffset(at);
+        final below = birdNameBox(pt, label);
+        final above = birdNameBoxAbove(pt, label);
+        if (!birdObstacles.any(below.overlaps)) {
+          labelBelow = true;
+        } else if (!birdObstacles.any(above.overlaps)) {
+          labelBelow = false;
+        } else {
+          labelBelow = null;
+        }
+      }
+      return Marker(
+        point: at,
+        width: 80,
+        height: 64,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            GestureDetector(
+              onTapUp: (d) {
+                final box = context.findRenderObject() as RenderBox?;
+                final local = box?.globalToLocal(d.globalPosition) ?? Offset.zero;
+                _say(local, label, when);
+              },
+              // Start +, finish ✕, in ink (Ed, Nov 2026); a station keeps its ring.
+              child: CustomPaint(
+                  size: const Size.square(22),
+                  painter: station ? const _EndPainter(false) : _StartFinishPainter(start)),
+            ),
+            if (labelBelow != null)
+              Positioned(
+                top: labelBelow ? 32 + 12 : null,
+                bottom: labelBelow ? null : 32 + 12,
+                child: IgnorePointer(child: _Halo(label, 11, ink, halo: 1.6)),
               ),
-              Positioned(top: 28 + 11, child: IgnorePointer(child: _Halo(label, 11, ink, halo: 1.6))),
-            ],
-          ),
-        );
+          ],
+        ),
+      );
+    }
+
     if (w.station != null) {
       return [if (w.place != null) end(w.place!, false, w.station!, 'The station', station: true)];
     }
@@ -1049,32 +1131,15 @@ class _WalkMapState extends State<WalkMap> {
   /// the earliest; a tap on a name opens the card, as the heart does
   /// (Ed, 23 Nov). Re-decided when the zoom changes ([_moved] rebuilds)
   /// and once the camera is ready.
-  List<Marker> _birds() {
+  List<Marker> _birds(Map<String, bool> placement) {
     final birds = widget.walk?.birds ?? const <WalkBird>[];
     final seen = <String>{};
-    final earliest = <WalkBird>[];
-    for (final b in birds) {
-      if (seen.add(b.sci)) earliest.add(b);
-    }
-    // Screen positions are a pure translation while panning, so overlap
-    // only changes with the zoom. [_moved] rebuilds when it does.
-    final showName = <String>{};
-    if (!_ready) {
-      for (final b in earliest) {
-        showName.add(b.sci);
-      }
-    } else {
-      final boxes = [for (final b in earliest) birdNameBox(_map.camera.latLngToScreenOffset(b.at), b.common)];
-      for (final i in birdNamesToKeep(boxes)) {
-        showName.add(earliest[i].sci);
-      }
-    }
-    seen.clear();
     final firsts = <Marker>[], rest = <Marker>[];
     for (final b in birds) {
       final first = seen.add(b.sci);
       if (!widget.allBirds && !first) continue;
       final size = first ? 24.0 : 18.0;
+      final nameBelow = placement[b.sci];
       final m = Marker(
         point: b.at,
         width: 140,
@@ -1098,9 +1163,11 @@ class _WalkMapState extends State<WalkMap> {
             ),
             // Names in ink, apart from the red hearts (Ed, Nov 2026; were madder).
             // A tap on the name opens the card, as the heart does (Ed, 23 Nov).
-            if (first && showName.contains(b.sci))
+            // Renders below the heart, or above if below would overlap.
+            if (first && nameBelow != null)
               Positioned(
-                top: 32 + 15,
+                top: nameBelow ? 32 + 15 : null,
+                bottom: nameBelow ? null : 32 + 15,
                 child: Semantics(
                   button: true,
                   label: '${b.common}: open its card',
@@ -1347,8 +1414,13 @@ class _WalkMapState extends State<WalkMap> {
                           pattern: const StrokePattern.dotted(spacingFactor: 2.2),
                         ),
                       ]),
-                    MarkerLayer(markers: _ends()),
-                    MarkerLayer(markers: _birds()),
+                    () {
+                      final layout = _birdLabelLayout();
+                      return MarkerLayer(markers: [
+                        ..._ends(layout.obstacles),
+                        ..._birds(layout.placement),
+                      ]);
+                    }(),
                   ],
                 ),
               if (kit != null)

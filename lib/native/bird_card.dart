@@ -312,7 +312,78 @@ class _BirdCardState extends State<BirdCard> {
     final narrow = screen.width <= 720;
     final body = narrow ? 16.0 : 18.0;
     final text = TextStyle(fontFamily: serif, fontSize: body, height: 1.5, color: ink);
-    final left = _left(text, screen, narrow), right = _right(text);
+    final inner = Stack(
+      children: [
+        if (!narrow)
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: Padding(
+                padding: EdgeInsets.all(6),
+                child: DecoratedBox(decoration: BoxDecoration(border: Border.fromBorderSide(BorderSide(color: rule)))),
+              ),
+            ),
+          ),
+        SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(narrow ? 20 : 28.8, narrow ? 48 : 28.8, narrow ? 20 : 28.8, 28.8),
+          child: DefaultTextStyle(
+            style: text,
+            child: narrow
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _artSection(text, screen, true),
+                      const SizedBox(height: 12),
+                      _nameAndBlurb(text, padRightForClose: false),
+                      _recordingsSection(text),
+                      _detailsAndCharts(text),
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 105,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _artSection(text, screen, false),
+                            _recordingsSection(text),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 32),
+                      Expanded(
+                        flex: 100,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _nameAndBlurb(text, padRightForClose: true),
+                            _detailsAndCharts(text),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+        Positioned(
+          top: narrow ? 4 : 8,
+          right: narrow ? 4 : 8,
+          child: IconButton(
+            tooltip: 'Close',
+            icon: const Icon(Icons.close),
+            color: ink,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ],
+    );
+    if (narrow) {
+      return Dialog.fullscreen(
+        backgroundColor: paper,
+        child: SafeArea(child: inner),
+      );
+    }
     return Dialog(
       backgroundColor: paper,
       surfaceTintColor: Colors.transparent,
@@ -320,46 +391,13 @@ class _BirdCardState extends State<BirdCard> {
       shape: const RoundedRectangleBorder(side: BorderSide(color: sepia)),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: math.min(960, screen.width * .94), maxHeight: screen.height * .92),
-        child: Stack(
-          children: [
-            // outline:1px solid rule; outline-offset:-7px
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: Padding(
-                  padding: EdgeInsets.all(6),
-                  child: DecoratedBox(decoration: BoxDecoration(border: Border.fromBorderSide(BorderSide(color: rule)))),
-                ),
-              ),
-            ),
-            SingleChildScrollView(
-              padding: const EdgeInsets.all(28.8),
-              child: DefaultTextStyle(
-                style: text,
-                child: narrow
-                    ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [left, const SizedBox(height: 16), right])
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 105, child: left),
-                          const SizedBox(width: 32),
-                          Expanded(flex: 100, child: right),
-                        ],
-                      ),
-              ),
-            ),
-            Positioned(
-              top: 14.4,
-              right: 17.6,
-              child: _Link('Close', onTap: () => Navigator.of(context).pop(), size: body * .95),
-            ),
-          ],
-        ),
+        child: inner,
       ),
     );
   }
 
-  /// The plate, its credit, and the latest recordings.
-  Widget _left(TextStyle text, Size screen, bool narrow) {
+  /// The plate and its credit.
+  Widget _artSection(TextStyle text, Size screen, bool narrow) {
     final art = _art;
     final caption = TextStyle(fontFamily: serif, fontSize: text.fontSize! * .82, height: 1.35, color: sepia);
     return Column(
@@ -367,7 +405,7 @@ class _BirdCardState extends State<BirdCard> {
       children: [
         if (art != null)
           ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: screen.height * (narrow ? .45 : .52)),
+            constraints: BoxConstraints(maxHeight: screen.height * (narrow ? .42 : .52)),
             child: PlateImage(art: art, width: math.min(500, screen.width * .9)),
           ),
         const SizedBox(height: 8),
@@ -386,29 +424,31 @@ class _BirdCardState extends State<BirdCard> {
                 ]),
           style: caption,
         ),
-        FutureBuilder<List<CardRecording>>(
-          future: _recs,
-          builder: (context, snap) {
-            final recs = snap.data ?? const <CardRecording>[];
-            if (recs.isEmpty) return const SizedBox();
-            final newest = recs.first;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 19.2),
-                _small('Latest recordings', text),
-                if (newest.spectrogramFile != null || newest.spectrogramUrl != null)
-                  _Spectrogram(file: newest.spectrogramFile, url: newest.spectrogramUrl),
-                const DecoratedBox(decoration: BoxDecoration(border: Border(top: BorderSide(color: rule)))),
-                for (final r in recs) _recording(r, text),
-                const SizedBox(height: 17.6),
-              ],
-            );
-          },
-        ),
       ],
     );
   }
+
+  /// The latest recordings and spectrogram.
+  Widget _recordingsSection(TextStyle text) => FutureBuilder<List<CardRecording>>(
+        future: _recs,
+        builder: (context, snap) {
+          final recs = snap.data ?? const <CardRecording>[];
+          if (recs.isEmpty) return const SizedBox();
+          final newest = recs.first;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 19.2),
+              _small('Latest recordings', text),
+              if (newest.spectrogramFile != null || newest.spectrogramUrl != null)
+                _Spectrogram(file: newest.spectrogramFile, url: newest.spectrogramUrl),
+              const DecoratedBox(decoration: BoxDecoration(border: Border(top: BorderSide(color: rule)))),
+              for (final r in recs) _recording(r, text),
+              const SizedBox(height: 17.6),
+            ],
+          );
+        },
+      );
 
   Widget _recording(CardRecording d, TextStyle text) {
     final size = text.fontSize! * .95;
@@ -445,16 +485,15 @@ class _BirdCardState extends State<BirdCard> {
     );
   }
 
-  /// Names, Wikipedia, particulars, the two bar charts, other plates.
-  Widget _right(TextStyle text) {
+  /// Names and Wikipedia blurb.
+  Widget _nameAndBlurb(TextStyle text, {required bool padRightForClose}) {
     final f = widget.source, size = text.fontSize!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(height: size * .6),
-        // a little short of the Close link
+        SizedBox(height: size * .4),
         Padding(
-          padding: const EdgeInsets.only(right: 48),
+          padding: EdgeInsets.only(right: padRightForClose ? 44 : 0),
           child: Text(f.common, style: TextStyle(fontSize: size * 2 * 16 / 18, height: 1.1)),
         ),
         SizedBox(height: size * .15),
@@ -483,6 +522,16 @@ class _BirdCardState extends State<BirdCard> {
             );
           },
         ),
+      ],
+    );
+  }
+
+  /// Particulars, the two bar charts, and other plates.
+  Widget _detailsAndCharts(TextStyle text) {
+    final f = widget.source, size = text.fontSize!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         FutureBuilder<List<(String, String)>>(
           future: _more,
           builder: (context, snap) => _particulars([...f.rows, ...?snap.data], text),

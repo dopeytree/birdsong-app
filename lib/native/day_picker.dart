@@ -44,13 +44,41 @@ class DayPicker extends StatefulWidget {
 DateTime _day(DateTime t) => DateTime(t.year, t.month, t.day);
 
 class _DayPickerState extends State<DayPicker> {
-  List<Session> get _sessions => widget.store.sessions;
-  late final Set<DateTime> _days = {for (final x in _sessions) _day(x.start)};
+  List<Session> get _sessions => [
+        for (final x in widget.store.sessions)
+          if (x.live || widget.speciesIn(x) > 0) x,
+      ];
+  Set<DateTime> get _days => {for (final x in _sessions) _day(x.start)};
   late DateTime _picked = _sessions.isEmpty
       ? _day(DateTime.now())
       : _day(widget.shown?.start ?? _sessions.last.start);
 
   List<Session> get _that => [for (final x in _sessions) if (sameDay(x.start, _picked)) x];
+
+  Future<void> _confirmDelete(Session x, int number) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: paper,
+        title: Text('Delete session #$number?'),
+        content: const Text(
+            'This permanently deletes this walk, its detections, and its recordings. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await widget.store.deleteSession(x);
+    if (!mounted) return;
+    setState(() {
+      final days = _days;
+      if (days.isNotEmpty && !days.contains(_picked)) {
+        _picked = days.reduce((a, b) => a.isAfter(b) ? a : b);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -220,7 +248,7 @@ class _DayPickerState extends State<DayPicker> {
 
   /// "#3  07:42 for 38m  ·  12 species", the one on show in madder.
   Widget _session(Session x) {
-    final i = _sessions.indexOf(x);
+    final i = widget.store.sessions.indexOf(x);
     final on = widget.shown?.id == x.id;
     final when = x.live ? '${clock(x.start)}, listening now' : '${clock(x.start)} for ${lasting(x.end!.difference(x.start))}';
     final n = widget.speciesIn(x);
@@ -230,8 +258,7 @@ class _DayPickerState extends State<DayPicker> {
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
         decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: rule))),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
               width: 44,
@@ -243,6 +270,16 @@ class _DayPickerState extends State<DayPicker> {
             ),
             Text(n == 1 ? '1 species' : '$n species',
                 style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia)),
+            if (!x.live)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.only(left: 6),
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                iconSize: 18,
+                color: sepia,
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => _confirmDelete(x, i + 1),
+              ),
           ],
         ),
       ),
