@@ -1480,7 +1480,7 @@ class _WalkMapState extends State<WalkMap> {
                 ),
               if (kit != null)
                 Positioned(
-                    left: 6,
+                    left: widget.fullScreen ? 48 : 6,
                     bottom: 6,
                     child: _Credit(_credit +
                         (widget.landmarks != null ? _extrasCredit() : '') +

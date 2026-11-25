@@ -493,6 +493,33 @@ class _NativePlateState extends State<NativePlate> {
                         ),
                       ),
                     ),
+                    // Bottom-left star icon on the map: closes the map and opens
+                    // Latest & most heard (same as top-right ✕).
+                    Positioned(
+                      left: 10,
+                      bottom: 10,
+                      child: DecoratedBox(
+                        decoration: const BoxDecoration(
+                          borderRadius: BorderRadius.all(Radius.circular(4)),
+                          boxShadow: [BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10)],
+                        ),
+                        child: Material(
+                          color: const Color(0xFF8C877D),
+                          borderRadius: const BorderRadius.all(Radius.circular(4)),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () => Navigator.of(context).maybePop(),
+                            child: const SizedBox(
+                              width: 31,
+                              height: 31,
+                              child: Center(
+                                child: Icon(Icons.star_border_outlined, size: 19, color: paper),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                     // on the map, not a strip below it; clear of the credit ⓘ (Ed, 23 Nov)
                     if (passed.isNotEmpty)
                       Positioned(
@@ -1001,8 +1028,8 @@ class _NativePlateState extends State<NativePlate> {
                     right: 8 + 12,
                     child: _lightToggle(feed, app.settings.nativeHeadingInk ? ink : sepia, end: true),
                   ),
-                // Single bottom-left view cycle button (order: Most recent -> Map -> No pecking order -> Latest & most heard):
-                // Each icon previews the next view in the cycle.
+                // Single bottom-left view cycle button:
+                // Most recent (map) -> Map (star / ✕) -> Latest & most heard (grid) -> No pecking order (mosaic) -> Most recent.
                 Positioned(
                   left: 8,
                   bottom: 8,
@@ -1012,12 +1039,12 @@ class _NativePlateState extends State<NativePlate> {
                     iconSize: 22,
                     tooltip: switch (mode.key) {
                       'time' => 'The walk on a map',
-                      'equal' => 'Latest & most heard',
+                      'spotlight' => 'No pecking order',
                       _ => 'Recent ramblings',
                     },
                     icon: Icon(switch (mode.key) {
                       'time' => Icons.map_outlined,
-                      'equal' => Icons.star_border_outlined,
+                      'spotlight' => Icons.grid_view_outlined,
                       _ => Icons.auto_awesome_mosaic_outlined,
                     }),
                     color: red,

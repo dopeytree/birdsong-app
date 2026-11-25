@@ -18,7 +18,7 @@ void main() {
   test('the plate modes run a to c', () {
     expect([for (var i = 1; i <= plateModes.length; i++) plateLetter(i)].join(), 'abc');
     expect(plateModes.map((m) => m.key).toList(),
-        ['time', 'equal', 'spotlight']);
+        ['time', 'spotlight', 'equal']);
   });
 
   test('a mode is kept by its key (and old latest/top map to spotlight)', () async {
@@ -30,10 +30,10 @@ void main() {
   test('a number saved in the first order finds the same mode', () async {
     // 2 was recent ramblings; it is a now.
     expect(plateLetter((await loadWith({'plateMode': 2})).plateMode), 'a');
-    // 3 was equal (no pecking order); it is b now.
-    expect(plateLetter((await loadWith({'plateMode': 3})).plateMode), 'b');
-    // 6 was latest; maps to spotlight (c).
-    expect(plateLetter((await loadWith({'plateMode': 6})).plateMode), 'c');
+    // 6 was latest; maps to spotlight (b).
+    expect(plateLetter((await loadWith({'plateMode': 6})).plateMode), 'b');
+    // 3 was equal (no pecking order); it is c now.
+    expect(plateLetter((await loadWith({'plateMode': 3})).plateMode), 'c');
   });
 
   test('an old single station becomes the first saved station', () async {

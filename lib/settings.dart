@@ -580,9 +580,9 @@ class PlateMode {
 
 const plateModes = <PlateMode>[
   PlateMode('time', 'Recent ramblings', sizeBy: 'time'),                           // a (default): Most recent -> Map
-  PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                         // b: Equal size (after Map closes)
-  PlateMode('spotlight', 'Latest & most heard',                                    // c: Combined Latest + Most heard
+  PlateMode('spotlight', 'Latest & most heard',                                    // b: Combined Latest + Most heard (after Map)
       query: 'view=latest&show=time,title,date', currentOnly: true),
+  PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                         // c: Equal size -> back to Most recent
 ];
 
 /// The view the app opens on until another is chosen: recent ramblings.
