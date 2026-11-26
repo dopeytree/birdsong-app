@@ -200,10 +200,12 @@ class Settings extends ChangeNotifier {
   /// Whether the plate is Flutter's own ([webPlate] off).
   bool get nativePlate => !webPlate;
 
-  /// Sort order for the "No pecking order" view: 'calls' (most heard),
-  /// 'recent' (latest), 'name' (A–Z), 'rare' (fewest calls), 'sci' (taxonomy),
-  /// or 'colour' (dominant plumage colour).
+  /// Sort order shared by "No pecking order" and "Index of Species":
+  /// 'calls', 'recent', 'name', 'rare', 'size', 'colour', 'artist', or 'sci'.
   String equalSort = 'calls';
+
+  /// Sort direction for [equalSort]: true = ascending, false = descending.
+  bool equalSortAsc = false;
 
   /// The Flutter plate's heading: the title line ("Birdsong #3/12") and the
   /// lines under it (when, where, the weather), as the web plate's Title
@@ -412,9 +414,10 @@ class Settings extends ChangeNotifier {
       modelOverrides = next;
     }
     webPlate = (j['webPlate'] as bool?) ?? webPlate;
-    equalSort = const ['calls', 'recent', 'name', 'rare', 'sci', 'colour'].contains(j['equalSort'])
+    equalSort = const ['calls', 'recent', 'name', 'rare', 'size', 'colour', 'artist', 'sci'].contains(j['equalSort'])
         ? j['equalSort'] as String
         : equalSort;
+    equalSortAsc = (j['equalSortAsc'] as bool?) ?? equalSortAsc;
     nativeShowTitle = (j['nativeShowTitle'] as bool?) ?? nativeShowTitle;
     nativeShowDate = (j['nativeShowDate'] as bool?) ?? nativeShowDate;
     final scribbleMode = j['songScribbleMode'];
@@ -513,6 +516,7 @@ class Settings extends ChangeNotifier {
         'modelOverrides': modelOverrides,
         'webPlate': webPlate,
         'equalSort': equalSort,
+        'equalSortAsc': equalSortAsc,
         'nativeShowTitle': nativeShowTitle,
         'nativeShowDate': nativeShowDate,
         'songScribble': songScribble,

@@ -72,6 +72,7 @@ class IndexView extends StatelessWidget {
     required this.canNext,
     required this.onStep,
     required this.onOpen,
+    this.sortBar,
   });
 
   final List<IndexEntry> entries;
@@ -109,6 +110,9 @@ class IndexView extends StatelessWidget {
   final ValueChanged<int> onStep;
   final ValueChanged<IndexEntry> onOpen;
 
+  /// Optional sort bar displayed above the expanded index columns.
+  final Widget? sortBar;
+
   @override
   Widget build(BuildContext context) {
     if (inline) {
@@ -138,7 +142,12 @@ class IndexView extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _heading(),
-        SizedBox(height: fit ? 13.6 : 25.6),
+        if (!folded && sortBar != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: sortBar!,
+          ),
+        SizedBox(height: fit ? 10.0 : 20.0),
         if (!folded) ...[
           Row(
             mainAxisAlignment: MainAxisAlignment.center,

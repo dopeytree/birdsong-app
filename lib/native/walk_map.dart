@@ -1445,7 +1445,7 @@ class _WalkMapState extends State<WalkMap> {
               if (kit != null)
                 Positioned(
                   right: 10,
-                  top: 10,
+                  top: widget.fullScreen ? 52 : 10,
                   child: _ZoomButtons(
                     map: _map,
                     style: widget.settings?.mapButtonStyle ?? 'ink',

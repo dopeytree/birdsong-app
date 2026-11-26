@@ -24,6 +24,8 @@ import 'index_view.dart';
 import 'landmarks.dart';
 import 'passed_view.dart';
 import 'plate_library.dart';
+import 'species_sort.dart';
+import 'species_traits.dart';
 import 'station_feed.dart';
 import 'walk_map.dart';
 
@@ -84,6 +86,7 @@ class _Row {
 
 class _NativePlateState extends State<NativePlate> {
   PlateLibrary? _lib;
+  SpeciesTraits? _traits;
 
   // the map's extras, shared by the map and "Passed on the way"
   final _landmarks = LandmarkLookup();
@@ -332,6 +335,13 @@ class _NativePlateState extends State<NativePlate> {
         lib.close();
       }
     });
+    SpeciesTraits.open().then((traits) {
+      if (mounted) {
+        setState(() => _traits = traits);
+      } else {
+        traits.dispose();
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => widget.onLoaded?.call());
   }
 
@@ -341,6 +351,7 @@ class _NativePlateState extends State<NativePlate> {
     _noteTimer?.cancel();
     _feed?.dispose();
     _lib?.close();
+    _traits?.dispose();
     super.dispose();
   }
 
@@ -380,21 +391,26 @@ class _NativePlateState extends State<NativePlate> {
   /// Resolution multiplier for zoomed-in high-res decoding on No pecking order.
   double _zoomTier = 1.0;
 
-  /// Whether the top-left sort slide-out is open on No pecking order.
+  /// Whether the sort slide-out is open on No pecking order or Index of Species.
   bool _sortOpen = false;
+  bool _indexSortOpen = false;
 
   /// Cached dominant plumage colour key per species (for Colour sort).
   final Map<String, double> _colourKey = {};
   final Set<String> _colourLoading = {};
 
-  static const _equalSorts = <(String key, String label)>[
-    ('calls', 'Most heard'),
-    ('recent', 'Latest'),
-    ('name', 'A–Z'),
-    ('rare', 'Rarity'),
-    ('sci', 'Taxonomy'),
-    ('colour', 'Colour'),
-  ];
+  void _selectSort(String key) {
+    final opt = speciesSortOptions.firstWhere(
+      (o) => o.key == key,
+      orElse: () => speciesSortOptions.first,
+    );
+    app.settings.update((x) {
+      x.equalSort = opt.key;
+      x.equalSortAsc = opt.defaultAsc;
+    });
+  }
+
+  void _flipSort() => app.settings.update((x) => x.equalSortAsc = !x.equalSortAsc);
 
   void _ensureColours(List<_Row> rows) {
     for (final r in rows) {
@@ -473,23 +489,61 @@ class _NativePlateState extends State<NativePlate> {
     }
   }
 
-  List<_Row> _sortedEqual(List<_Row> rows) {
+  /// Sort [rows] using the shared sort setting (`equalSort` + `equalSortAsc`),
+  /// used by both "No pecking order" and "Index of Species".
+  List<_Row> _sortRows(List<_Row> rows) {
     final sort = app.settings.equalSort;
+    final asc = app.settings.equalSortAsc;
+    final dir = asc ? 1 : -1;
     final out = [...rows];
+    int cmpOptNum(double? a, double? b, String fallbackA, String fallbackB) {
+      if (a == null && b == null) return fallbackA.toLowerCase().compareTo(fallbackB.toLowerCase());
+      if (a == null) return 1; // unknowns always stay at the end
+      if (b == null) return -1;
+      final c = a.compareTo(b);
+      return c != 0 ? c * dir : fallbackA.toLowerCase().compareTo(fallbackB.toLowerCase());
+    }
+
     switch (sort) {
       case 'recent':
-        out.sort((a, b) => (b.last ?? DateTime(0)).compareTo(a.last ?? DateTime(0)));
+        out.sort((a, b) {
+          final c = (a.last ?? DateTime(0)).compareTo(b.last ?? DateTime(0));
+          return c != 0 ? c * dir : a.common.toLowerCase().compareTo(b.common.toLowerCase());
+        });
       case 'name':
-        out.sort((a, b) => a.common.toLowerCase().compareTo(b.common.toLowerCase()));
+        out.sort((a, b) => a.common.toLowerCase().compareTo(b.common.toLowerCase()) * dir);
       case 'rare':
-        out.sort((a, b) => a.count != b.count ? a.count.compareTo(b.count) : a.common.compareTo(b.common));
+        _traits?.wantRarity(rows.map((r) => r.sci));
+        out.sort((a, b) => cmpOptNum(
+            _traits?.of(a.sci)?.rarityScore, _traits?.of(b.sci)?.rarityScore, a.common, b.common));
+      case 'size':
+        _traits?.wantSizeAndIucn(rows.map((r) => r.sci));
+        out.sort((a, b) => cmpOptNum(
+            _traits?.of(a.sci)?.sizeScore, _traits?.of(b.sci)?.sizeScore, a.common, b.common));
       case 'sci':
-        out.sort((a, b) => a.sci.toLowerCase().compareTo(b.sci.toLowerCase()));
+        out.sort((a, b) => a.sci.toLowerCase().compareTo(b.sci.toLowerCase()) * dir);
+      case 'artist':
+        out.sort((a, b) {
+          final aa = artistOfPlate(_art[a.sci]).toLowerCase();
+          final bb = artistOfPlate(_art[b.sci]).toLowerCase();
+          if (aa.isEmpty && bb.isEmpty) return a.common.toLowerCase().compareTo(b.common.toLowerCase());
+          if (aa.isEmpty) return 1;
+          if (bb.isEmpty) return -1;
+          final c = aa.compareTo(bb);
+          return c != 0 ? c * dir : a.common.toLowerCase().compareTo(b.common.toLowerCase());
+        });
       case 'colour':
         _ensureColours(rows);
-        out.sort((a, b) => (_colourKey[a.sci] ?? 999).compareTo(_colourKey[b.sci] ?? 999));
-      default:
-        out.sort((a, b) => b.count != a.count ? b.count.compareTo(a.count) : a.common.compareTo(b.common));
+        out.sort((a, b) {
+          final ka = _colourKey[a.sci];
+          final kb = _colourKey[b.sci];
+          return cmpOptNum(ka == 999 ? null : ka, kb == 999 ? null : kb, a.common, b.common);
+        });
+      default: // 'calls'
+        out.sort((a, b) {
+          final c = a.count.compareTo(b.count);
+          return c != 0 ? c * dir : a.common.toLowerCase().compareTo(b.common.toLowerCase());
+        });
     }
     return out;
   }
@@ -674,6 +728,16 @@ class _NativePlateState extends State<NativePlate> {
                                 : null,
                           ),
                         ),
+                      ),
+                    ),
+                    // Top-right menu button on the map (always visible in all views).
+                    Positioned(
+                      right: 4,
+                      top: 4,
+                      child: SettingsButton(
+                        app: app,
+                        color: isInk ? ink : (isMadder ? madder : madder),
+                        onOpenCalendar: _pickDay,
                       ),
                     ),
                     // Bottom-left interests icon on the map: closes the map and opens
@@ -926,7 +990,13 @@ class _NativePlateState extends State<NativePlate> {
   Widget build(BuildContext context) {
     final feed = _syncFeed();
     return ListenableBuilder(
-      listenable: Listenable.merge([app.settings, app.store, app.engine, if (feed != null) feed]),
+      listenable: Listenable.merge([
+        app.settings,
+        app.store,
+        app.engine,
+        if (feed != null) feed,
+        if (_traits != null) _traits!,
+      ]),
       builder: (context, _) {
         final store = app.store, engine = app.engine;
         // a remote station has no sessions
@@ -969,9 +1039,10 @@ class _NativePlateState extends State<NativePlate> {
         // the room; opened, the list is where it always was.
         final foldedInline = showIndex && showPlate && !spotlight && app.settings.nativeIndexFolded;
         if (foldedInline) _bottomRoom += 40 + 24;
+        final sortedIndex = _sortRows(rows);
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
               entries: [
-                for (final r in rows)
+                for (final r in sortedIndex)
                   IndexEntry(r.sci, r.common, r.count, noPlate: _art.containsKey(r.sci) && _art[r.sci] == null),
               ],
               width: width,
@@ -992,6 +1063,17 @@ class _NativePlateState extends State<NativePlate> {
               canNext: feed?.canStepOn ?? (i >= 0 && i < n - 1),
               onStep: feed?.stepDay ?? store.step,
               onOpen: (e) => _openCard(rows.firstWhere((r) => r.sci == e.sci)),
+              sortBar: inline
+                  ? null
+                  : SpeciesSortBar(
+                      open: _indexSortOpen,
+                      sortKey: app.settings.equalSort,
+                      ascending: app.settings.equalSortAsc,
+                      centered: true,
+                      onToggleOpen: () => setState(() => _indexSortOpen = !_indexSortOpen),
+                      onSelect: _selectSort,
+                      onFlipDirection: _flipSort,
+                    ),
             );
         return Stack(
           children: [
@@ -1191,127 +1273,66 @@ class _NativePlateState extends State<NativePlate> {
             SafeArea(
               child: Stack(
                 children: [
-                // Top-left sort icon + compact slide-out on No pecking order.
+                // Top-left modern transparent black-icon sort bar on No pecking order.
                 if (equal)
                   Positioned(
                     left: 8,
                     top: 8,
-                    right: 8,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                          padding: EdgeInsets.zero,
-                          iconSize: 22,
-                          tooltip: 'Sort species',
-                          icon: Icon(_sortOpen ? Icons.close : Icons.sort),
-                          color: red,
-                          onPressed: () => setState(() => _sortOpen = !_sortOpen),
-                        ),
-                        Flexible(
-                          child: ClipRect(
-                            child: AnimatedSize(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeOutCubic,
-                              alignment: Alignment.centerLeft,
-                              child: _sortOpen
-                                  ? Container(
-                                      margin: const EdgeInsets.only(left: 4),
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: paper.withValues(alpha: 0.96),
-                                        border: Border.all(color: rule),
-                                        borderRadius: BorderRadius.circular(20),
-                                        boxShadow: const [
-                                          BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 3), blurRadius: 10),
-                                        ],
-                                      ),
-                                      child: SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            for (final (key, label) in _equalSorts)
-                                              Padding(
-                                                padding: const EdgeInsets.symmetric(horizontal: 2),
-                                                child: InkWell(
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  onTap: () {
-                                                    app.settings.update((x) => x.equalSort = key);
-                                                    setState(() => _sortOpen = false);
-                                                  },
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                                    decoration: BoxDecoration(
-                                                      color: app.settings.equalSort == key ? madder : Colors.transparent,
-                                                      borderRadius: BorderRadius.circular(14),
-                                                    ),
-                                                    child: Text(
-                                                      label,
-                                                      style: TextStyle(
-                                                        fontFamily: caps,
-                                                        fontSize: 12.5,
-                                                        letterSpacing: 0.5,
-                                                        color: app.settings.equalSort == key ? paper : ink,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    )
-                                  : const SizedBox.shrink(),
+                    right: 60,
+                    child: SpeciesSortBar(
+                      open: _sortOpen,
+                      sortKey: app.settings.equalSort,
+                      ascending: app.settings.equalSortAsc,
+                      onToggleOpen: () => setState(() => _sortOpen = !_sortOpen),
+                      onSelect: (key) {
+                        _selectSort(key);
+                        setState(() => _sortOpen = false);
+                      },
+                      onFlipDirection: _flipSort,
+                    ),
+                  ),
+                // Top-right controls: the Settings menu icon is always visible
+                // in every view; record / stations / pill show on the default view.
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (showTopRight) ...[
+                        // record in Listen here, or while a session records
+                        if (feed == null || engine.running || engine.starting)
+                          RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
+                        // on a station: the list of stations, to choose or add one
+                        if (feed != null)
+                          Builder(
+                            builder: (bc) => IconButton(
+                              tooltip: 'Stations',
+                              constraints: const BoxConstraints.tightFor(
+                                  width: SourcePill.rowHeight, height: SourcePill.rowHeight),
+                              icon: Text('±', style: TextStyle(fontSize: 22, height: 1, color: red)),
+                              color: red,
+                              onPressed: () => _stationsTap(bc),
+                            ),
+                          ),
+                        SizedBox(
+                          // level with the record and menu buttons
+                          height: SourcePill.rowHeight,
+                          child: Center(
+                            child: SourcePill(
+                              listen: feed == null,
+                              stationName: app.settings.station?.name,
+                              onListen: () => app.settings.update((x) {
+                                x.mode = AppMode.listen;
+                                x.plateMode = defaultPlateMode;
+                                x.nativeSizeBy = 'time';
+                              }),
+                              onRemote: _toRemote,
                             ),
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                // The same buttons as over the web plate: record, the
-                // source pill, and the menu (hidden on Latest & most heard
-                // and No pecking order so the birds get the full screen).
-                if (showTopRight)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // record in Listen here, or while a session records
-                      if (feed == null || engine.running || engine.starting)
-                        RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
-                      // on a station: the list of stations, to choose or add one
-                      if (feed != null)
-                        Builder(
-                          builder: (bc) => IconButton(
-                            tooltip: 'Stations',
-                            constraints: const BoxConstraints.tightFor(
-                                width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                            icon: Text('±', style: TextStyle(fontSize: 22, height: 1, color: red)),
-                            color: red,
-                            onPressed: () => _stationsTap(bc),
-                          ),
-                        ),
-                      SizedBox(
-                      // level with the record and menu buttons
-                      height: SourcePill.rowHeight,
-                      child: Center(
-                        child: SourcePill(
-                          listen: feed == null,
-                          stationName: app.settings.station?.name,
-                          onListen: () => app.settings.update((x) {
-                            x.mode = AppMode.listen;
-                            x.plateMode = defaultPlateMode;
-                            x.nativeSizeBy = 'time';
-                          }),
-                          onRemote: _toRemote,
-                        ),
-                      ),
-                      ),
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1628,7 +1649,7 @@ class _NativePlateState extends State<NativePlate> {
       }
       _revealed = showing;
     }
-    final ordered = sizeBy == 'equal' ? _sortedEqual(ready) : ready;
+    final ordered = sizeBy == 'equal' ? _sortRows(ready) : ready;
     final collage = CollageView(
       birds: [for (final r in ordered) CollageBird(r.sci, r.common, r.count, r.last)],
       art: _art,
