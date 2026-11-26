@@ -308,6 +308,12 @@ class _NativePlateState extends State<NativePlate> {
     final s = app.settings;
     final next = s.plateMode % plateModes.length + 1;
     final mode = plateModes[next - 1];
+    if (_sortOpen || _zoomTier != 1.0) {
+      setState(() {
+        _sortOpen = false;
+        _zoomTier = 1.0;
+      });
+    }
     s.update((x) {
       x.plateMode = next;
       if (mode.sizeBy != null) x.nativeSizeBy = mode.sizeBy!;
@@ -370,6 +376,123 @@ class _NativePlateState extends State<NativePlate> {
 
   /// Tap the top-left heading to hide it; tap that corner again to reshow it.
   bool _headingHidden = false;
+
+  /// Resolution multiplier for zoomed-in high-res decoding on No pecking order.
+  double _zoomTier = 1.0;
+
+  /// Whether the top-left sort slide-out is open on No pecking order.
+  bool _sortOpen = false;
+
+  /// Cached dominant plumage colour key per species (for Colour sort).
+  final Map<String, double> _colourKey = {};
+  final Set<String> _colourLoading = {};
+
+  static const _equalSorts = <(String key, String label)>[
+    ('calls', 'Most heard'),
+    ('recent', 'Latest'),
+    ('name', 'A–Z'),
+    ('rare', 'Rarity'),
+    ('sci', 'Taxonomy'),
+    ('colour', 'Colour'),
+  ];
+
+  void _ensureColours(List<_Row> rows) {
+    for (final r in rows) {
+      if (_colourKey.containsKey(r.sci) || _colourLoading.contains(r.sci)) continue;
+      final art = _art[r.sci];
+      if (art == null) continue;
+      _colourLoading.add(r.sci);
+      unawaited(_computeColourKey(r.sci, art));
+    }
+  }
+
+  Future<void> _computeColourKey(String sci, PlateArt art) async {
+    try {
+      final bytes = await art.file.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes, targetWidth: 24);
+      final frame = await codec.getNextFrame();
+      final img = frame.image;
+      final data = await img.toByteData(format: ui.ImageByteFormat.rawRgba);
+      img.dispose();
+      codec.dispose();
+      if (data == null) {
+        _colourKey[sci] = 999;
+        return;
+      }
+      final px = data.buffer.asUint8List();
+      // Weighted hue histogram (36 bins) + average lightness for achromatic birds.
+      final bins = List<double>.filled(36, 0);
+      var chromaSum = 0.0, lumSum = 0.0, count = 0.0;
+      for (var i = 0; i + 3 < px.length; i += 4) {
+        final a = px[i + 3];
+        if (a < 128) continue;
+        final r = px[i] / 255.0, g = px[i + 1] / 255.0, b = px[i + 2] / 255.0;
+        final hi = math.max(r, math.max(g, b));
+        final lo = math.min(r, math.min(g, b));
+        final d = hi - lo;
+        final l = (hi + lo) / 2;
+        // Skip near-paper background pixels
+        if (l > 0.90 && d < 0.10) continue;
+        lumSum += l;
+        count += 1;
+        if (d > 0.12) {
+          double h;
+          if (hi == r) {
+            h = ((g - b) / d) % 6;
+          } else if (hi == g) {
+            h = (b - r) / d + 2;
+          } else {
+            h = (r - g) / d + 4;
+          }
+          h = (h * 60 + 360) % 360;
+          final bin = (h / 10).floor().clamp(0, 35);
+          bins[bin] += d;
+          chromaSum += d;
+        }
+      }
+      double key;
+      if (count == 0) {
+        key = 999;
+      } else if (chromaSum / count < 0.07) {
+        // Dark/grey/white birds grouped cleanly at the end by lightness
+        key = 400 + (lumSum / count) * 100;
+      } else {
+        var best = 0;
+        for (var i = 1; i < 36; i++) {
+          if (bins[i] > bins[best]) best = i;
+        }
+        key = best * 10.0 + (lumSum / count);
+      }
+      _colourKey[sci] = key;
+      if (mounted && app.settings.equalSort == 'colour') setState(() {});
+    } catch (e) {
+      debugPrint('colour $sci: $e');
+      _colourKey[sci] = 999;
+    } finally {
+      _colourLoading.remove(sci);
+    }
+  }
+
+  List<_Row> _sortedEqual(List<_Row> rows) {
+    final sort = app.settings.equalSort;
+    final out = [...rows];
+    switch (sort) {
+      case 'recent':
+        out.sort((a, b) => (b.last ?? DateTime(0)).compareTo(a.last ?? DateTime(0)));
+      case 'name':
+        out.sort((a, b) => a.common.toLowerCase().compareTo(b.common.toLowerCase()));
+      case 'rare':
+        out.sort((a, b) => a.count != b.count ? a.count.compareTo(b.count) : a.common.compareTo(b.common));
+      case 'sci':
+        out.sort((a, b) => a.sci.toLowerCase().compareTo(b.sci.toLowerCase()));
+      case 'colour':
+        _ensureColours(rows);
+        out.sort((a, b) => (_colourKey[a.sci] ?? 999).compareTo(_colourKey[b.sci] ?? 999));
+      default:
+        out.sort((a, b) => b.count != a.count ? b.count.compareTo(a.count) : a.common.compareTo(b.common));
+    }
+    return out;
+  }
 
   void _say(String text, {String? action, VoidCallback? onAction, int seconds = 3}) {
     if (!mounted) return;
@@ -1067,6 +1190,85 @@ class _NativePlateState extends State<NativePlate> {
             SafeArea(
               child: Stack(
                 children: [
+                // Top-left sort icon + compact slide-out on No pecking order.
+                if (equal)
+                  Positioned(
+                    left: 8,
+                    top: 8,
+                    right: 8,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                          padding: EdgeInsets.zero,
+                          iconSize: 22,
+                          tooltip: 'Sort species',
+                          icon: Icon(_sortOpen ? Icons.close : Icons.sort),
+                          color: red,
+                          onPressed: () => setState(() => _sortOpen = !_sortOpen),
+                        ),
+                        Flexible(
+                          child: ClipRect(
+                            child: AnimatedSize(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOutCubic,
+                              alignment: Alignment.centerLeft,
+                              child: _sortOpen
+                                  ? Container(
+                                      margin: const EdgeInsets.only(left: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: paper.withValues(alpha: 0.96),
+                                        border: Border.all(color: rule),
+                                        borderRadius: BorderRadius.circular(20),
+                                        boxShadow: const [
+                                          BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 3), blurRadius: 10),
+                                        ],
+                                      ),
+                                      child: SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            for (final (key, label) in _equalSorts)
+                                              Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                                child: InkWell(
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  onTap: () {
+                                                    app.settings.update((x) => x.equalSort = key);
+                                                    setState(() => _sortOpen = false);
+                                                  },
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                    decoration: BoxDecoration(
+                                                      color: app.settings.equalSort == key ? madder : Colors.transparent,
+                                                      borderRadius: BorderRadius.circular(14),
+                                                    ),
+                                                    child: Text(
+                                                      label,
+                                                      style: TextStyle(
+                                                        fontFamily: caps,
+                                                        fontSize: 12.5,
+                                                        letterSpacing: 0.5,
+                                                        color: app.settings.equalSort == key ? paper : ink,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 // The same buttons as over the web plate: record, the
                 // source pill, and the menu (hidden on Latest & most heard
                 // and No pecking order so the birds get the full screen).
@@ -1195,8 +1397,9 @@ class _NativePlateState extends State<NativePlate> {
                   ),
                 // The song scribble between the buttons along the bottom: live
                 // mic when listening here, or the matching resting line with
-                // the latest heard species when on a remote station.
-                if (app.settings.songScribble)
+                // the latest heard species when on a remote station. On No
+                // pecking order, shows "Index of <N> Species" instead.
+                if (app.settings.songScribble || equal)
                   Positioned(
                     left: 8 + 40 + 8,
                     right: (PlateShare.supported ? 8 + 40 : 8) + 8,
@@ -1205,8 +1408,10 @@ class _NativePlateState extends State<NativePlate> {
                     child: SongScribble(
                       engine: engine,
                       simpleWave: app.settings.songScribbleMode == 'wave',
-                      remote: feed != null,
-                      remoteName: feed != null ? newestCommon : null,
+                      remote: equal || feed != null,
+                      remoteName: equal
+                          ? 'Index of ${thousands(all.length)} Species'
+                          : (feed != null ? newestCommon : null),
                     ),
                   ),
                 // Share or save, out of the way at the bottom right.
@@ -1421,22 +1626,9 @@ class _NativePlateState extends State<NativePlate> {
       }
       _revealed = showing;
     }
-    if (sizeBy == 'equal' && app.settings.experimentalInfinityView) {
-      return InfinityCollage(
-        key: ValueKey('infinity|$showing'),
-        birds: [for (final r in ready) CollageBird(r.sci, r.common, r.count, r.last)],
-        art: _art,
-        size: Size(width, height),
-        showAllNameTickets: app.settings.nativeAllNameTickets,
-        onHold: (held) {
-          final want = held ? showing : null;
-          if (want != _holdFor && mounted) setState(() => _holdFor = want);
-        },
-        onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
-      );
-    }
+    final ordered = sizeBy == 'equal' ? _sortedEqual(ready) : ready;
     final collage = CollageView(
-      birds: [for (final r in ready) CollageBird(r.sci, r.common, r.count, r.last)],
+      birds: [for (final r in ordered) CollageBird(r.sci, r.common, r.count, r.last)],
       art: _art,
       size: Size(width, height),
       sizeBy: sizeBy,
@@ -1445,6 +1637,7 @@ class _NativePlateState extends State<NativePlate> {
       live: app.engine.liveSpecies,
       showHoverInfo: app.settings.nativeHoverInfo,
       showAllNameTickets: app.settings.nativeAllNameTickets,
+      resolutionScale: sizeBy == 'equal' ? _zoomTier : 1.0,
       onDragHold: (held) {
         final want = held ? showing : null;
         if (want != _holdFor && mounted) setState(() => _holdFor = want);
@@ -1454,8 +1647,15 @@ class _NativePlateState extends State<NativePlate> {
     return ZoomableCollage(
       // A new session or style is a new collage: nothing glides across from
       // the one before, and it starts unzoomed.
-      key: ValueKey(showing),
+      key: ValueKey('$showing|$sizeBy'),
       size: Size(width, height),
+      allPlatforms: sizeBy == 'equal',
+      maxScale: sizeBy == 'equal' ? 8.0 : 4.0,
+      onScaleTier: sizeBy == 'equal'
+          ? (t) {
+              if (mounted && t != _zoomTier) setState(() => _zoomTier = t);
+            }
+          : null,
       onHold: (held) {
         final want = held ? showing : null;
         if (want != _holdFor && mounted) setState(() => _holdFor = want);

@@ -52,6 +52,7 @@ class CollageView extends StatefulWidget {
     required this.onOpen,
     this.showHoverInfo = false,
     this.showAllNameTickets = false,
+    this.resolutionScale = 1.0,
     this.onDragHold,
     this.resetAfter = const Duration(seconds: 10),
   });
@@ -84,6 +85,10 @@ class CollageView extends StatefulWidget {
   /// Whether all birds in the collage show a name ticket (off by default; only
   /// the centred bird shows the madder ticket with a + symbol).
   final bool showAllNameTickets;
+
+  /// Multiplier applied to [PlateImage] decode resolution when zoomed in, so
+  /// zooming into a dense plate smoothly upgrades to full high-res artwork.
+  final double resolutionScale;
 
   /// Called when the user begins/ends dragging the collage so the outer scroll
   /// view can pause while dragging.
@@ -246,7 +251,7 @@ class _CollageViewState extends State<CollageView> {
                 child: _Bird(
                   bird: bird[p.id]!,
                   art: art[p.id],
-                  width: p.rect.width,
+                  width: p.rect.width * widget.resolutionScale,
                   delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
                   hovered: _hover == p.id,
                   isCenter: p.id == centerSci,
@@ -774,11 +779,28 @@ class _PaperPainter extends CustomPainter {
 /// fingers are on the collage, and while it is zoomed in, so one finger
 /// pans the birds rather than the page.
 class ZoomableCollage extends StatefulWidget {
-  const ZoomableCollage({super.key, required this.size, required this.onHold, required this.child});
+  const ZoomableCollage({
+    super.key,
+    required this.size,
+    required this.onHold,
+    required this.child,
+    this.allPlatforms = false,
+    this.maxScale = 4.0,
+    this.onScaleTier,
+  });
 
   final Size size;
   final ValueChanged<bool> onHold;
   final Widget child;
+
+  /// When true, enables zoom & pan on desktop/macOS as well as touch devices
+  /// (used for the museum-plate "No pecking order" view).
+  final bool allPlatforms;
+  final double maxScale;
+
+  /// Called when the zoom crosses a resolution tier (1, 2, 4, 8) so artwork
+  /// re-decodes at higher resolution as the user zooms in.
+  final ValueChanged<double>? onScaleTier;
 
   /// Only where fingers are the pointer, as on the web plate.
   static bool get touch =>
@@ -792,8 +814,16 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
   final _view = TransformationController();
   final Set<int> _fingers = {};
   bool _zoomed = false, _held = false;
+  double _tier = 1.0;
 
   double get _scale => _view.value.getMaxScaleOnAxis();
+
+  double _tierFor(double s) {
+    if (s >= 5.0) return 8.0;
+    if (s >= 2.6) return 4.0;
+    if (s >= 1.4) return 2.0;
+    return 1.0;
+  }
 
   @override
   void initState() {
@@ -819,8 +849,14 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
   }
 
   void _changed() {
-    final zoomed = _scale > 1.001;
+    final s = _scale;
+    final zoomed = s > 1.001;
     if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
+    final nextTier = _tierFor(s);
+    if (nextTier != _tier) {
+      _tier = nextTier;
+      widget.onScaleTier?.call(nextTier);
+    }
     _tell();
   }
 
@@ -835,7 +871,7 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
 
   @override
   Widget build(BuildContext context) {
-    if (!ZoomableCollage.touch) return widget.child;
+    if (!widget.allPlatforms && !ZoomableCollage.touch) return widget.child;
     return Listener(
       onPointerDown: (e) {
         _fingers.add(e.pointer);
@@ -856,7 +892,7 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
         child: InteractiveViewer(
           transformationController: _view,
           minScale: 1,
-          maxScale: 4,
+          maxScale: widget.maxScale,
           panEnabled: _zoomed,
           clipBehavior: Clip.hardEdge,
           onInteractionEnd: (_) {
@@ -864,257 +900,6 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
           },
           child: SizedBox.fromSize(size: widget.size, child: widget.child),
         ),
-      ),
-    );
-  }
-}
-
-/// Experimental Infinity View for "No pecking order": lays out all species on
-/// a generous virtual canvas so large counts (e.g. 160+ species) stay crisp
-/// and explorable. Opens zoomed out to show the whole wall, then plays a
-/// gentle 2-second zoom-in and stops so the user immediately sees how to zoom
-/// and pan around.
-class InfinityCollage extends StatefulWidget {
-  const InfinityCollage({
-    super.key,
-    required this.birds,
-    required this.art,
-    required this.size,
-    required this.onOpen,
-    required this.onHold,
-    this.showAllNameTickets = false,
-  });
-
-  final List<CollageBird> birds;
-  final Map<String, PlateArt?> art;
-  final Size size;
-  final ValueChanged<CollageBird> onOpen;
-  final ValueChanged<bool> onHold;
-  final bool showAllNameTickets;
-
-  @override
-  State<InfinityCollage> createState() => _InfinityCollageState();
-}
-
-class _InfinityCollageState extends State<InfinityCollage> with SingleTickerProviderStateMixin {
-  final _ctrl = TransformationController();
-  late final AnimationController _anim = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2000),
-  )..addListener(_tick);
-  Timer? _startDelay;
-
-  double _fromScale = 1.0;
-  double _toScale = 1.0;
-  Size _canvasSize = Size.zero;
-  bool _introStarted = false;
-
-  Size _computeCanvas(int n, Size view) {
-    if (n <= 0 || view.width <= 0 || view.height <= 0) return view;
-    final cell = view.width <= 720 ? 150.0 : 195.0;
-    final ar = view.width / view.height;
-    final cols = math.sqrt(n * ar).round().clamp(1, n);
-    final rows = (n / cols).ceil();
-    return Size(
-      math.max(view.width, cols * cell),
-      math.max(view.height, rows * cell),
-    );
-  }
-
-  Matrix4 _centeredMatrix(double scale, Size view, Size canvas) {
-    final tx = (view.width - canvas.width * scale) / 2;
-    final ty = (view.height - canvas.height * scale) / 2;
-    return Matrix4.diagonal3Values(scale, scale, 1)..setTranslationRaw(tx, ty, 0);
-  }
-
-  void _tick() {
-    if (!mounted) return;
-    final t = Curves.easeInOutCubic.transform(_anim.value);
-    final s = _fromScale + (_toScale - _fromScale) * t;
-    _ctrl.value = _centeredMatrix(s, widget.size, _canvasSize);
-  }
-
-  void _setupIntro({bool force = false}) {
-    final canvas = _computeCanvas(widget.birds.length, widget.size);
-    _canvasSize = canvas;
-    if (canvas.width <= 0 || canvas.height <= 0) return;
-    final fit = math.min(widget.size.width / canvas.width, widget.size.height / canvas.height).clamp(0.12, 1.0);
-    _fromScale = fit;
-    _toScale = fit < 0.85 ? 1.0 : math.min(1.45, fit * 1.35);
-    if (_introStarted && !force) return;
-    _introStarted = true;
-    _startDelay?.cancel();
-    _anim.stop();
-    _ctrl.value = _centeredMatrix(_fromScale, widget.size, canvas);
-    _startDelay = Timer(const Duration(milliseconds: 180), () {
-      if (mounted) _anim.forward(from: 0);
-    });
-  }
-
-  void _cancelIntro() {
-    _startDelay?.cancel();
-    if (_anim.isAnimating) _anim.stop();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _setupIntro();
-  }
-
-  @override
-  void didUpdateWidget(InfinityCollage old) {
-    super.didUpdateWidget(old);
-    if (old.size != widget.size || old.birds.length != widget.birds.length) {
-      _canvasSize = _computeCanvas(widget.birds.length, widget.size);
-      if (!_introStarted) _setupIntro(force: true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _startDelay?.cancel();
-    _anim.dispose();
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final birds = widget.birds, art = widget.art;
-    if (birds.isEmpty) return SizedBox.fromSize(size: widget.size);
-    final canvas = _computeCanvas(birds.length, widget.size);
-    _canvasSize = canvas;
-    final minScale = math.min(widget.size.width / canvas.width, widget.size.height / canvas.height).clamp(0.12, 1.0);
-    final items = [
-      for (final b in birds)
-        CollageItem(
-          b.sci,
-          weight: 1,
-          aspect: art[b.sci]?.aspect ?? 1.7,
-          blank: art[b.sci] == null,
-        ),
-    ];
-    final places = layoutEvenGrid(items, canvas);
-    final bySci = {for (final b in birds) b.sci: b};
-
-    return Listener(
-      onPointerDown: (_) {
-        _cancelIntro();
-        widget.onHold(true);
-      },
-      onPointerUp: (_) => widget.onHold(false),
-      onPointerCancel: (_) => widget.onHold(false),
-      onPointerSignal: (_) => _cancelIntro(),
-      child: SizedBox.fromSize(
-        size: widget.size,
-        child: InteractiveViewer(
-          transformationController: _ctrl,
-          constrained: false,
-          boundaryMargin: const EdgeInsets.all(120),
-          minScale: minScale * 0.9,
-          maxScale: 3.5,
-          onInteractionStart: (_) {
-            _cancelIntro();
-            widget.onHold(true);
-          },
-          onInteractionEnd: (_) => widget.onHold(false),
-          child: SizedBox(
-            width: canvas.width,
-            height: canvas.height,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                for (final p in places)
-                  Positioned(
-                    left: p.rect.left,
-                    top: p.rect.top,
-                    width: p.rect.width,
-                    height: p.rect.height,
-                    child: _InfinityBirdTile(
-                      bird: bySci[p.id]!,
-                      art: art[p.id],
-                      width: p.rect.width,
-                      showNameTicket: widget.showAllNameTickets,
-                      onTap: () => widget.onOpen(bySci[p.id]!),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfinityBirdTile extends StatelessWidget {
-  const _InfinityBirdTile({
-    required this.bird,
-    required this.art,
-    required this.width,
-    required this.showNameTicket,
-    required this.onTap,
-  });
-
-  final CollageBird bird;
-  final PlateArt? art;
-  final double width;
-  final bool showNameTicket;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final a = art;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: a == null
-            ? Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: paper.withValues(alpha: 0.92),
-                    border: Border.all(color: rule),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    bird.common,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: ink),
-                  ),
-                ),
-              )
-            : Stack(
-                alignment: Alignment.center,
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fill(child: PlateImage(art: a, width: width)),
-                  if (showNameTicket)
-                    Positioned(
-                      bottom: 4,
-                      child: IgnorePointer(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: paper.withValues(alpha: 0.92),
-                            border: Border.all(color: rule),
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                          child: Text(
-                            bird.common,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontFamily: serif, fontSize: 12, color: ink, height: 1.15),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
       ),
     );
   }

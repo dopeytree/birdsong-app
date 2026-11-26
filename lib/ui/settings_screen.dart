@@ -217,24 +217,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _section(
               context,
               'Experimental',
-              summary: [
-                if (s.experimentalInfinityView) 'Infinity view',
-                if (s.webPlate) 'The old web plate',
-              ].isEmpty
-                  ? 'Nothing switched on'
-                  : [
-                      if (s.experimentalInfinityView) 'Infinity view',
-                      if (s.webPlate) 'The old web plate',
-                    ].join(' · '),
+              summary: s.webPlate ? 'The old web plate' : 'Nothing switched on',
               [
-                _switch('Infinity view (No pecking order)', s.experimentalInfinityView,
-                    (v) => s.update((x) => x.experimentalInfinityView = v)),
-                Text(
-                  'Turns No pecking order into a large zoomable canvas for exploring many species, '
-                  'starting with a gentle 2-second zoom.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 8),
                 _switch('Use the old web plate', s.webPlate, (v) => s.update((x) => x.webPlate = v)),
                 Text(
                   'The plate as the web page drew it, before it was moved into Flutter. '
