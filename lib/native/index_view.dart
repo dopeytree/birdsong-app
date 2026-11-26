@@ -196,43 +196,143 @@ class IndexView extends StatelessWidget {
             onPressed: on ? () => onStep(by) : null,
           ),
         );
-    final line = SizedBox(width: rules, height: 1, child: const ColoredBox(color: rule));
-    final space = SizedBox(width: gap);
     final size = titleSize ?? (fit ? 16.0 : 20.0);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (steps) step(-1, Icons.chevron_left, 'Earlier session', canPrev),
         Flexible(
-          child: Semantics(
-            button: foldable,
-            expanded: foldable ? !folded : null,
-            child: InkWell(
-              onTap: foldable ? onFold : null,
+          child: _IndexHeading(
+            title: species > 0 ? 'Index of Species | ${thousands(species)}' : 'Index of Species',
+            rules: rules,
+            gap: gap,
+            size: size,
+            folded: folded,
+            foldable: foldable,
+            onFold: onFold,
+          ),
+        ),
+        if (steps) step(1, Icons.chevron_right, 'Later session', canNext),
+      ],
+    );
+  }
+}
+
+/// Interactive "Index of Species" heading with hover pill highlight, rule
+/// emphasis, and animated expand/collapse chevron so its open/close action
+/// is immediately unmistakable.
+class _IndexHeading extends StatefulWidget {
+  const _IndexHeading({
+    required this.title,
+    required this.rules,
+    required this.gap,
+    required this.size,
+    required this.folded,
+    required this.foldable,
+    required this.onFold,
+  });
+
+  final String title;
+  final double rules;
+  final double gap;
+  final double size;
+  final bool folded;
+  final bool foldable;
+  final VoidCallback onFold;
+
+  @override
+  State<_IndexHeading> createState() => _IndexHeadingState();
+}
+
+class _IndexHeadingState extends State<_IndexHeading> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.foldable && (_hovered || _pressed);
+    final ruleColor = active ? ink.withValues(alpha: 0.65) : rule;
+    final ruleWidth = active ? widget.rules + 6 : widget.rules;
+    Widget line() => AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          width: ruleWidth,
+          height: 1,
+          color: ruleColor,
+        );
+    return Semantics(
+      button: widget.foldable,
+      expanded: widget.foldable ? !widget.folded : null,
+      child: MouseRegion(
+        cursor: widget.foldable ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            hoverColor: Colors.transparent,
+            highlightColor: ink.withValues(alpha: 0.12),
+            onHighlightChanged: (v) {
+              if (_pressed != v) setState(() => _pressed = v);
+            },
+            onTap: widget.foldable ? widget.onFold : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _pressed
+                    ? ink.withValues(alpha: 0.12)
+                    : _hovered && widget.foldable
+                        ? ink.withValues(alpha: 0.08)
+                        : Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  line,
-                  space,
+                  line(),
+                  SizedBox(width: widget.gap),
                   Flexible(
-                    child: Text(species > 0 ? 'Index of Species | ${thousands(species)}' : 'Index of Species',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontFamily: caps,
-                            fontSize: size,
-                            letterSpacing: size * .06,
-                            height: 1.5,
-                            color: ink)),
+                    child: Text(
+                      widget.title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: caps,
+                        fontSize: widget.size,
+                        letterSpacing: widget.size * .06,
+                        height: 1.4,
+                        color: ink,
+                      ),
+                    ),
                   ),
-                  space,
-                  line,
+                  if (widget.foldable) ...[
+                    const SizedBox(width: 4),
+                    AnimatedScale(
+                      scale: active ? 1.15 : 1.0,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      child: AnimatedRotation(
+                        turns: widget.folded ? 0.0 : 0.5,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        child: Icon(
+                          Icons.expand_more,
+                          size: widget.size >= 18 ? 20 : 17,
+                          color: active ? ink : ink.withValues(alpha: 0.72),
+                        ),
+                      ),
+                    ),
+                  ],
+                  SizedBox(width: widget.gap),
+                  line(),
                 ],
               ),
             ),
           ),
         ),
-        if (steps) step(1, Icons.chevron_right, 'Later session', canNext),
-      ],
+      ),
     );
   }
 }

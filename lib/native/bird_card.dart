@@ -209,9 +209,11 @@ class BirdCard extends StatefulWidget {
   final ValueChanged<PlateArt?> onChosen;
   final SpeciesTraits? traits;
 
-  /// Open the card over [context].
+  /// Open the card over [context]. `useSafeArea: false` ensures mobile
+  /// [Dialog.fullscreen] runs truly edge-to-edge on iPhone without dark bars.
   static Future<void> show(BuildContext context, BirdCard card) => showDialog<void>(
         context: context,
+        useSafeArea: false,
         barrierColor: const Color(0x8C2A241C), // rgba(42,36,28,.55)
         builder: (_) => card,
       );
@@ -313,22 +315,21 @@ class _BirdCardState extends State<BirdCard> {
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
+    final pad = MediaQuery.paddingOf(context);
     final narrow = screen.width <= 720;
+    final topPad = narrow ? (pad.top > 24 ? math.max(16.0, pad.top - 16.0) : math.max(8.0, pad.top)) : 0.0;
+    final bottomPad = narrow ? math.max(16.0, pad.bottom) : 0.0;
     final body = narrow ? 16.0 : 18.0;
     final text = TextStyle(fontFamily: serif, fontSize: body, height: 1.5, color: ink);
     final inner = Stack(
       children: [
-        if (!narrow)
-          const Positioned.fill(
-            child: IgnorePointer(
-              child: Padding(
-                padding: EdgeInsets.all(6),
-                child: DecoratedBox(decoration: BoxDecoration(border: Border.fromBorderSide(BorderSide(color: rule)))),
-              ),
-            ),
-          ),
         SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(narrow ? 20 : 28.8, narrow ? 48 : 28.8, narrow ? 20 : 28.8, 28.8),
+          padding: EdgeInsets.fromLTRB(
+            narrow ? 20 : 28.8,
+            narrow ? topPad + 44 : 28.8,
+            narrow ? 20 : 28.8,
+            narrow ? bottomPad + 24 : 28.8,
+          ),
           child: DefaultTextStyle(
             style: text,
             child: narrow
@@ -378,8 +379,8 @@ class _BirdCardState extends State<BirdCard> {
           ),
         ),
         Positioned(
-          top: narrow ? 4 : 8,
-          right: narrow ? 4 : 8,
+          top: narrow ? topPad : 8,
+          right: narrow ? 6 : 8,
           child: IconButton(
             tooltip: 'Close',
             icon: const Icon(Icons.close),
@@ -392,14 +393,19 @@ class _BirdCardState extends State<BirdCard> {
     if (narrow) {
       return Dialog.fullscreen(
         backgroundColor: paper,
-        child: SafeArea(child: inner),
+        child: inner,
       );
     }
     return Dialog(
-      backgroundColor: paper,
+      backgroundColor: paper.withValues(alpha: 0.97),
       surfaceTintColor: Colors.transparent,
+      elevation: 10,
+      shadowColor: const Color(0x382A241C),
       insetPadding: EdgeInsets.symmetric(horizontal: screen.width * .03, vertical: screen.height * .04),
-      shape: const RoundedRectangleBorder(side: BorderSide(color: sepia)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: rule.withValues(alpha: 0.7)),
+      ),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: math.min(960, screen.width * .94), maxHeight: screen.height * .92),
         child: inner,
@@ -409,66 +415,67 @@ class _BirdCardState extends State<BirdCard> {
 
   void _openFullImage(PlateArt art) {
     final screen = MediaQuery.sizeOf(context);
+    final pad = MediaQuery.paddingOf(context);
+    final topPad = pad.top > 24 ? math.max(16.0, pad.top - 16.0) : math.max(8.0, pad.top);
     showDialog<void>(
       context: context,
+      useSafeArea: false,
       barrierColor: const Color(0x8C2A241C),
       builder: (c) => Dialog.fullscreen(
         backgroundColor: paper,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.of(c).pop(),
-                  child: InteractiveViewer(
-                    minScale: 1,
-                    maxScale: 4,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 48, 20, 24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ConstrainedBox(
-                              constraints: BoxConstraints(maxHeight: screen.height * 0.72),
-                              child: PlateImage(
-                                art: art,
-                                width: math.min(screen.width - 40, screen.height * 0.72),
-                              ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(c).pop(),
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(20, topPad + 44, 20, math.max(24.0, pad.bottom + 12)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ConstrainedBox(
+                            constraints: BoxConstraints(maxHeight: screen.height * 0.72),
+                            child: PlateImage(
+                              art: art,
+                              width: math.min(screen.width - 40, screen.height * 0.72),
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              widget.source.common,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontFamily: serif, fontSize: 20, height: 1.2, color: ink),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              widget.source.sci,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                  fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia),
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.source.common,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontFamily: serif, fontSize: 20, height: 1.2, color: ink),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.source.sci,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: IconButton(
-                  tooltip: 'Close',
-                  icon: const Icon(Icons.close),
-                  color: ink,
-                  onPressed: () => Navigator.of(c).pop(),
-                ),
+            ),
+            Positioned(
+              top: topPad,
+              right: 8,
+              child: IconButton(
+                tooltip: 'Close',
+                icon: const Icon(Icons.close),
+                color: ink,
+                onPressed: () => Navigator.of(c).pop(),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

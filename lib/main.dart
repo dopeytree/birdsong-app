@@ -33,17 +33,19 @@ Future<void> main() async {
 }
 
 ThemeData birdsongTheme() {
-  final scheme = ColorScheme.fromSeed(seedColor: madder, surface: paper).copyWith(
-    primary: madder,
+  final scheme = ColorScheme.fromSeed(seedColor: ink, surface: paper).copyWith(
+    primary: ink,
     onPrimary: paper,
     primaryContainer: paperDeep,
     onPrimaryContainer: ink,
     secondary: sepia,
     onSecondary: paper,
-    secondaryContainer: madder,
-    onSecondaryContainer: paper,
-    tertiary: sepia,
+    secondaryContainer: paperDeep,
+    onSecondaryContainer: ink,
+    tertiary: madder,
     onTertiary: paper,
+    error: madder,
+    onError: paper,
     surface: paper,
     onSurface: ink,
     onSurfaceVariant: sepia,
@@ -79,23 +81,137 @@ ThemeData birdsongTheme() {
     labelMedium: plain(base.labelMedium),
     labelSmall: plain(base.labelSmall),
   );
+  final hoverFill = ink.withValues(alpha: 0.08);
+  final pressFill = ink.withValues(alpha: 0.12);
   return ThemeData(
     colorScheme: scheme,
     useMaterial3: true,
     fontFamily: serif,
     textTheme: text,
     scaffoldBackgroundColor: paper,
-    hoverColor: ink.withValues(alpha: 0.08),
-    highlightColor: ink.withValues(alpha: 0.12),
+    hoverColor: hoverFill,
+    highlightColor: pressFill,
     splashColor: ink.withValues(alpha: 0.10),
     iconTheme: const IconThemeData(color: ink),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
         foregroundColor: ink,
-        hoverColor: ink.withValues(alpha: 0.08),
-        highlightColor: ink.withValues(alpha: 0.12),
-        focusColor: ink.withValues(alpha: 0.08),
+        hoverColor: hoverFill,
+        highlightColor: pressFill,
+        focusColor: hoverFill,
       ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: ink,
+        foregroundColor: paper,
+        disabledBackgroundColor: rule.withValues(alpha: 0.45),
+        disabledForegroundColor: sepia.withValues(alpha: 0.7),
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontFamily: caps, fontSize: 14, letterSpacing: 0.6, fontWeight: FontWeight.w400),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: ink,
+        side: BorderSide(color: rule.withValues(alpha: 0.85)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontFamily: caps, fontSize: 13.5, letterSpacing: 0.5, fontWeight: FontWeight.w400),
+      ).copyWith(
+        overlayColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.pressed)) return pressFill;
+          if (states.contains(WidgetState.hovered)) return hoverFill;
+          return null;
+        }),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: ink,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: const TextStyle(fontFamily: caps, fontSize: 13.5, letterSpacing: 0.5, fontWeight: FontWeight.w400),
+      ).copyWith(
+        overlayColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.pressed)) return pressFill;
+          if (states.contains(WidgetState.hovered)) return hoverFill;
+          return null;
+        }),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.disabled)) return sepia.withValues(alpha: 0.35);
+        return states.contains(WidgetState.selected) ? paper : sepia;
+      }),
+      trackColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.disabled)) return paperDeep.withValues(alpha: 0.5);
+        return states.contains(WidgetState.selected) ? ink : paperDeep;
+      }),
+      trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+        return states.contains(WidgetState.selected) ? ink : rule;
+      }),
+    ),
+    sliderTheme: SliderThemeData(
+      activeTrackColor: ink,
+      inactiveTrackColor: rule.withValues(alpha: 0.5),
+      thumbColor: ink,
+      overlayColor: ink.withValues(alpha: 0.12),
+      valueIndicatorColor: ink,
+      valueIndicatorTextStyle: const TextStyle(fontFamily: serif, color: paper, fontSize: 13),
+    ),
+    checkboxTheme: CheckboxThemeData(
+      fillColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return ink;
+        return Colors.transparent;
+      }),
+      checkColor: const WidgetStatePropertyAll(paper),
+      side: const BorderSide(color: ink, width: 1.5),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: ink,
+      linearTrackColor: rule.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(4),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: paper.withValues(alpha: 0.97),
+      surfaceTintColor: Colors.transparent,
+      elevation: 8,
+      shadowColor: const Color(0x382A241C),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: rule.withValues(alpha: 0.65)),
+      ),
+      titleTextStyle: const TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 0.7, color: ink),
+      contentTextStyle: const TextStyle(fontFamily: serif, fontSize: 15.5, height: 1.45, color: ink),
+    ),
+    cardTheme: CardThemeData(
+      color: paper,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: rule.withValues(alpha: 0.7)),
+      ),
+    ),
+    dividerTheme: DividerThemeData(color: rule.withValues(alpha: 0.65), thickness: 1),
+    chipTheme: ChipThemeData(
+      backgroundColor: paperDeep.withValues(alpha: 0.65),
+      selectedColor: ink,
+      deleteIconColor: ink,
+      side: BorderSide(color: rule.withValues(alpha: 0.7)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      labelStyle: const TextStyle(fontFamily: serif, fontSize: 14, color: ink),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      labelStyle: const TextStyle(fontFamily: serif, color: sepia),
+      hintStyle: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, color: sepia.withValues(alpha: 0.7)),
+      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: rule.withValues(alpha: 0.85))),
+      focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: ink, width: 1.6)),
     ),
     popupMenuTheme: PopupMenuThemeData(
       color: paper.withValues(alpha: 0.95),
@@ -125,7 +241,7 @@ class BirdsongApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Birdsong',
+      title: 'birdsongs.ai',
       debugShowCheckedModeBanner: false,
       theme: birdsongTheme(),
       builder: (context, child) => TooltipVisibility(

@@ -10,11 +10,22 @@ import 'settings_screen.dart';
 /// a 390 px sidebar on desktop / iPad (so the plate stays visible and updates
 /// live beside it), or full screen on phones.
 class SettingsButton extends StatelessWidget {
-  const SettingsButton({super.key, required this.app, required this.color, this.onOpenCalendar});
+  const SettingsButton({
+    super.key,
+    required this.app,
+    required this.color,
+    this.onGoHome,
+    this.onOpenMap,
+    this.onOpenCalendar,
+    this.onOpenBestSession,
+  });
 
   final AppState app;
   final Color color;
+  final VoidCallback? onGoHome;
+  final VoidCallback? onOpenMap;
   final VoidCallback? onOpenCalendar;
+  final VoidCallback? onOpenBestSession;
 
   void _open(BuildContext context) {
     Navigator.of(context).push(PageRouteBuilder<void>(
@@ -30,7 +41,13 @@ class SettingsButton extends StatelessWidget {
           bindings: {const SingleActivator(LogicalKeyboardKey.escape): () => Navigator.of(context).maybePop()},
           child: Focus(
             autofocus: true,
-            child: SettingsScreen(app: app, onOpenCalendar: onOpenCalendar),
+            child: SettingsScreen(
+              app: app,
+              onGoHome: onGoHome,
+              onOpenMap: onOpenMap,
+              onOpenCalendar: onOpenCalendar,
+              onOpenBestSession: onOpenBestSession,
+            ),
           ),
         );
         if (!wide) return sheet;

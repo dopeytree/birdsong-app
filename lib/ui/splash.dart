@@ -103,7 +103,7 @@ class Splash extends StatelessWidget {
                             ),
                           ],
                         )
-                      : Text('Birdsong could not start:\n$error',
+                      : Text('birdsongs.ai could not start:\n$error',
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontFamily: serif, color: sepia)),
                 ),

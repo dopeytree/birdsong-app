@@ -10,9 +10,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
 import '../engine/listen_engine.dart';
 import '../engine/model_catalog.dart';
-import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, paperDeep, rule, sepia, serif;
 import '../server/page_control.dart';
 import '../settings.dart';
+import '../store/detection_store.dart';
 import 'format.dart';
 import 'splash.dart' show Cardinal, SupportQuote;
 import 'station_editor.dart';
@@ -37,10 +38,20 @@ enum _SettingsTab {
 /// models, the location filter and stored data. Opened from the plate's
 /// menu button.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.app, this.onOpenCalendar});
+  const SettingsScreen({
+    super.key,
+    required this.app,
+    this.onGoHome,
+    this.onOpenMap,
+    this.onOpenCalendar,
+    this.onOpenBestSession,
+  });
 
   final AppState app;
+  final VoidCallback? onGoHome;
+  final VoidCallback? onOpenMap;
   final VoidCallback? onOpenCalendar;
+  final VoidCallback? onOpenBestSession;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -104,22 +115,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
         x.longitude = double.tryParse(_lon.text.trim());
       });
 
+  /// Finds the local session with the highest distinct (non-ignored) species count.
+  ({Session session, int species})? _bestLocalSession() {
+    final model = s.plateModel;
+    Session? best;
+    var bestCount = 0;
+    for (final ses in app.store.sessions) {
+      final count = {
+        for (final d in app.store.forPlate(model, session: ses))
+          if (!s.isIgnoredSpecies(d.common, d.sci)) d.sci
+      }.length;
+      if (count > bestCount || (count == bestCount && count > 0 && best != null && ses.start.isAfter(best.start))) {
+        best = ses;
+        bestCount = count;
+      }
+    }
+    return best == null ? null : (session: best, species: bestCount);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        leading: widget.onOpenCalendar == null
-            ? null
-            : IconButton(
-                tooltip: 'Pick a day',
-                icon: const Icon(Icons.calendar_today_outlined),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  widget.onOpenCalendar!();
-                },
-              ),
-        title: const Text('Settings'),
+        title: const Text(
+          'birdsongs.ai',
+          style: TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 1.0, color: ink),
+        ),
         actions: [
           IconButton(
             tooltip: 'Close',
@@ -138,11 +160,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             listenable: Listenable.merge([s, app.engine, app.models, app.store, app.updates, app.icloud]),
             builder: (context, _) {
               final listen = s.mode == AppMode.listen;
+              final best = listen ? _bestLocalSession() : null;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _quickLaunchBar(context, side, best),
+                  Divider(height: 1, color: rule.withValues(alpha: 0.6)),
                   _iconBar(side),
-                  const Divider(height: 1, color: rule),
+                  Divider(height: 1, color: rule.withValues(alpha: 0.6)),
                   Expanded(
                     child: ListView(
                       padding: EdgeInsets.fromLTRB(side, 12, side, 32),
@@ -154,6 +179,124 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _quickLaunchBar(BuildContext context, double side, ({Session session, int species})? best) {
+    Widget tile({
+      required IconData icon,
+      required String label,
+      String? detail,
+      required VoidCallback onTap,
+    }) {
+      return Expanded(
+        child: Material(
+          color: paperDeep.withValues(alpha: 0.42),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: rule.withValues(alpha: 0.55)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            hoverColor: ink.withValues(alpha: 0.08),
+            highlightColor: ink.withValues(alpha: 0.12),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 20, color: ink),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontFamily: caps, fontSize: 11.5, letterSpacing: 0.4, color: ink),
+                  ),
+                  if (detail != null) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      detail,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 11, color: sepia),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final tiles = <Widget>[
+      tile(
+        icon: Icons.home_outlined,
+        label: 'Home',
+        onTap: () {
+          Navigator.of(context).pop();
+          if (widget.onGoHome != null) {
+            widget.onGoHome!();
+          } else {
+            s.update((x) {
+              x.plateMode = defaultPlateMode;
+              x.nativeSizeBy = x.mode == AppMode.station ? 'calls' : 'time';
+            });
+          }
+        },
+      ),
+      if (widget.onOpenMap != null)
+        tile(
+          icon: Icons.map_outlined,
+          label: 'Map',
+          onTap: () {
+            Navigator.of(context).pop();
+            widget.onOpenMap!();
+          },
+        ),
+      if (widget.onOpenCalendar != null)
+        tile(
+          icon: Icons.calendar_today_outlined,
+          label: 'Calendar',
+          onTap: () {
+            Navigator.of(context).pop();
+            widget.onOpenCalendar!();
+          },
+        ),
+      if (best != null)
+        tile(
+          icon: Icons.emoji_events_outlined,
+          label: 'Best walk',
+          detail: '${best.species} sp.',
+          onTap: () {
+            Navigator.of(context).pop();
+            if (widget.onOpenBestSession != null) {
+              widget.onOpenBestSession!();
+            } else {
+              app.store.select(best.session);
+              s.update((x) {
+                x.mode = AppMode.listen;
+                x.plateMode = defaultPlateMode;
+                x.nativeSizeBy = 'time';
+              });
+            }
+          },
+        ),
+    ];
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(side, 6, side, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < tiles.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            tiles[i],
+          ],
+        ],
       ),
     );
   }
@@ -356,7 +499,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const Text('Only the saved address goes; nothing on the station changes.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Remove')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: madder, foregroundColor: paper),
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Remove'),
+          ),
         ],
       ),
     );
@@ -367,14 +514,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final theme = Theme.of(context);
     final engine = app.engine;
     final locked = engine.running;
-    return _section(
-      context,
-      'Listening',
-      summary: engine.running
-          ? 'Listening · ${engine.levelDb.toStringAsFixed(0)} dBFS'
-          : '${(s.threshold * 100).round()}% · every ${s.hopSeconds.toStringAsFixed(1)} s',
-      open: open || engine.running,
-      [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         if (engine.error != null)
           Text(engine.error!, style: TextStyle(color: theme.colorScheme.error)),
         if (engine.running) ...[
@@ -403,81 +545,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text('A change of microphone applies from the next recording.',
               style: theme.textTheme.bodySmall),
         const SizedBox(height: 8),
-        if (PlateShare.supported) ...[
-          _dropdown(
-            'Recording format',
-            s.clipFormat,
-            const {
-              'aac': 'AAC 128 kbps (.m4a, smaller)',
-              'wav': 'WAV (uncompressed)',
-            },
-            (v) => s.update((x) => x.clipFormat = v),
-          ),
-          Text(
-            'Saved clips include 2 seconds of pre-record before each detection.',
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
-        ],
         _slider('Threshold ${(s.threshold * 100).round()}%', s.threshold, 0.05, 0.95, 18,
             (v) => s.update((x) => x.threshold = v)),
-        _slider('Every ${s.hopSeconds.toStringAsFixed(1)} s', s.hopSeconds, 0.5, 5, 9,
-            (v) => s.update((x) => x.hopSeconds = v)),
-        _slider('Repeat after ${s.repeatSeconds.round()} s', s.repeatSeconds, 3, 60, 19,
-            (v) => s.update((x) => x.repeatSeconds = v)),
         _switch('Animals only', s.animalsOnly, (v) => s.update((x) => x.animalsOnly = v)),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: Text('Ignored species', style: theme.textTheme.titleSmall)),
-            if (s.ignoredSpecies.join('\u0000') != Settings.defaultIgnoredSpecies.join('\u0000'))
-              TextButton(
-                onPressed: () => s.update((x) => x.ignoredSpecies = List<String>.of(Settings.defaultIgnoredSpecies)),
-                child: const Text('Reset defaults'),
+        const Divider(height: 20, color: rule),
+        _section(
+          context,
+          'More listening options',
+          summary: 'Format, timing, ignored species and Core ML',
+          [
+            if (PlateShare.supported) ...[
+              _dropdown(
+                'Recording format',
+                s.clipFormat,
+                const {
+                  'aac': 'AAC 128 kbps (.m4a, smaller)',
+                  'wav': 'WAV (uncompressed)',
+                },
+                (v) => s.update((x) => x.clipFormat = v),
               ),
-          ],
-        ),
-        Text(
-          'Detections matching these names are ignored while listening and hidden from the plate.',
-          style: theme.textTheme.bodySmall,
-        ),
-        const SizedBox(height: 6),
-        if (s.ignoredSpecies.isNotEmpty)
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (final term in s.ignoredSpecies)
-                InputChip(
-                  label: Text(term),
-                  visualDensity: VisualDensity.compact,
-                  onDeleted: () => s.update((x) => x.ignoredSpecies = [
-                        for (final item in x.ignoredSpecies)
-                          if (item != term) item,
-                      ]),
-                ),
+              Text(
+                'Saved clips include 2 seconds of pre-record before each detection.',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
             ],
-          ),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _ignoreAdd,
-                decoration: const InputDecoration(
-                  hintText: 'Add species or sound to ignore',
-                  isDense: true,
-                ),
-                onSubmitted: (_) => _addIgnored(),
-              ),
+            _slider('Every ${s.hopSeconds.toStringAsFixed(1)} s', s.hopSeconds, 0.5, 5, 9,
+                (v) => s.update((x) => x.hopSeconds = v)),
+            _slider('Repeat after ${s.repeatSeconds.round()} s', s.repeatSeconds, 3, 60, 19,
+                (v) => s.update((x) => x.repeatSeconds = v)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: Text('Ignored species', style: theme.textTheme.titleSmall)),
+                if (s.ignoredSpecies.join('\u0000') != Settings.defaultIgnoredSpecies.join('\u0000'))
+                  TextButton(
+                    onPressed: () => s.update((x) => x.ignoredSpecies = List<String>.of(Settings.defaultIgnoredSpecies)),
+                    child: const Text('Reset defaults'),
+                  ),
+              ],
             ),
-            const SizedBox(width: 8),
-            TextButton(onPressed: _addIgnored, child: const Text('Add')),
+            Text(
+              'Detections matching these names are ignored while listening and hidden from the plate.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            if (s.ignoredSpecies.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final term in s.ignoredSpecies)
+                    InputChip(
+                      label: Text(term),
+                      visualDensity: VisualDensity.compact,
+                      onDeleted: () => s.update((x) => x.ignoredSpecies = [
+                            for (final item in x.ignoredSpecies)
+                              if (item != term) item,
+                          ]),
+                    ),
+                ],
+              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _ignoreAdd,
+                    decoration: const InputDecoration(
+                      hintText: 'Add species or sound to ignore',
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _addIgnored(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(onPressed: _addIgnored, child: const Text('Add')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (Platform.isIOS || Platform.isMacOS)
+              _switch('Core ML (GPU / Neural Engine)', s.useCoreMl,
+                  locked ? null : (v) => s.update((x) => x.useCoreMl = v)),
           ],
         ),
-        const SizedBox(height: 8),
-        if (Platform.isIOS || Platform.isMacOS)
-          _switch('Core ML (GPU / Neural Engine)', s.useCoreMl,
-              locked ? null : (v) => s.update((x) => x.useCoreMl = v)),
       ],
     );
   }
@@ -646,14 +796,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final m = app.models;
     final locked = app.engine.running;
     final geoReady = m.isInstalled(geomodel);
-    return _section(
-      context,
-      'Location filter',
-      open: open,
-      summary: s.useGeomodel
-          ? (geoReady ? 'On' : 'On · geomodel not downloaded')
-          : 'Off',
-      [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         _switch('Drop species unlikely here', s.useGeomodel,
             locked ? null : (v) => s.update((x) => x.useGeomodel = v)),
         _switch('Note the weather (MET Norway)', s.recordWeather,
@@ -663,34 +808,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? LinearProgressIndicator(value: m.progress[geomodel.id])
               : TextButton.icon(
                   onPressed: () => m.install(geomodel),
-                  icon: const Icon(Icons.download),
+                  icon: const Icon(Icons.download_outlined),
                   label: Text('Geomodel, ${megabytes(geomodel.totalBytes)}'),
                 ),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _lat,
-                decoration: const InputDecoration(labelText: 'Latitude', hintText: 'GPS'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                onSubmitted: (_) => _saveLocation(),
-              ),
+        const Divider(height: 20, color: rule),
+        _section(
+          context,
+          'More location options',
+          summary: 'Manual coordinates and threshold',
+          [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _lat,
+                    decoration: const InputDecoration(labelText: 'Latitude', hintText: 'GPS'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                    onSubmitted: (_) => _saveLocation(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _lon,
+                    decoration: const InputDecoration(labelText: 'Longitude', hintText: 'GPS'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                    onSubmitted: (_) => _saveLocation(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(onPressed: _saveLocation, child: const Text('Save')),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _lon,
-                decoration: const InputDecoration(labelText: 'Longitude', hintText: 'GPS'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                onSubmitted: (_) => _saveLocation(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton(onPressed: _saveLocation, child: const Text('Save')),
+            _slider('Above ${(s.geoThreshold * 100).toStringAsFixed(0)}% likely', s.geoThreshold,
+                0.01, 0.2, 19, (v) => s.update((x) => x.geoThreshold = v)),
           ],
         ),
-        _slider('Above ${(s.geoThreshold * 100).toStringAsFixed(0)}% likely', s.geoThreshold,
-            0.01, 0.2, 19, (v) => s.update((x) => x.geoThreshold = v)),
       ],
     );
   }
@@ -938,37 +1091,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _mapSection(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
-    return _section(
-      context,
-      'Map',
-      open: open,
-      summary: s.showMap ? 'Showing the walk · ${mapBirds[s.mapBirds]}' : 'Showing the collage',
-      [
-        _switch('Show the walk on a map', s.showMap, (v) => s.update((x) => x.showMap = v)),
-        _dropdown(
-          'Map buttons',
-          s.mapButtonStyle,
-          const {
-            'ink': 'All black icons (default)',
-            'paper': 'Paper circle, madder icons',
-            'madder': 'Solid madder',
-          },
-          (v) => s.update((x) => x.mapButtonStyle = v),
-        ),
-        _dropdown('Crosses', s.mapBirds, mapBirds, (v) => s.update((x) => x.mapBirds = v)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         _switch('Landmarks, heritage and nature sites', s.mapExtras,
             (v) => s.update((x) => x.mapExtras = v)),
-        if (s.mapExtras)
-          _switch('Descriptions in Passed on the way', s.mapPassedAbout,
-              (v) => s.update((x) => x.mapPassedAbout = v)),
-        if (kDebugMode)
-          _switch('Timing readout on the map (debug)', s.mapDebugReadout,
-              (v) => s.update((x) => x.mapDebugReadout = v)),
-        Text(
-          'The map is drawn from OpenFreeMap and open elevation data, so the area of each walk '
-          'is sent to them. Landmarks also send it to Historic England, Natural England and '
-          'Wikipedia, and list what the walk passed above the map.',
-          style: theme.textTheme.bodySmall,
+        _dropdown('Bird pins', s.mapBirds, mapBirds, (v) => s.update((x) => x.mapBirds = v)),
+        const Divider(height: 20, color: rule),
+        _section(
+          context,
+          'More map options',
+          summary: 'Button style, descriptions and privacy',
+          [
+            _dropdown(
+              'Map buttons',
+              s.mapButtonStyle,
+              const {
+                'ink': 'All black icons (default)',
+                'paper': 'Paper circle, madder icons',
+                'madder': 'Solid madder',
+              },
+              (v) => s.update((x) => x.mapButtonStyle = v),
+            ),
+            if (s.mapExtras)
+              _switch('Descriptions in Passed on the way', s.mapPassedAbout,
+                  (v) => s.update((x) => x.mapPassedAbout = v)),
+            if (kDebugMode)
+              _switch('Timing readout on the map (debug)', s.mapDebugReadout,
+                  (v) => s.update((x) => x.mapDebugReadout = v)),
+            const SizedBox(height: 6),
+            Text(
+              'The map is drawn from OpenFreeMap and open elevation data, so the area of each walk '
+              'is sent to them. Landmarks also send it to Historic England, Natural England and '
+              'Wikipedia, and list what the walk passed above the map.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
         ),
       ],
     );
@@ -992,7 +1150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       FutureBuilder<String?>(
         future: _webVersion,
         builder: (context, snap) => Text(
-          'Birdsong${snap.data == null ? '' : ' v${snap.data}'}. Created by Ed Stone. '
+          'birdsongs.ai${snap.data == null ? '' : ' v${snap.data}'}. Created by Ed Stone. '
           'Detections by $detections. Bird cut-outs from the Fugleramme project by '
           'Arne Giacomo, after Gould, the von Wright brothers, Audubon and others, used under '
           'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Weather from MET Norway, CC BY 4.0. '
@@ -1024,7 +1182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const SupportQuote(size: 15),
       const SizedBox(height: 16),
       Text(
-        'One hopes you are enjoying Birdsong. If something is amiss, or it does not yet do '
+        'One hopes you are enjoying birdsongs.ai. If something is amiss, or it does not yet do '
         'what you want of it, say so on GitHub.',
         style: theme.textTheme.bodyMedium,
       ),
@@ -1088,7 +1246,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const Text('Deletes all sessions, detections and recordings. Models stay.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: madder, foregroundColor: paper),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );

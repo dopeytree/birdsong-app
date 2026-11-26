@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:latlong2/latlong.dart' hide Path;
 
-import '../main.dart' show caps, ink, madder, paper, paperDeep, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, paperDeep, rule, sepia, serif;
 
 /// A place found by the map's search: its name, a line saying where it is,
 /// its point, and its extent when it has one.
@@ -246,10 +246,10 @@ class _PlaceSearchState extends State<PlaceSearch> {
       border: isMadder ? null : Border.all(color: paperDeep.withValues(alpha: isInk ? 0.6 : 1.0)),
       boxShadow: isInk ? null : const [BoxShadow(color: Color(0x4D3C280A), offset: Offset(0, 2), blurRadius: 8)],
     );
-    const box = BoxDecoration(
-      color: paper,
-      borderRadius: BorderRadius.all(Radius.circular(4)),
-      border: Border.fromBorderSide(BorderSide(color: paperDeep)),
+    final box = BoxDecoration(
+      color: paper.withValues(alpha: 0.96),
+      borderRadius: const BorderRadius.all(Radius.circular(14)),
+      border: Border.fromBorderSide(BorderSide(color: rule.withValues(alpha: 0.6))),
     );
     // TextFieldTapRegion: a click on a suggestion counts as inside the field,
     // so the field keeps its focus (and the list stays) until the tap lands.
@@ -310,8 +310,8 @@ class _PlaceSearchState extends State<PlaceSearch> {
                     radius: 16,
                     onTap: _clear,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('×', style: TextStyle(fontSize: 18, height: 1, color: fg)),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Icon(Icons.close, size: 17, color: fg),
                     ),
                   ),
                 ),

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../engine/place_names.dart';
@@ -169,60 +171,78 @@ class _CompactMonthGrid extends StatelessWidget {
   }
 }
 
-/// Modern responsive shell shared by [DayPicker] and [StationDayPicker],
-/// matching the translucent rounded styling of the filter bar.
+/// Modern responsive shell shared by [DayPicker] and [StationDayPicker]:
+/// full-screen edge-to-edge on mobile (<= 720 px), translucent rounded dialog
+/// matching the filter bar on tablets & desktop.
 Widget _calendarFrame({
   required BuildContext context,
   required String title,
   required Widget body,
 }) {
   final screen = MediaQuery.sizeOf(context);
-  final wide = screen.width >= 640;
+  final pad = MediaQuery.paddingOf(context);
+  final narrow = screen.width <= 720;
+  final header = Row(
+    children: [
+      const SizedBox(width: 40),
+      Expanded(
+        child: Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontFamily: caps, fontSize: 17, letterSpacing: 1.0, color: ink),
+        ),
+      ),
+      IconButton(
+        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+        padding: EdgeInsets.zero,
+        iconSize: 22,
+        color: ink,
+        icon: const Icon(Icons.close),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+    ],
+  );
+  if (narrow) {
+    final topPad = pad.top > 24 ? math.max(16.0, pad.top - 16.0) : math.max(10.0, pad.top);
+    final bottomPad = math.max(16.0, pad.bottom);
+    return Dialog.fullscreen(
+      backgroundColor: paper,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, topPad, 16, bottomPad),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            header,
+            const SizedBox(height: 8),
+            Expanded(child: body),
+          ],
+        ),
+      ),
+    );
+  }
   return Dialog(
     backgroundColor: paper.withValues(alpha: 0.96),
     surfaceTintColor: Colors.transparent,
     elevation: 8,
     shadowColor: const Color(0x382A241C),
-    insetPadding: EdgeInsets.symmetric(
-      horizontal: wide ? 32 : 14,
-      vertical: wide ? 28 : 18,
-    ),
+    insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(18),
       side: BorderSide(color: rule.withValues(alpha: 0.65)),
     ),
     child: ConstrainedBox(
       constraints: BoxConstraints(
-        maxWidth: wide ? 680 : 420,
+        maxWidth: 680,
         maxHeight: screen.height * 0.88,
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                const SizedBox(width: 36),
-                Expanded(
-                  child: Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontFamily: caps, fontSize: 16, letterSpacing: 1.0, color: ink),
-                  ),
-                ),
-                IconButton(
-                  constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                  padding: EdgeInsets.zero,
-                  iconSize: 20,
-                  color: ink,
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
+            header,
+            const SizedBox(height: 8),
             Flexible(child: body),
           ],
         ),
@@ -231,9 +251,8 @@ Widget _calendarFrame({
   );
 }
 
-/// The calendar dialog for local walks: compact auto-fitting month grid with
-/// sessions immediately visible beside it (tablet/Mac) or directly below it
-/// (iPhone), with rich delete confirmation.
+/// The calendar dialog for local walks: full-screen on phones, side-by-side
+/// rounded modal on tablets/Mac, with rich delete confirmation.
 class DayPicker extends StatefulWidget {
   const DayPicker({super.key, required this.store, required this.speciesIn, this.shown});
 
@@ -243,6 +262,7 @@ class DayPicker extends StatefulWidget {
 
   static Future<Session?> show(BuildContext context, DayPicker picker) => showDialog<Session>(
         context: context,
+        useSafeArea: false,
         barrierColor: const Color(0x662A241C),
         builder: (_) => picker,
       );
@@ -328,7 +348,11 @@ class _DayPickerState extends State<DayPicker> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Delete')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: madder, foregroundColor: paper),
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -371,7 +395,7 @@ class _DayPickerState extends State<DayPicker> {
     final firstMonth = DateTime(first.year, first.month);
     final lastMonth = DateTime(last.year, last.month);
     final that = _that;
-    final wide = MediaQuery.sizeOf(context).width >= 640;
+    final wide = MediaQuery.sizeOf(context).width > 720;
 
     final cal = _CompactMonthGrid(
       month: _month,
@@ -507,6 +531,7 @@ class StationDayPicker extends StatefulWidget {
 
   static Future<DateTime?> show(BuildContext context, StationDayPicker picker) => showDialog<DateTime>(
         context: context,
+        useSafeArea: false,
         barrierColor: const Color(0x662A241C),
         builder: (_) => picker,
       );
@@ -542,7 +567,7 @@ class _StationDayPickerState extends State<StationDayPicker> {
     final archive = widget.feed.archive;
     const small = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 13.5, color: sepia);
     final shown = _picked.isBefore(first) ? first : _picked;
-    final wide = MediaQuery.sizeOf(context).width >= 640;
+    final wide = MediaQuery.sizeOf(context).width > 720;
 
     return _calendarFrame(
       context: context,

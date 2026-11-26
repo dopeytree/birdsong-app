@@ -166,10 +166,13 @@ class _ModelNotice extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
           child: Material(
-            color: paper,
-            elevation: 3,
-            shadowColor: const Color(0x553C280A),
-            shape: const RoundedRectangleBorder(side: BorderSide(color: rule)),
+            color: paper.withValues(alpha: 0.95),
+            elevation: 4,
+            shadowColor: const Color(0x382A241C),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: rule.withValues(alpha: 0.65)),
+            ),
             child: Padding(
               padding: EdgeInsets.fromLTRB(14, 6, actions.length == 1 ? 6 : 14, 6),
               child: actions.isEmpty

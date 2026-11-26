@@ -434,7 +434,7 @@ class _PlateViewState extends State<PlateView> {
     final from = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
     var ok = false;
     try {
-      ok = await PlateShare.share(text: 'Heard with Birdsong', from: from);
+      ok = await PlateShare.share(text: 'Heard with birdsongs.ai', from: from);
     } catch (_) {}
     if (!ok && mounted) {
       _say("Couldn't take a picture of the plate.");
@@ -449,7 +449,7 @@ class _PlateViewState extends State<PlateView> {
     if (!mounted) return;
     _say(switch (r) {
       'saved' => 'Saved to Photos.',
-      'denied' => 'Birdsong may not add to Photos: allow it in Settings.',
+      'denied' => 'birdsongs.ai may not add to Photos: allow it in Settings.',
       _ => "Couldn't save the plate.",
     });
   }
@@ -499,9 +499,7 @@ class _PlateViewState extends State<PlateView> {
                           tooltip: 'Stations',
                           constraints: const BoxConstraints.tightFor(
                               width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                          icon: Text('±',
-                              style: TextStyle(
-                                  fontSize: 22, height: 1, color: Theme.of(context).colorScheme.primary)),
+                          icon: Icon(Icons.cell_tower, size: 20, color: Theme.of(context).colorScheme.primary),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: () => _stationsTap(bc),
                         ),

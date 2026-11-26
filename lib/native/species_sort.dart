@@ -61,6 +61,8 @@ class SpeciesSortBar extends StatelessWidget {
     required this.onToggleOpen,
     required this.onSelect,
     required this.onFlipDirection,
+    this.showLabels,
+    this.onToggleLabels,
     this.centered = false,
   });
 
@@ -70,6 +72,10 @@ class SpeciesSortBar extends StatelessWidget {
   final VoidCallback onToggleOpen;
   final ValueChanged<String> onSelect;
   final VoidCallback onFlipDirection;
+
+  /// Optional name-ticket labels toggle shown as the 1st option in the panel.
+  final bool? showLabels;
+  final VoidCallback? onToggleLabels;
   final bool centered;
 
   @override
@@ -95,7 +101,7 @@ class SpeciesSortBar extends StatelessWidget {
               margin: EdgeInsets.only(top: centered ? 4 : 4),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
-                color: paper.withValues(alpha: 0.92),
+                color: paper.withValues(alpha: 0.94),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: rule.withValues(alpha: 0.55)),
                 boxShadow: const [
@@ -108,7 +114,17 @@ class SpeciesSortBar extends StatelessWidget {
                 alignment: centered ? WrapAlignment.center : WrapAlignment.start,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  // Direction toggle sits 1st inside the filter bar, showing and hiding with it.
+                  // 1st option: toggle bird name-ticket labels on/off.
+                  if (showLabels != null && onToggleLabels != null) ...[
+                    _labelsChip(showLabels!, onToggleLabels!),
+                    Container(
+                      width: 1,
+                      height: 18,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      color: rule.withValues(alpha: 0.65),
+                    ),
+                  ],
+                  // Direction toggle sits first among the sort options.
                   IconButton(
                     constraints: const BoxConstraints.tightFor(width: 34, height: 34),
                     padding: EdgeInsets.zero,
@@ -130,6 +146,39 @@ class SpeciesSortBar extends StatelessWidget {
         trigger,
         panel,
       ],
+    );
+  }
+
+  Widget _labelsChip(bool on, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      hoverColor: ink.withValues(alpha: 0.08),
+      highlightColor: ink.withValues(alpha: 0.12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: on
+            ? const BoxDecoration(
+                border: Border(bottom: BorderSide(color: madder, width: 1.8)),
+              )
+            : null,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.label_outlined, size: 16, color: on ? madder : ink),
+            const SizedBox(width: 5),
+            Text(
+              'Labels',
+              style: TextStyle(
+                fontFamily: caps,
+                fontSize: 12.5,
+                letterSpacing: 0.4,
+                color: on ? ink : sepia,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

@@ -13,7 +13,7 @@ import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:url_launcher/url_launcher.dart';
 
-import '../main.dart' show caps, ink, madder, paper, paperDeep, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, paperDeep, rule, sepia, serif;
 import '../settings.dart';
 import 'bird_records.dart';
 import 'engravings.dart';
@@ -1443,44 +1443,62 @@ class _WalkMapState extends State<WalkMap> {
                   ],
                 ),
               if (kit != null)
-                Positioned(
-                  right: (widget.fullScreen ? MediaQuery.paddingOf(context).right : 0) + 10,
-                  top: (widget.fullScreen ? MediaQuery.paddingOf(context).top + 52 : 10),
-                  child: _ZoomButtons(
-                    map: _map,
-                    style: widget.settings?.mapButtonStyle ?? 'ink',
-                    home: w == null || (w.trail.isEmpty && w.birds.isEmpty && w.place == null) ? null : _home,
-                    homeTip: w?.station != null ? 'Back to the station' : 'Back to the walk',
-                    layers: widget.settings == null ? null : () => setState(() => _layersOpen = !_layersOpen),
-                  ),
-                ),
+                () {
+                  final pad = MediaQuery.paddingOf(context);
+                  final topEdge = widget.fullScreen
+                      ? (pad.top > 24 ? math.max(12.0, pad.top - 16.0) : 6.0)
+                      : 10.0;
+                  final rightEdge = widget.fullScreen
+                      ? (pad.right > 16 ? math.max(8.0, pad.right - 16.0) : 6.0)
+                      : 10.0;
+                  return Positioned(
+                    right: rightEdge,
+                    top: widget.fullScreen ? topEdge + 50 : 10,
+                    child: _ZoomButtons(
+                      map: _map,
+                      style: widget.settings?.mapButtonStyle ?? 'ink',
+                      home: w == null || (w.trail.isEmpty && w.birds.isEmpty && w.place == null) ? null : _home,
+                      homeTip: w?.station != null ? 'Back to the station' : 'Back to the walk',
+                      layers: widget.settings == null ? null : () => setState(() => _layersOpen = !_layersOpen),
+                    ),
+                  );
+                }(),
               if (kit != null)
-                Positioned(
-                  left: (widget.fullScreen ? MediaQuery.paddingOf(context).left : 0) + 10,
-                  top: (widget.fullScreen ? MediaQuery.paddingOf(context).top : 0) + 10,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      PlaceSearch(
-                        width: math.min(
-                          220.0,
-                          math.max(100.0, widget.size.width - 20 - 44 - (widget.onPoi != null ? 44 : 0)),
-                        ),
-                        style: widget.settings?.mapButtonStyle ?? 'ink',
-                        near: () => _ready ? _map.camera.center : center,
-                        onPick: _goTo,
-                      ),
-                      if (widget.onPoi != null) ...[
-                        const SizedBox(width: 4),
-                        _PoiButton(
-                          onTap: widget.onPoi!,
+                () {
+                  final pad = MediaQuery.paddingOf(context);
+                  final topEdge = widget.fullScreen
+                      ? (pad.top > 24 ? math.max(12.0, pad.top - 16.0) : 6.0)
+                      : 10.0;
+                  final leftEdge = widget.fullScreen
+                      ? (pad.left > 16 ? math.max(8.0, pad.left - 16.0) : 8.0)
+                      : 10.0;
+                  return Positioned(
+                    left: leftEdge,
+                    top: topEdge + (widget.fullScreen ? 6 : 0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        PlaceSearch(
+                          width: math.min(
+                            220.0,
+                            math.max(100.0, widget.size.width - 20 - 48 - (widget.onPoi != null ? 44 : 0)),
+                          ),
                           style: widget.settings?.mapButtonStyle ?? 'ink',
+                          near: () => _ready ? _map.camera.center : center,
+                          onPick: _goTo,
                         ),
+                        if (widget.onPoi != null) ...[
+                          const SizedBox(width: 4),
+                          _PoiButton(
+                            onTap: widget.onPoi!,
+                            style: widget.settings?.mapButtonStyle ?? 'ink',
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                }(),
               if (kit != null && _layersOpen && widget.settings != null)
                 Positioned.fill(
                   child: GestureDetector(
@@ -1505,8 +1523,15 @@ class _WalkMapState extends State<WalkMap> {
                 ),
               if (kit != null)
                 Positioned(
-                    left: (widget.fullScreen ? MediaQuery.paddingOf(context).left + 48 : 6),
-                    bottom: (widget.fullScreen ? MediaQuery.paddingOf(context).bottom : 0) + 10,
+                    left: widget.fullScreen
+                        ? ((MediaQuery.paddingOf(context).left > 16
+                                ? math.max(8.0, MediaQuery.paddingOf(context).left - 16.0)
+                                : 6.0) +
+                            46)
+                        : 6,
+                    bottom: widget.fullScreen
+                        ? (MediaQuery.paddingOf(context).bottom > 0 ? 18.0 : 12.0)
+                        : 10,
                     child: _Credit(_credit +
                         (widget.landmarks != null ? _extrasCredit() : '') +
                         (_recordsKey != null ? '\nBird records: GBIF.org' : '') +
@@ -1940,7 +1965,7 @@ class _ZoomButtons extends StatelessWidget {
         ],
       );
     }
-    Widget button(String label, String tip, double by) => Tooltip(
+    Widget button(IconData icon, String tip, double by) => Tooltip(
           message: tip,
           child: InkWell(
             onTap: () {
@@ -1950,7 +1975,7 @@ class _ZoomButtons extends StatelessWidget {
             child: SizedBox(
               width: 34,
               height: 34,
-              child: Center(child: Text(label, style: TextStyle(fontSize: 19, height: 1, color: t.fg))),
+              child: Center(child: Icon(icon, size: 19, color: t.fg)),
             ),
           ),
         );
@@ -1962,9 +1987,9 @@ class _ZoomButtons extends StatelessWidget {
         borderRadius: t.radius,
         clipBehavior: Clip.antiAlias,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          button('+', 'Zoom in', 1),
+          button(Icons.add, 'Zoom in', 1),
           sep,
-          button('−', 'Zoom out', -1),
+          button(Icons.remove, 'Zoom out', -1),
           if (home != null) ...[
             sep,
             Tooltip(
@@ -2073,18 +2098,22 @@ class _CreditState extends State<_Credit> {
         onTap: () => setState(() => _open = !_open),
         child: Container(
           constraints: const BoxConstraints(maxWidth: 320),
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-          color: paper.withValues(alpha: .85),
-          child: Text(_open ? widget.text : 'ⓘ',
-              style: const TextStyle(fontFamily: serif, fontSize: 10, color: ink, height: 1.3)),
+          padding: EdgeInsets.symmetric(horizontal: _open ? 8 : 4, vertical: _open ? 5 : 4),
+          decoration: BoxDecoration(
+            color: paper.withValues(alpha: _open ? 0.94 : 0.78),
+            borderRadius: BorderRadius.circular(_open ? 10 : 12),
+            border: _open ? Border.all(color: rule.withValues(alpha: 0.55)) : null,
+          ),
+          child: _open
+              ? Text(widget.text,
+                  style: const TextStyle(fontFamily: serif, fontSize: 10.5, color: ink, height: 1.35))
+              : const Icon(Icons.info_outline, size: 15, color: ink),
         ),
       );
 }
 
-/// What the map shows: a box of switches beside the map's buttons. Each
-/// kind of extra on or off (off, it isn't looked up either), and the bird
-/// whose records (GBIF) are drawn. Turning any landmark on turns the
-/// landmarks on (Settings > Map), and the last off turns them off.
+/// What the map shows: a modern translucent rounded card matching the filter
+/// panel. Each kind of extra switches on/off, plus GBIF bird records.
 class _LayersPanel extends StatelessWidget {
   const _LayersPanel({required this.settings, required this.species, required this.onClose});
 
@@ -2105,74 +2134,87 @@ class _LayersPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = settings, on = s.mapExtras;
-    Widget row(String title, String sub, bool value, void Function(Settings s, bool v) put) => InkWell(
-          onTap: () => _set((x) {
-            // with the landmarks off, a switch turns that one on alone
-            if (!on) {
-              x
-                ..mapShowHeritage = false
-                ..mapShowNature = false
-                ..mapShowAncient = false
-                ..mapShowWiki = false
-                ..mapShowReserves = false
-                ..mapShowHides = false;
-            }
-            put(x, !(on && value));
-          }),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
-            child: Row(children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, style: const TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
-                  Text(sub,
-                      style: const TextStyle(
-                          fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia, height: 1.2)),
-                ]),
-              ),
-              Transform.scale(
-                scale: .75,
-                child: Switch(
-                  value: on && value,
-                  activeTrackColor: madder,
-                  onChanged: (v) => _set((x) {
-                    if (!on) {
-                      x
-                        ..mapShowHeritage = false
-                        ..mapShowNature = false
-                        ..mapShowAncient = false
-                        ..mapShowWiki = false
-                        ..mapShowReserves = false
-                        ..mapShowHides = false;
-                    }
-                    put(x, v);
-                  }),
+    Widget row(String title, String sub, bool value, void Function(Settings s, bool v) put) => Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            hoverColor: ink.withValues(alpha: 0.08),
+            highlightColor: ink.withValues(alpha: 0.12),
+            onTap: () => _set((x) {
+              // with the landmarks off, a switch turns that one on alone
+              if (!on) {
+                x
+                  ..mapShowHeritage = false
+                  ..mapShowNature = false
+                  ..mapShowAncient = false
+                  ..mapShowWiki = false
+                  ..mapShowReserves = false
+                  ..mapShowHides = false;
+              }
+              put(x, !(on && value));
+            }),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
+              child: Row(children: [
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title, style: const TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
+                    Text(sub,
+                        style: const TextStyle(
+                            fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia, height: 1.2)),
+                  ]),
                 ),
-              ),
-            ]),
+                Transform.scale(
+                  scale: .78,
+                  child: Switch(
+                    value: on && value,
+                    onChanged: (v) => _set((x) {
+                      if (!on) {
+                        x
+                          ..mapShowHeritage = false
+                          ..mapShowNature = false
+                          ..mapShowAncient = false
+                          ..mapShowWiki = false
+                          ..mapShowReserves = false
+                          ..mapShowHides = false;
+                      }
+                      put(x, v);
+                    }),
+                  ),
+                ),
+              ]),
+            ),
           ),
         );
     final chosen = species.any((b) => b.sci == s.mapRecordsSci) ? s.mapRecordsSci : '';
     return Container(
-      width: 264,
-      decoration: BoxDecoration(color: paper, border: Border.all(color: paperDeep), boxShadow: const [
-        BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 6), blurRadius: 18),
-      ]),
+      width: 292,
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+      decoration: BoxDecoration(
+        color: paper.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: rule.withValues(alpha: 0.65)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x332A241C), offset: Offset(0, 8), blurRadius: 22),
+        ],
+      ),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
           const Padding(
-            padding: EdgeInsets.fromLTRB(10, 6, 0, 2),
+            padding: EdgeInsets.fromLTRB(10, 2, 0, 2),
             child: Text('On the map',
-                style: TextStyle(fontFamily: serif, fontSize: 13, letterSpacing: 1.2, color: sepia)),
+                style: TextStyle(fontFamily: caps, fontSize: 15, letterSpacing: 0.9, color: ink)),
           ),
           const Spacer(),
           IconButton(
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            padding: EdgeInsets.zero,
             tooltip: 'Close',
-            visualDensity: VisualDensity.compact,
             onPressed: onClose,
-            icon: const Icon(Icons.close, size: 16, color: sepia),
+            icon: const Icon(Icons.close, size: 20, color: ink),
           ),
         ]),
+        const SizedBox(height: 2),
         row('Heritage', 'Listed buildings, monuments, parks, battlefields', s.mapShowHeritage,
             (x, v) => x.mapShowHeritage = v),
         row('Nature sites', 'SSSIs, bird SPAs, nature reserves, wetlands', s.mapShowNature, (x, v) => x.mapShowNature = v),
@@ -2182,46 +2224,56 @@ class _LayersPanel extends StatelessWidget {
         row('Hides & viewpoints', 'Where OpenStreetMap has them', s.mapShowHides, (x, v) => x.mapShowHides = v),
         row('Wikipedia places', 'With a line about each', s.mapShowWiki, (x, v) => x.mapShowWiki = v),
         if (wildlifePicturesOn)
-        InkWell(
-          onTap: () => settings.update((x) => x.mapWildlife = !x.mapWildlife),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
-            child: Row(children: [
-              const Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Wildlife pictures', style: TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
-                  Text('A few, for decoration: a deer in the woods',
-                      style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia, height: 1.2)),
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              hoverColor: ink.withValues(alpha: 0.08),
+              highlightColor: ink.withValues(alpha: 0.12),
+              onTap: () => settings.update((x) => x.mapWildlife = !x.mapWildlife),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
+                child: Row(children: [
+                  const Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Wildlife pictures', style: TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
+                      Text('A few, for decoration: a deer in the woods',
+                          style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia, height: 1.2)),
+                    ]),
+                  ),
+                  Transform.scale(
+                    scale: .78,
+                    child: Switch(
+                      value: s.mapWildlife,
+                      onChanged: (v) => settings.update((x) => x.mapWildlife = v),
+                    ),
+                  ),
                 ]),
               ),
-              Transform.scale(
-                scale: .75,
-                child: Switch(
-                  value: s.mapWildlife,
-                  activeTrackColor: madder,
-                  onChanged: (v) => settings.update((x) => x.mapWildlife = v),
-                ),
-              ),
-            ]),
+            ),
           ),
-        ),
-        const Divider(height: 1, color: paperDeep),
         Padding(
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 2),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Divider(height: 1, color: rule.withValues(alpha: 0.55)),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(10, 2, 10, 2),
           child: Text('Bird records',
-              style: const TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
+              style: TextStyle(fontFamily: caps, fontSize: 13.5, letterSpacing: 0.6, color: ink, height: 1.2)),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
           child: species.isEmpty
               ? const Text('No birds heard here yet',
-                  style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia))
+                  style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12.5, color: sepia))
               : DropdownButton<String>(
                   isExpanded: true,
                   value: chosen,
                   underline: const SizedBox.shrink(),
-                  style: const TextStyle(fontFamily: serif, fontSize: 14, color: ink),
+                  iconEnabledColor: ink,
+                  style: const TextStyle(fontFamily: serif, fontSize: 14.5, color: ink),
                   dropdownColor: paper,
+                  borderRadius: BorderRadius.circular(14),
                   items: [
                     const DropdownMenuItem(
                         value: '',
@@ -2234,7 +2286,7 @@ class _LayersPanel extends StatelessWidget {
         ),
         if (chosen.isNotEmpty)
           const Padding(
-            padding: EdgeInsets.fromLTRB(10, 0, 10, 8),
+            padding: EdgeInsets.fromLTRB(10, 0, 10, 4),
             child: Text('Where it has been recorded, from GBIF: darker hexagons, more records.',
                 style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia)),
           ),
