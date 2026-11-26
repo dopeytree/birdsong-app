@@ -228,12 +228,13 @@ class _CollageViewState extends State<CollageView> {
     final at = {for (var i = 0; i < places.length; i++) places[i].id: i};
     final tipFor = widget.showHoverInfo && _hover != null ? bird[_hover] : null;
 
+    final allowDrag = widget.sizeBy != 'equal';
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onPanStart: _onPanStart,
-      onPanUpdate: _onPanUpdate,
-      onPanEnd: (_) => _onPanEnd(),
-      onPanCancel: _onPanEnd,
+      onPanStart: allowDrag ? _onPanStart : null,
+      onPanUpdate: allowDrag ? _onPanUpdate : null,
+      onPanEnd: allowDrag ? (_) => _onPanEnd() : null,
+      onPanCancel: allowDrag ? _onPanEnd : null,
       child: SizedBox.fromSize(
         size: widget.size,
         child: Stack(

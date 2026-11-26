@@ -931,10 +931,15 @@ class _NativePlateState extends State<NativePlate> {
         final store = app.store, engine = app.engine;
         // a remote station has no sessions
         final ses = feed == null ? store.selected : null;
-        // Limit species: the most heard only, on the plate and in the index
+        final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
+        final spotlight = mode.key == 'spotlight';
+        final equal = mode.key == 'equal';
+        final onDefaultView = mode.key == 'time';
+        // Limit species: the most heard only, on the plate and in the index.
+        // No pecking order shows every species (not capped at maxOnPlate = 60).
         final all = _rows(ses), limit = app.settings.nativeLimit;
         final rows = limit > 0 && all.length > limit ? all.sublist(0, limit) : all;
-        final onPlate = rows.take(maxOnPlate).toList();
+        final onPlate = equal ? rows : rows.take(maxOnPlate).toList();
         _ensure(onPlate);
         // the creature heard last (the page's newestSci)
         String? newest;
@@ -952,10 +957,6 @@ class _NativePlateState extends State<NativePlate> {
         final calls = all.fold<int>(0, (n, r) => n + r.count);
         final i = store.selectedIndex, n = store.sessions.length;
         final red = Theme.of(context).colorScheme.primary;
-        final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
-        final spotlight = mode.key == 'spotlight';
-        final equal = mode.key == 'equal';
-        final onDefaultView = mode.key == 'time';
         final showPlate = true;
         final showIndex = !equal;
         final showHeading = !equal;
@@ -1612,12 +1613,13 @@ class _NativePlateState extends State<NativePlate> {
   /// ready, and the rest make room).
   Widget _collage(Session? ses, List<_Row> rows, String? newest, double width, double height,
       {required String sizeBy}) {
-    final showing = _showingFor(ses);
+    final baseShowing = _showingFor(ses);
+    final showing = sizeBy == 'equal' ? '$baseShowing|equal|${rows.length}' : baseShowing;
     final ready = [for (final r in rows) if (_art.containsKey(r.sci)) r];
     // Not before the height is known either (_measure), or they would be
     // placed once and then again.
     if (_revealed != showing) {
-      if (ready.length < rows.length || (app.settings.nativeFit && _others == null)) {
+      if (ready.length < rows.length || (sizeBy != 'equal' && app.settings.nativeFit && _others == null)) {
         return SizedBox(
           width: width,
           height: height,
@@ -1639,7 +1641,7 @@ class _NativePlateState extends State<NativePlate> {
       showAllNameTickets: app.settings.nativeAllNameTickets,
       resolutionScale: sizeBy == 'equal' ? _zoomTier : 1.0,
       onDragHold: (held) {
-        final want = held ? showing : null;
+        final want = held ? baseShowing : null;
         if (want != _holdFor && mounted) setState(() => _holdFor = want);
       },
       onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
@@ -1657,7 +1659,7 @@ class _NativePlateState extends State<NativePlate> {
             }
           : null,
       onHold: (held) {
-        final want = held ? showing : null;
+        final want = held ? baseShowing : null;
         if (want != _holdFor && mounted) setState(() => _holdFor = want);
       },
       child: collage,
