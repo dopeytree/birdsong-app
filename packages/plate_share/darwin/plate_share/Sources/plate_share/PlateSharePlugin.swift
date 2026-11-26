@@ -132,6 +132,7 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
         AVLinearPCMIsNonInterleaved: false,
       ]
       let readerOut = AVAssetReaderTrackOutput(track: track, outputSettings: readerSettings)
+      readerOut.alwaysCopiesSampleData = false
       guard reader.canAdd(readerOut) else { done(false); return }
       reader.add(readerOut)
 
@@ -147,7 +148,13 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       guard writer.canAdd(writerIn) else { done(false); return }
       writer.add(writerIn)
 
-      guard reader.startReading(), writer.startWriting() else {
+      guard reader.startReading() else {
+        try? FileManager.default.removeItem(at: tmpUrl)
+        done(false)
+        return
+      }
+      guard writer.startWriting() else {
+        reader.cancelReading()
         try? FileManager.default.removeItem(at: tmpUrl)
         done(false)
         return
@@ -155,25 +162,63 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       writer.startSession(atSourceTime: .zero)
 
       let queue = DispatchQueue(label: "uk.co.edstone.birdsong.aac")
-      writerIn.requestMediaDataWhenReady(on: queue) {
+      var finished = false
+      let complete: (Bool) -> Void = { ok in
+        if !ok {
+          try? FileManager.default.removeItem(at: tmpUrl)
+        }
+        done(ok)
+      }
+      // Explicitly retain `asset` and `reader` across the async pull loop:
+      // AVAssetReaderTrackOutput does not retain its AVAssetReader, so letting
+      // `reader` deallocate when encodeAac returns makes copyNextSampleBuffer()
+      // throw an NSInternalInconsistencyException (SIGABRT).
+      writerIn.requestMediaDataWhenReady(on: queue) { [asset, reader, readerOut, writer, writerIn] in
+        _ = asset
+        if finished { return }
         while writerIn.isReadyForMoreMediaData {
-          if let buf = readerOut.copyNextSampleBuffer() {
-            writerIn.append(buf)
-          } else {
+          if reader.status != .reading || writer.status != .writing {
+            finished = true
+            if reader.status == .reading { reader.cancelReading() }
             writerIn.markAsFinished()
             writer.finishWriting {
-              if writer.status == .completed {
+              if writer.status == .completed && reader.status == .completed {
                 do {
                   try? FileManager.default.removeItem(at: outputUrl)
                   try FileManager.default.moveItem(at: tmpUrl, to: outputUrl)
-                  done(true)
+                  complete(true)
                 } catch {
-                  try? FileManager.default.removeItem(at: tmpUrl)
-                  done(false)
+                  complete(false)
                 }
               } else {
-                try? FileManager.default.removeItem(at: tmpUrl)
-                done(false)
+                complete(false)
+              }
+            }
+            return
+          }
+          if let buf = readerOut.copyNextSampleBuffer() {
+            if !writerIn.append(buf) {
+              finished = true
+              reader.cancelReading()
+              writerIn.markAsFinished()
+              writer.cancelWriting()
+              complete(false)
+              return
+            }
+          } else {
+            finished = true
+            writerIn.markAsFinished()
+            writer.finishWriting {
+              if writer.status == .completed && reader.status == .completed {
+                do {
+                  try? FileManager.default.removeItem(at: outputUrl)
+                  try FileManager.default.moveItem(at: tmpUrl, to: outputUrl)
+                  complete(true)
+                } catch {
+                  complete(false)
+                }
+              } else {
+                complete(false)
               }
             }
             return
