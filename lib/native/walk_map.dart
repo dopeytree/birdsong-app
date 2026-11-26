@@ -8,13 +8,19 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show compute, consolidateHttpClientResponseBytes, kDebugMode, visibleForTesting;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
 import 'package:latlong2/latlong.dart' hide Path;
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:plate_share/plate_share.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, paperDeep, rule, sepia, serif;
 import '../settings.dart';
+import '../store/map_pins.dart';
+import '../ui/format.dart' show place;
+import '../ui/paper_surface.dart';
 import 'bird_records.dart';
 import 'engravings.dart';
 import 'wildlife.dart';
@@ -96,12 +102,17 @@ class Walk {
 
   /// The walk [selected] belongs to: its trail and the detections of
   /// [model] ('all' for every model) that have a place.
-  static Walk of(DetectionStore store, Session selected, String model) {
+  static Walk of(
+    DetectionStore store,
+    Session selected,
+    String model, {
+    bool Function(String common, String sci)? ignore,
+  }) {
     final parts = store.walkOf(selected);
     final heard = [
       for (final x in parts)
         for (final d in store.forPlate(model, session: x))
-          if (d.hasPlace) d
+          if (d.hasPlace && !(ignore?.call(d.common, d.sci) ?? false)) d
     ]..sort((a, b) => a.at.compareTo(b.at));
     LatLng? place;
     for (final x in parts) {
@@ -188,6 +199,14 @@ Rect birdNameBox(Offset heart, String name) {
   return Rect.fromLTWH(heart.dx - width / 2, heart.dy + 15, width, height);
 }
 
+/// Approximate box of a bird's name placed above the heart when below is taken.
+@visibleForTesting
+Rect birdNameBoxAbove(Offset heart, String name) {
+  const height = 15.0;
+  final width = name.length * 6.2 + 6;
+  return Rect.fromLTWH(heart.dx - width / 2, heart.dy - 15 - height, width, height);
+}
+
 /// Which names to keep when their boxes may overlap. [boxes] are in order
 /// (earliest heard first): the first of a cluster is kept, and a later
 /// name is dropped only when it overlaps one already kept (Ed, 23 Nov).
@@ -223,8 +242,10 @@ class WalkMap extends StatefulWidget {
     required this.onHold,
     this.landmarks,
     this.onFullScreen,
+    this.onPoi,
     this.fullScreen = false,
     this.settings,
+    this.pins,
     this.species = const [],
   });
 
@@ -240,11 +261,17 @@ class WalkMap extends StatefulWidget {
   /// Opens the map full screen, or (when [fullScreen]) closes it again.
   final VoidCallback? onFullScreen;
 
+  /// Optional POI ("Passed on the way") button beside Search at top left.
+  final VoidCallback? onPoi;
+
   /// This map is the full-screen one: its button closes it.
   final bool fullScreen;
 
   /// The app's settings, for the layers button (what the map shows).
   final Settings? settings;
+
+  /// Persistent auto-saved store of user-dropped pins on the map.
+  final MapPinStore? pins;
 
   /// The birds heard, most first, for "Bird records": which one's records
   /// (GBIF) to show.
@@ -293,6 +320,13 @@ class _WalkMapState extends State<WalkMap> {
   Timer? _tipTimer;
   Timer? _lookTimer;
 
+  // User-dropped pin selection & active drag state.
+  String? _selectedPinId;
+  String? _draggingPinId;
+  LatLng? _draggingPinAt;
+  bool _editingPinLabel = false;
+  final TextEditingController _pinLabelController = TextEditingController();
+
   int _focusSeen = 0;
 
   // ---- debug readout (debug builds only): where a slow frame's time goes
@@ -329,6 +363,7 @@ class _WalkMapState extends State<WalkMap> {
     }
     _focusSeen = widget.landmarks?.focusAsked ?? 0;
     widget.landmarks?.addListener(_landmarksChanged);
+    widget.pins?.addListener(_pinsChanged);
     _askLandmarks();
     _Kit.load().then((k) {
       if (!mounted) return;
@@ -348,6 +383,10 @@ class _WalkMapState extends State<WalkMap> {
       widget.landmarks?.addListener(_landmarksChanged);
       _focusSeen = widget.landmarks?.focusAsked ?? 0;
     }
+    if (widget.pins != old.pins) {
+      old.pins?.removeListener(_pinsChanged);
+      widget.pins?.addListener(_pinsChanged);
+    }
     _askLandmarks();
     // the pictures switched on: find them for this view
     if (wildlifePicturesOn && (widget.settings?.mapWildlife ?? true) && _critters.isEmpty && _ready) {
@@ -364,6 +403,8 @@ class _WalkMapState extends State<WalkMap> {
     if (kDebugMode) SchedulerBinding.instance.removeTimingsCallback(_timings);
     _probeTick?.cancel();
     widget.landmarks?.removeListener(_landmarksChanged);
+    widget.pins?.removeListener(_pinsChanged);
+    _pinLabelController.dispose();
     _lookTimer?.cancel();
     _contourTimer?.cancel();
     _tipTimer?.cancel();
@@ -500,22 +541,34 @@ class _WalkMapState extends State<WalkMap> {
         for (final b in widget.walk?.birds ?? const <WalkBird>[]) b.at,
       ];
 
-  /// The page's fitWalk(): the trail and the crosses, with a margin, no
-  /// closer than zoom 16; just the place at 14 when that is all there is.
+  bool _hasSpan(List<LatLng> pts) {
+    if (pts.length < 2) return false;
+    final first = pts.first;
+    for (var i = 1; i < pts.length; i++) {
+      if ((pts[i].latitude - first.latitude).abs() > 1e-6 ||
+          (pts[i].longitude - first.longitude).abs() > 1e-6) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Fit tightly to the walk trail and bird detections; fall back to the
+  /// session/station place when there are no trail or bird points.
   void _fit() {
     if (!mounted || !_ready) return;
     final w = widget.walk;
     _fittedTo = w?.key;
     final pts = _points;
     if (pts.isEmpty) {
-      if (w?.place != null) _map.move(w!.place!, 14);
+      if (w?.place != null) _map.move(w!.place!, 15);
       return;
     }
-    final pad = math.min(60.0, (math.min(widget.size.width, widget.size.height) / 6).roundToDouble());
-    if (pts.length == 1) {
-      _map.move(pts.first, 16);
+    final pad = math.min(48.0, (math.min(widget.size.width, widget.size.height) / 7).roundToDouble());
+    if (!_hasSpan(pts)) {
+      _map.move(pts.first, 17.5);
     } else {
-      _map.fitCamera(CameraFit.coordinates(coordinates: pts, padding: EdgeInsets.all(pad), maxZoom: 16));
+      _map.fitCamera(CameraFit.coordinates(coordinates: pts, padding: EdgeInsets.all(pad), maxZoom: 18));
     }
   }
 
@@ -690,7 +743,173 @@ class _WalkMapState extends State<WalkMap> {
     for (final a in [...?found?.worldHeritage, ...?found?.nature]) {
       if (inShape(ll, a.shape)) return _say(p, a.name, a.about, page: pageOf(a.name, a.about, a.link));
     }
-    if (_tip != null) setState(() => _tip = null);
+    if (_tip != null || _selectedPinId != null) {
+      setState(() {
+        _tip = null;
+        _selectedPinId = null;
+        _editingPinLabel = false;
+      });
+    }
+  }
+
+  void _pinsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _dropPinAt(LatLng at) {
+    final store = widget.pins;
+    if (store == null) return;
+    hapticTap();
+    final pin = store.drop(at);
+    setState(() {
+      _tip = null;
+      _selectedPinId = pin.id;
+      _editingPinLabel = false;
+    });
+  }
+
+  void _openPin(MapPin pin) {
+    hapticTap();
+    setState(() {
+      _tip = null;
+      if (_selectedPinId == pin.id) {
+        _selectedPinId = null;
+        _editingPinLabel = false;
+      } else {
+        _selectedPinId = pin.id;
+        _editingPinLabel = false;
+      }
+    });
+  }
+
+  Future<void> _navigateToPin(MapPin pin, {required bool googleMaps}) async {
+    hapticTap();
+    final lat = pin.lat.toStringAsFixed(6);
+    final lon = pin.lon.toStringAsFixed(6);
+    final q = Uri.encodeComponent(pin.label);
+    final uri = googleMaps
+        ? Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lon')
+        : Platform.isIOS || Platform.isMacOS
+            ? Uri.parse('https://maps.apple.com/?daddr=$lat,$lon&q=$q')
+            : Uri.parse('geo:$lat,$lon?q=$lat,$lon($q)');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _sharePin(MapPin pin, BuildContext anchorContext) async {
+    hapticTap();
+    final lat = pin.lat.toStringAsFixed(6);
+    final lon = pin.lon.toStringAsFixed(6);
+    final coords = place(pin.lat, pin.lon);
+    final q = Uri.encodeComponent(pin.label);
+    final text = '${pin.label} ($coords)\n'
+        'Apple Maps: https://maps.apple.com/?ll=$lat,$lon&q=$q\n'
+        'Google Maps: https://www.google.com/maps/search/?api=1&query=$lat,$lon';
+    final box = anchorContext.findRenderObject() as RenderBox?;
+    final from = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+    var shared = false;
+    if (PlateShare.supported) {
+      try {
+        shared = await PlateShare.shareText(text, from: from);
+      } catch (e) {
+        debugPrint('pin share: $e');
+      }
+    }
+    if (!shared) {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pin link copied to clipboard.')));
+      }
+    }
+  }
+
+  List<Marker> _pinMarkers() {
+    final pins = widget.pins?.pins ?? const <MapPin>[];
+    if (pins.isEmpty) return const [];
+    return [
+      for (final p in pins)
+        () {
+          final dragging = _draggingPinId == p.id;
+          final selected = _selectedPinId == p.id;
+          final point = dragging && _draggingPinAt != null ? _draggingPinAt! : p.point;
+          return Marker(
+            point: point,
+            width: 140,
+            height: 68,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _openPin(p),
+                  onPanStart: (_) {
+                    if (!_ready) return;
+                    hapticTap();
+                    widget.onHold(true);
+                    setState(() {
+                      _draggingPinId = p.id;
+                      _draggingPinAt = p.point;
+                      _selectedPinId = p.id;
+                      _editingPinLabel = false;
+                    });
+                  },
+                  onPanUpdate: (d) {
+                    if (!_ready || _draggingPinId != p.id) return;
+                    final cur = _draggingPinAt ?? p.point;
+                    final curPx = _map.camera.latLngToScreenOffset(cur);
+                    final nextLl = _map.camera.screenOffsetToLatLng(curPx + d.delta);
+                    setState(() => _draggingPinAt = nextLl);
+                  },
+                  onPanEnd: (_) {
+                    final at = _draggingPinAt;
+                    widget.onHold(false);
+                    setState(() {
+                      _draggingPinId = null;
+                      _draggingPinAt = null;
+                    });
+                    if (at != null) {
+                      widget.pins?.move(p.id, at);
+                    }
+                  },
+                  onPanCancel: () {
+                    widget.onHold(false);
+                    setState(() {
+                      _draggingPinId = null;
+                      _draggingPinAt = null;
+                    });
+                  },
+                  child: AnimatedSlide(
+                    offset: dragging ? const Offset(0, -0.25) : Offset.zero,
+                    duration: const Duration(milliseconds: 120),
+                    child: SizedBox(
+                      width: 38,
+                      height: 38,
+                      child: Center(
+                        child: Icon(
+                          Symbols.push_pin,
+                          fill: 1.0,
+                          size: dragging ? 28 : (selected ? 25 : 22),
+                          color: selected || dragging ? madder : ink,
+                          shadows: const [
+                            Shadow(color: paper, blurRadius: 5),
+                            Shadow(color: Color(0x442A241C), offset: Offset(0, 2), blurRadius: 4),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 46,
+                  child: IgnorePointer(
+                    child: _Halo(p.label, 11, selected ? madder : ink, halo: 1.6),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }(),
+    ];
   }
 
   /// The label at [at]: [title], then [sub]; with [page], a last line that
@@ -762,34 +981,108 @@ class _WalkMapState extends State<WalkMap> {
             }(),
       ];
 
-  List<Marker> _ends() {
+  /// Decide which bird names show (and whether below or above their heart), plus
+  /// the screen rects of all bird hearts and placed bird names so Start/End
+  /// labels can dodge or hide when overlapped.
+  ({Map<String, bool> placement, List<Rect> obstacles}) _birdLabelLayout() {
+    final birds = widget.walk?.birds ?? const <WalkBird>[];
+    final seen = <String>{};
+    final earliest = <WalkBird>[];
+    for (final b in birds) {
+      if (seen.add(b.sci)) earliest.add(b);
+    }
+    final placement = <String, bool>{}; // sci -> true (below) / false (above)
+    final obstacles = <Rect>[];
+    if (!_ready) {
+      for (final b in earliest) {
+        placement[b.sci] = true;
+      }
+      return (placement: placement, obstacles: obstacles);
+    }
+    final heartRects = [
+      for (final b in earliest)
+        Rect.fromCenter(center: _map.camera.latLngToScreenOffset(b.at), width: 22, height: 22),
+    ];
+    obstacles.addAll(heartRects);
+    final placedNames = <Rect>[];
+    for (var i = 0; i < earliest.length; i++) {
+      final b = earliest[i];
+      final pt = _map.camera.latLngToScreenOffset(b.at);
+      final below = birdNameBox(pt, b.common);
+      final above = birdNameBoxAbove(pt, b.common);
+      bool collides(Rect r) {
+        if (placedNames.any(r.overlaps)) return true;
+        for (var j = 0; j < heartRects.length; j++) {
+          if (j != i && heartRects[j].overlaps(r)) return true;
+        }
+        return false;
+      }
+
+      if (!collides(below)) {
+        placement[b.sci] = true;
+        placedNames.add(below);
+        obstacles.add(below);
+      } else if (!collides(above)) {
+        placement[b.sci] = false;
+        placedNames.add(above);
+        obstacles.add(above);
+      }
+    }
+    return (placement: placement, obstacles: obstacles);
+  }
+
+  List<Marker> _ends(List<Rect> birdObstacles) {
     final w = widget.walk;
     if (w == null) return const [];
     final line = w.trail;
     final a = line.isNotEmpty ? line.first : w.place;
     String time(DateTime? t) => t == null ? '' : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-    Marker end(LatLng at, bool start, String label, String when, {bool station = false}) => Marker(
-          point: at,
-          width: 80,
-          height: 56,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              GestureDetector(
-                onTapUp: (d) {
-                  final box = context.findRenderObject() as RenderBox?;
-                  final local = box?.globalToLocal(d.globalPosition) ?? Offset.zero;
-                  _say(local, label, when);
-                },
-                // Start +, finish ✕, in ink (Ed, Nov 2026); a station keeps its ring.
-                child: CustomPaint(
-                    size: const Size.square(22),
-                    painter: station ? const _EndPainter(false) : _StartFinishPainter(start)),
+    Marker end(LatLng at, bool start, String label, String when, {bool station = false}) {
+      // Check if a bird heart or bird name covers the Start/End label:
+      // try below, then above, else hide the word cleanly.
+      bool? labelBelow = true;
+      if (!station && _ready && birdObstacles.isNotEmpty) {
+        final pt = _map.camera.latLngToScreenOffset(at);
+        final below = birdNameBox(pt, label);
+        final above = birdNameBoxAbove(pt, label);
+        if (!birdObstacles.any(below.overlaps)) {
+          labelBelow = true;
+        } else if (!birdObstacles.any(above.overlaps)) {
+          labelBelow = false;
+        } else {
+          labelBelow = null;
+        }
+      }
+      return Marker(
+        point: at,
+        width: 80,
+        height: 64,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            GestureDetector(
+              onTapUp: (d) {
+                final box = context.findRenderObject() as RenderBox?;
+                final local = box?.globalToLocal(d.globalPosition) ?? Offset.zero;
+                _say(local, label, when);
+              },
+              // Start +, finish ✕, in ink (Ed, Nov 2026); a station keeps its ring.
+              child: CustomPaint(
+                  size: const Size.square(22),
+                  painter: station ? const _EndPainter(false) : _StartFinishPainter(start)),
+            ),
+            if (labelBelow != null)
+              Positioned(
+                top: labelBelow ? 32 + 12 : null,
+                bottom: labelBelow ? null : 32 + 12,
+                child: IgnorePointer(child: _Halo(label, 11, ink, halo: 1.6)),
               ),
-              Positioned(top: 28 + 11, child: IgnorePointer(child: _Halo(label, 11, ink, halo: 1.6))),
-            ],
-          ),
-        );
+          ],
+        ),
+      );
+    }
+
     if (w.station != null) {
       return [if (w.place != null) end(w.place!, false, w.station!, 'The station', station: true)];
     }
@@ -803,7 +1096,7 @@ class _WalkMapState extends State<WalkMap> {
   static const _natureEdge = Color(0xFF5F7D4C), _natureWash = Color(0xFF7F9A6A);
 
   /// Over the wood's #c2cc9f and its trees: a little deeper and older.
-  static const _ancient = Color(0x993F5A2A); // #3F5A2A at 60% (Ed, 23 Nov: "C very deep")
+  static const _ancient = Color(0x523F5A2A); // #3F5A2A at 32% (lightened from 60%)
   static const _monument = Color(0xFF8A5A3A), _building = Color(0xFF6B4A33), _wiki = Color(0xFF3D5566);
 
   TextStyle _labelStyle(Color c) => TextStyle(
@@ -1043,32 +1336,15 @@ class _WalkMapState extends State<WalkMap> {
   /// the earliest; a tap on a name opens the card, as the heart does
   /// (Ed, 23 Nov). Re-decided when the zoom changes ([_moved] rebuilds)
   /// and once the camera is ready.
-  List<Marker> _birds() {
+  List<Marker> _birds(Map<String, bool> placement) {
     final birds = widget.walk?.birds ?? const <WalkBird>[];
     final seen = <String>{};
-    final earliest = <WalkBird>[];
-    for (final b in birds) {
-      if (seen.add(b.sci)) earliest.add(b);
-    }
-    // Screen positions are a pure translation while panning, so overlap
-    // only changes with the zoom. [_moved] rebuilds when it does.
-    final showName = <String>{};
-    if (!_ready) {
-      for (final b in earliest) {
-        showName.add(b.sci);
-      }
-    } else {
-      final boxes = [for (final b in earliest) birdNameBox(_map.camera.latLngToScreenOffset(b.at), b.common)];
-      for (final i in birdNamesToKeep(boxes)) {
-        showName.add(earliest[i].sci);
-      }
-    }
-    seen.clear();
     final firsts = <Marker>[], rest = <Marker>[];
     for (final b in birds) {
       final first = seen.add(b.sci);
       if (!widget.allBirds && !first) continue;
       final size = first ? 24.0 : 18.0;
+      final nameBelow = placement[b.sci];
       final m = Marker(
         point: b.at,
         width: 140,
@@ -1092,9 +1368,11 @@ class _WalkMapState extends State<WalkMap> {
             ),
             // Names in ink, apart from the red hearts (Ed, Nov 2026; were madder).
             // A tap on the name opens the card, as the heart does (Ed, 23 Nov).
-            if (first && showName.contains(b.sci))
+            // Renders below the heart, or above if below would overlap.
+            if (first && nameBelow != null)
               Positioned(
-                top: 32 + 15,
+                top: nameBelow ? 32 + 15 : null,
+                bottom: nameBelow ? null : 32 + 15,
                 child: Semantics(
                   button: true,
                   label: '${b.common}: open its card',
@@ -1205,13 +1483,15 @@ class _WalkMapState extends State<WalkMap> {
     final kit = _kit, w = widget.walk, note = _note();
     final layers = _layers();
     final pts = _points;
-    final initial = pts.length > 1
+    final hasSpan = _hasSpan(pts);
+    final pad = math.min(48.0, (math.min(widget.size.width, widget.size.height) / 7).roundToDouble());
+    final initial = hasSpan
         ? CameraFit.coordinates(
             coordinates: pts,
-            padding: EdgeInsets.all(math.min(60.0, (math.min(widget.size.width, widget.size.height) / 6).roundToDouble())),
-            maxZoom: 16)
+            padding: EdgeInsets.all(pad),
+            maxZoom: 18)
         : null;
-    final center = pts.length == 1 ? pts.first : (w?.place ?? const LatLng(52.5, -1.5));
+    final center = pts.isNotEmpty ? pts.first : (w?.place ?? const LatLng(52.5, -1.5));
     return Listener(
       onPointerDown: (e) {
         _fingers.add(e.pointer);
@@ -1235,16 +1515,18 @@ class _WalkMapState extends State<WalkMap> {
                   mapController: _map,
                   options: MapOptions(
                     initialCenter: center,
-                    initialZoom: pts.length == 1 ? 16 : (w?.place != null ? 14 : 5),
+                    initialZoom: pts.isNotEmpty && !hasSpan ? 17.5 : (w?.place != null ? 15 : 5),
                     initialCameraFit: initial,
                     maxZoom: 18,
                     backgroundColor: paper,
                     interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
                     onMapReady: () {
-                      // the camera exists: decide which bird names overlap (Ed, 23 Nov)
+                      // the camera exists: fit tightly to the trail and decide
+                      // which bird names overlap (Ed, 23 Nov)
                       if (!mounted) return;
+                      _ready = true;
+                      if (!_dragged) _fit();
                       setState(() {
-                        _ready = true;
                         _fittedTo = w?.key;
                         _zoom = _map.camera.zoom;
                       });
@@ -1254,6 +1536,7 @@ class _WalkMapState extends State<WalkMap> {
                     },
                     onPositionChanged: _moved,
                     onTap: _tapped,
+                    onLongPress: (_, ll) => _dropPinAt(ll),
                   ),
                   children: [
                     vt.VectorTileLayer(
@@ -1341,60 +1624,109 @@ class _WalkMapState extends State<WalkMap> {
                           pattern: const StrokePattern.dotted(spacingFactor: 2.2),
                         ),
                       ]),
-                    MarkerLayer(markers: _ends()),
-                    MarkerLayer(markers: _birds()),
+                    () {
+                      final layout = _birdLabelLayout();
+                      return MarkerLayer(markers: [
+                        ..._ends(layout.obstacles),
+                        ..._birds(layout.placement),
+                        ..._pinMarkers(),
+                      ]);
+                    }(),
                   ],
                 ),
               if (kit != null)
-                Positioned(
-                  left: 10,
-                  top: 10,
-                  child: _ZoomButtons(
-                    map: _map,
-                    home: w == null || (w.trail.isEmpty && w.birds.isEmpty && w.place == null) ? null : _home,
-                    homeTip: w?.station != null ? 'Back to the station' : 'Back to the walk',
-                    layers: widget.settings == null ? null : () => setState(() => _layersOpen = !_layersOpen),
-                  ),
-                ),
-              if (kit != null && _layersOpen && widget.settings != null)
-                Positioned(
-                  left: 46,
-                  top: 10,
-                  child: _LayersPanel(
-                    settings: widget.settings!,
-                    species: widget.species,
-                    onClose: () => setState(() => _layersOpen = false),
-                  ),
-                ),
+                () {
+                  final pad = MediaQuery.paddingOf(context);
+                  final topEdge = widget.fullScreen
+                      ? (pad.top > 24 ? math.max(16.0, pad.top - 14.0) : 10.0)
+                      : 10.0;
+                  final rightEdge = widget.fullScreen
+                      ? (pad.right > 16 ? math.max(14.0, pad.right - 10.0) : 12.0)
+                      : 10.0;
+                  return Positioned(
+                    right: rightEdge,
+                    top: widget.fullScreen ? topEdge + 50 : 10,
+                    child: _ZoomButtons(
+                      map: _map,
+                      style: widget.settings?.mapButtonStyle ?? 'ink',
+                      home: w == null || (w.trail.isEmpty && w.birds.isEmpty && w.place == null) ? null : _home,
+                      homeTip: w?.station != null ? 'Back to the station' : 'Back to the walk',
+                      layers: widget.settings == null ? null : () => setState(() => _layersOpen = !_layersOpen),
+                      onDropPin: widget.pins == null
+                          ? null
+                          : () => _dropPinAt(_ready ? _map.camera.center : center),
+                    ),
+                  );
+                }(),
               if (kit != null)
-                Positioned(
-                  right: 10,
-                  top: 10,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      PlaceSearch(
-                        // 70 for the zoom column and margins; 36 more (31 + a
-                        // 5 px gap) when full screen sits to the right (Ed, 23 Nov).
-                        width: math.min(
-                          280.0,
-                          math.max(0.0, widget.size.width - 70 - (widget.onFullScreen == null ? 0 : 36)),
+                () {
+                  final pad = MediaQuery.paddingOf(context);
+                  final topEdge = widget.fullScreen
+                      ? (pad.top > 24 ? math.max(16.0, pad.top - 14.0) : 10.0)
+                      : 10.0;
+                  final leftEdge = widget.fullScreen
+                      ? (pad.left > 16 ? math.max(14.0, pad.left - 10.0) : 12.0)
+                      : 10.0;
+                  return Positioned(
+                    left: leftEdge,
+                    top: topEdge + (widget.fullScreen ? 6 : 0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        if (widget.onPoi != null) ...[
+                          _PoiButton(
+                            onTap: widget.onPoi!,
+                            style: widget.settings?.mapButtonStyle ?? 'ink',
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        PlaceSearch(
+                          width: math.min(
+                            220.0,
+                            math.max(100.0, widget.size.width - 28 - 48 - (widget.onPoi != null ? 44 : 0)),
+                          ),
+                          style: widget.settings?.mapButtonStyle ?? 'ink',
+                          near: () => _ready ? _map.camera.center : center,
+                          onPick: _goTo,
                         ),
-                        near: () => _ready ? _map.camera.center : center,
-                        onPick: _goTo,
-                      ),
-                      if (widget.onFullScreen != null) ...[
-                        const SizedBox(width: 5),
-                        _FullScreenButton(isFull: widget.fullScreen, onTap: widget.onFullScreen!),
                       ],
-                    ],
+                    ),
+                  );
+                }(),
+              if (kit != null && _layersOpen && widget.settings != null)
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _layersOpen = false),
+                    child: Container(
+                      color: const Color(0x402A241C),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.fromLTRB(24, 56, 24, 56),
+                      child: GestureDetector(
+                        onTap: () {},
+                        child: SingleChildScrollView(
+                          child: _LayersPanel(
+                            settings: widget.settings!,
+                            species: widget.species,
+                            onClose: () => setState(() => _layersOpen = false),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               if (kit != null)
                 Positioned(
-                    right: 0,
-                    bottom: 0,
+                    left: widget.fullScreen
+                        ? ((MediaQuery.paddingOf(context).left > 16
+                                ? math.max(14.0, MediaQuery.paddingOf(context).left - 10.0)
+                                : 12.0) +
+                            46)
+                        : 6,
+                    bottom: widget.fullScreen
+                        ? (MediaQuery.paddingOf(context).bottom > 0 ? 24.0 : 18.0)
+                        : 10,
                     child: _Credit(_credit +
                         (widget.landmarks != null ? _extrasCredit() : '') +
                         (_recordsKey != null ? '\nBird records: GBIF.org' : '') +
@@ -1432,6 +1764,164 @@ class _WalkMapState extends State<WalkMap> {
                   ),
                 ),
               if (_tip != null) _tipBox(_tip!),
+              if (_selectedPinId != null)
+                () {
+                  final pin = widget.pins?.pins.where((p) => p.id == _selectedPinId).firstOrNull;
+                  if (pin == null) return const SizedBox.shrink();
+                  return _pinBox(pin);
+                }(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Floating frosted-paper action card for a selected dropped pin: rename,
+  /// navigate in Apple Maps / Google Maps, share, or delete.
+  Widget _pinBox(MapPin pin) {
+    final pad = MediaQuery.paddingOf(context);
+    final bottomOffset = (widget.fullScreen ? (pad.bottom > 0 ? 18.0 : 12.0) : 12.0) + 52.0;
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: bottomOffset,
+      child: Center(
+        child: PaperSurface(
+          borderRadius: 16,
+          constraints: const BoxConstraints(maxWidth: 340),
+          padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Symbols.push_pin, fill: 1.0, size: 17, color: madder),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _editingPinLabel
+                        ? TextField(
+                            controller: _pinLabelController,
+                            autofocus: true,
+                            style: const TextStyle(fontFamily: caps, fontSize: 14.5, color: ink),
+                            decoration: const InputDecoration(isDense: true, hintText: 'Pin name'),
+                            onSubmitted: (v) {
+                              widget.pins?.rename(pin.id, v);
+                              setState(() => _editingPinLabel = false);
+                            },
+                          )
+                        : GestureDetector(
+                            onTap: () {
+                              _pinLabelController.text = pin.label;
+                              setState(() => _editingPinLabel = true);
+                            },
+                            child: Text(
+                              pin.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontFamily: caps, fontSize: 15, letterSpacing: 0.5, color: ink),
+                            ),
+                          ),
+                  ),
+                  IconButton(
+                    constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                    padding: EdgeInsets.zero,
+                    iconSize: 17,
+                    tooltip: _editingPinLabel ? 'Save name' : 'Rename pin',
+                    icon: Icon(_editingPinLabel ? Symbols.check : Symbols.edit, color: ink),
+                    onPressed: () {
+                      if (_editingPinLabel) {
+                        widget.pins?.rename(pin.id, _pinLabelController.text);
+                        setState(() => _editingPinLabel = false);
+                      } else {
+                        _pinLabelController.text = pin.label;
+                        setState(() => _editingPinLabel = true);
+                      }
+                    },
+                  ),
+                  IconButton(
+                    constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                    padding: EdgeInsets.zero,
+                    iconSize: 18,
+                    tooltip: 'Close',
+                    icon: const Icon(Symbols.close, color: ink),
+                    onPressed: () => setState(() {
+                      _selectedPinId = null;
+                      _editingPinLabel = false;
+                    }),
+                  ),
+                ],
+              ),
+              Text(
+                '${place(pin.lat, pin.lon)} · drag pin to move',
+                style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12.5, color: sepia),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  _pinAction(
+                    icon: Symbols.directions,
+                    label: Platform.isIOS || Platform.isMacOS ? 'Apple Maps' : 'Navigate',
+                    onTap: () => _navigateToPin(pin, googleMaps: false),
+                  ),
+                  _pinAction(
+                    icon: Symbols.near_me,
+                    label: 'Google Maps',
+                    onTap: () => _navigateToPin(pin, googleMaps: true),
+                  ),
+                  Builder(
+                    builder: (bc) => _pinAction(
+                      icon: Symbols.ios_share,
+                      label: 'Share',
+                      onTap: () => _sharePin(pin, bc),
+                    ),
+                  ),
+                  _pinAction(
+                    icon: Symbols.delete,
+                    label: 'Remove',
+                    color: madder,
+                    onTap: () {
+                      hapticTap();
+                      widget.pins?.remove(pin.id);
+                      setState(() {
+                        _selectedPinId = null;
+                        _editingPinLabel = false;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pinAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color color = ink,
+  }) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        hoverColor: ink.withValues(alpha: 0.08),
+        highlightColor: ink.withValues(alpha: 0.12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 4),
+              Text(label, style: TextStyle(fontFamily: caps, fontSize: 11.5, letterSpacing: 0.4, color: color)),
             ],
           ),
         ),
@@ -1445,9 +1935,6 @@ class _WalkMapState extends State<WalkMap> {
         left: (t.at.dx - 120).clamp(8.0, math.max(8.0, widget.size.width - 248)),
         top: t.at.dy > (t.page != null ? 98 : 80) ? t.at.dy - (t.page != null ? 92 : 70) : t.at.dy + 22,
         width: 240,
-        // In the app's dialog look (Ed, Nov 2026: as the download and model
-        // update dialogs): the deeper paper, rounded, a soft shadow, no ring.
-        // A tap on it closes it; its link still opens the page.
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () {
@@ -1455,12 +1942,8 @@ class _WalkMapState extends State<WalkMap> {
             setState(() => _tip = null);
           },
           child: Center(
-            child: Container(
-              decoration: BoxDecoration(
-                color: paperDeep,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 6), blurRadius: 18)],
-              ),
+            child: PaperSurface(
+              borderRadius: 16,
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 11),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Text(t.title,
@@ -1726,18 +2209,55 @@ class _StartFinishPainter extends CustomPainter {
   bool shouldRepaint(_StartFinishPainter old) => old.start != start;
 }
 
-/// Engraved grey for the map's controls (Ed, 23 Nov; was paper).
-const _controlFill = Color(0xFF8C877D);
-const _controlRule = Color(0x59EEE5CE);
-const _controlRadius = BorderRadius.all(Radius.circular(4));
-const _controlShadow = BoxShadow(color: Color(0x6B3C280A), offset: Offset(0, 3), blurRadius: 10);
+/// Style tokens for map controls: 'ink' (all-black icons with hover/touch-only
+/// background, matching the rest of the app), 'paper' (permanent round warm
+/// paper background with madder icons), or 'madder' (solid madder).
+({Color bg, Color fg, Color divider, BorderRadius radius, Border? border, bool flat}) _mapControlTheme(String style) {
+  if (style == 'madder') {
+    return (
+      bg: madder,
+      fg: paper,
+      divider: const Color(0x59EEE5CE),
+      radius: const BorderRadius.all(Radius.circular(4)),
+      border: null,
+      flat: false,
+    );
+  }
+  if (style == 'paper') {
+    return (
+      bg: paper.withValues(alpha: 0.94),
+      fg: madder,
+      divider: paperDeep,
+      radius: const BorderRadius.all(Radius.circular(18)),
+      border: Border.all(color: paperDeep),
+      flat: false,
+    );
+  }
+  return (
+    bg: Colors.transparent,
+    fg: ink,
+    divider: Colors.transparent,
+    radius: const BorderRadius.all(Radius.circular(20)),
+    border: null,
+    flat: true,
+  );
+}
 
-/// The map's + and − at the top left, one engraved grey column. Full
-/// screen sits by the search, not here (Ed, 23 Nov).
+const _controlShadow = BoxShadow(color: Color(0x4D3C280A), offset: Offset(0, 2), blurRadius: 8);
+
+/// The map's + / − / reset / layers / drop-pin stack at the top right.
 class _ZoomButtons extends StatelessWidget {
-  const _ZoomButtons({required this.map, this.home, this.homeTip = '', this.layers});
+  const _ZoomButtons({
+    required this.map,
+    this.style = 'ink',
+    this.home,
+    this.homeTip = '',
+    this.layers,
+    this.onDropPin,
+  });
 
   final MapController map;
+  final String style;
 
   /// Back to the walk or the station; null when there is nowhere to go.
   final VoidCallback? home;
@@ -1746,9 +2266,64 @@ class _ZoomButtons extends StatelessWidget {
   /// Opens the layers panel.
   final VoidCallback? layers;
 
+  /// Drops a draggable saved pin at the current map centre.
+  final VoidCallback? onDropPin;
+
   @override
   Widget build(BuildContext context) {
-    Widget button(String label, String tip, double by) => Tooltip(
+    final t = _mapControlTheme(style);
+    if (t.flat) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+            padding: EdgeInsets.zero,
+            tooltip: 'Zoom in',
+            icon: Icon(Symbols.add, size: 22, color: t.fg),
+            onPressed: () {
+              final c = map.camera;
+              map.move(c.center, (c.zoom + 1).clamp(2.0, 18.0));
+            },
+          ),
+          IconButton(
+            constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+            padding: EdgeInsets.zero,
+            tooltip: 'Zoom out',
+            icon: Icon(Symbols.remove, size: 22, color: t.fg),
+            onPressed: () {
+              final c = map.camera;
+              map.move(c.center, (c.zoom - 1).clamp(2.0, 18.0));
+            },
+          ),
+          if (home != null)
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+              padding: EdgeInsets.zero,
+              tooltip: homeTip,
+              icon: Icon(Symbols.refresh, size: 20, color: t.fg),
+              onPressed: home,
+            ),
+          if (layers != null)
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+              padding: EdgeInsets.zero,
+              tooltip: 'Layers',
+              icon: Icon(Symbols.layers, size: 20, color: t.fg),
+              onPressed: layers,
+            ),
+          if (onDropPin != null)
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+              padding: EdgeInsets.zero,
+              tooltip: 'Drop a pin here',
+              icon: Icon(Symbols.add_location_alt, size: 20, color: t.fg),
+              onPressed: onDropPin,
+            ),
+        ],
+      );
+    }
+    Widget button(IconData icon, String tip, double by) => Tooltip(
           message: tip,
           child: InkWell(
             onTap: () {
@@ -1756,25 +2331,25 @@ class _ZoomButtons extends StatelessWidget {
               map.move(c.center, (c.zoom + by).clamp(2.0, 18.0));
             },
             child: SizedBox(
-              width: 29,
-              height: 29,
-              child: Center(child: Text(label, style: const TextStyle(fontSize: 18, height: 1, color: paper))),
+              width: 34,
+              height: 34,
+              child: Center(child: Icon(icon, size: 19, color: t.fg)),
             ),
           ),
         );
-    const rule = SizedBox(width: 29, height: 1, child: ColoredBox(color: _controlRule));
+    final sep = SizedBox(width: 24, height: 1, child: ColoredBox(color: t.divider));
     return DecoratedBox(
-      decoration: const BoxDecoration(borderRadius: _controlRadius, boxShadow: [_controlShadow]),
+      decoration: BoxDecoration(borderRadius: t.radius, border: t.border, boxShadow: const [_controlShadow]),
       child: Material(
-        color: _controlFill,
-        borderRadius: _controlRadius,
+        color: t.bg,
+        borderRadius: t.radius,
         clipBehavior: Clip.antiAlias,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          button('+', 'Zoom in', 1),
-          rule,
-          button('−', 'Zoom out', -1),
+          button(Symbols.add, 'Zoom in', 1),
+          sep,
+          button(Symbols.remove, 'Zoom out', -1),
           if (home != null) ...[
-            rule,
+            sep,
             Tooltip(
               message: homeTip,
               child: Semantics(
@@ -1782,17 +2357,17 @@ class _ZoomButtons extends StatelessWidget {
                 label: homeTip,
                 child: InkWell(
                   onTap: home,
-                  child: const SizedBox(
-                    width: 29,
-                    height: 29,
-                    child: Center(child: Icon(Icons.refresh, size: 17, color: paper)),
+                  child: SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: Center(child: Icon(Symbols.refresh, size: 18, color: t.fg)),
                   ),
                 ),
               ),
             ),
           ],
           if (layers != null) ...[
-            rule,
+            sep,
             Tooltip(
               message: 'Layers',
               child: Semantics(
@@ -1800,10 +2375,28 @@ class _ZoomButtons extends StatelessWidget {
                 label: 'What the map shows',
                 child: InkWell(
                   onTap: layers,
-                  child: const SizedBox(
-                    width: 29,
-                    height: 29,
-                    child: Center(child: Icon(Icons.layers_outlined, size: 17, color: paper)),
+                  child: SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: Center(child: Icon(Symbols.layers, size: 18, color: t.fg)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (onDropPin != null) ...[
+            sep,
+            Tooltip(
+              message: 'Drop a pin here',
+              child: Semantics(
+                button: true,
+                label: 'Drop a pin here',
+                child: InkWell(
+                  onTap: onDropPin,
+                  child: SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: Center(child: Icon(Symbols.add_location_alt, size: 18, color: t.fg)),
                   ),
                 ),
               ),
@@ -1815,48 +2408,44 @@ class _ZoomButtons extends StatelessWidget {
   }
 }
 
-/// Full screen, to the right of the search: the same engraved grey, with
-/// the search bar's paper hairline (Ed, 23 Nov).
-class _FullScreenButton extends StatelessWidget {
-  const _FullScreenButton({required this.isFull, required this.onTap});
+/// Route / POI ("Passed on the way") icon button to the left of Search at top left.
+class _PoiButton extends StatelessWidget {
+  const _PoiButton({required this.onTap, this.style = 'ink'});
 
-  final bool isFull;
   final VoidCallback onTap;
+  final String style;
 
   @override
   Widget build(BuildContext context) {
-    final tip = isFull ? 'Close the full-screen map' : 'Full screen';
-    final label = isFull ? 'Close the full-screen map' : 'Show the map full screen';
+    final t = _mapControlTheme(style);
+    if (t.flat) {
+      return IconButton(
+        constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+        padding: EdgeInsets.zero,
+        tooltip: 'Points of interest passed on the way',
+        icon: Icon(Symbols.route, size: 21, color: t.fg),
+        onPressed: onTap,
+      );
+    }
     return Tooltip(
-      message: tip,
+      message: 'Points of interest passed on the way',
       child: Semantics(
         button: true,
-        label: label,
+        label: 'POI',
         child: DecoratedBox(
-          decoration: const BoxDecoration(borderRadius: _controlRadius, boxShadow: [_controlShadow]),
+          decoration: BoxDecoration(borderRadius: t.radius, border: t.border, boxShadow: const [_controlShadow]),
           child: Material(
-            color: _controlFill,
-            borderRadius: _controlRadius,
+            color: t.bg,
+            borderRadius: t.radius,
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: onTap,
               child: SizedBox(
-                width: 31,
-                height: 31,
-                child: Stack(alignment: Alignment.center, children: [
-                  const Positioned.fill(
-                    child: Padding(
-                      padding: EdgeInsets.all(2),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(3)),
-                          border: Border.fromBorderSide(BorderSide(color: Color(0x8CEEE5CE), width: 0.8)),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Icon(isFull ? Icons.fullscreen_exit : Icons.fullscreen, size: 19, color: paper),
-                ]),
+                width: 34,
+                height: 34,
+                child: Center(
+                  child: Icon(Symbols.route, size: 19, color: t.fg),
+                ),
               ),
             ),
           ),
@@ -1885,18 +2474,22 @@ class _CreditState extends State<_Credit> {
         onTap: () => setState(() => _open = !_open),
         child: Container(
           constraints: const BoxConstraints(maxWidth: 320),
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-          color: paper.withValues(alpha: .85),
-          child: Text(_open ? widget.text : 'ⓘ',
-              style: const TextStyle(fontFamily: serif, fontSize: 10, color: ink, height: 1.3)),
+          padding: EdgeInsets.symmetric(horizontal: _open ? 8 : 4, vertical: _open ? 5 : 4),
+          decoration: BoxDecoration(
+            color: paper.withValues(alpha: _open ? 0.94 : 0.78),
+            borderRadius: BorderRadius.circular(_open ? 10 : 12),
+            border: _open ? Border.all(color: rule.withValues(alpha: 0.55)) : null,
+          ),
+          child: _open
+              ? Text(widget.text,
+                  style: const TextStyle(fontFamily: serif, fontSize: 10.5, color: ink, height: 1.35))
+              : const Icon(Symbols.info, size: 15, color: ink),
         ),
       );
 }
 
-/// What the map shows: a box of switches beside the map's buttons. Each
-/// kind of extra on or off (off, it isn't looked up either), and the bird
-/// whose records (GBIF) are drawn. Turning any landmark on turns the
-/// landmarks on (Settings > Map), and the last off turns them off.
+/// What the map shows: a modern translucent rounded card matching the filter
+/// panel. Each kind of extra switches on/off, plus GBIF bird records.
 class _LayersPanel extends StatelessWidget {
   const _LayersPanel({required this.settings, required this.species, required this.onClose});
 
@@ -1917,74 +2510,80 @@ class _LayersPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = settings, on = s.mapExtras;
-    Widget row(String title, String sub, bool value, void Function(Settings s, bool v) put) => InkWell(
-          onTap: () => _set((x) {
-            // with the landmarks off, a switch turns that one on alone
-            if (!on) {
-              x
-                ..mapShowHeritage = false
-                ..mapShowNature = false
-                ..mapShowAncient = false
-                ..mapShowWiki = false
-                ..mapShowReserves = false
-                ..mapShowHides = false;
-            }
-            put(x, !(on && value));
-          }),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
-            child: Row(children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, style: const TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
-                  Text(sub,
-                      style: const TextStyle(
-                          fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia, height: 1.2)),
-                ]),
-              ),
-              Transform.scale(
-                scale: .75,
-                child: Switch(
-                  value: on && value,
-                  activeTrackColor: madder,
-                  onChanged: (v) => _set((x) {
-                    if (!on) {
-                      x
-                        ..mapShowHeritage = false
-                        ..mapShowNature = false
-                        ..mapShowAncient = false
-                        ..mapShowWiki = false
-                        ..mapShowReserves = false
-                        ..mapShowHides = false;
-                    }
-                    put(x, v);
-                  }),
+    Widget row(String title, String sub, bool value, void Function(Settings s, bool v) put) => Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            hoverColor: ink.withValues(alpha: 0.08),
+            highlightColor: ink.withValues(alpha: 0.12),
+            onTap: () => _set((x) {
+              // with the landmarks off, a switch turns that one on alone
+              if (!on) {
+                x
+                  ..mapShowHeritage = false
+                  ..mapShowNature = false
+                  ..mapShowAncient = false
+                  ..mapShowWiki = false
+                  ..mapShowReserves = false
+                  ..mapShowHides = false;
+              }
+              put(x, !(on && value));
+            }),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
+              child: Row(children: [
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title, style: const TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
+                    Text(sub,
+                        style: const TextStyle(
+                            fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia, height: 1.2)),
+                  ]),
                 ),
-              ),
-            ]),
+                Transform.scale(
+                  scale: .78,
+                  child: Switch(
+                    value: on && value,
+                    onChanged: (v) => _set((x) {
+                      if (!on) {
+                        x
+                          ..mapShowHeritage = false
+                          ..mapShowNature = false
+                          ..mapShowAncient = false
+                          ..mapShowWiki = false
+                          ..mapShowReserves = false
+                          ..mapShowHides = false;
+                      }
+                      put(x, v);
+                    }),
+                  ),
+                ),
+              ]),
+            ),
           ),
         );
     final chosen = species.any((b) => b.sci == s.mapRecordsSci) ? s.mapRecordsSci : '';
-    return Container(
-      width: 264,
-      decoration: BoxDecoration(color: paper, border: Border.all(color: paperDeep), boxShadow: const [
-        BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 6), blurRadius: 18),
-      ]),
+    return PaperSurface(
+      width: 292,
+      borderRadius: 18,
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
           const Padding(
-            padding: EdgeInsets.fromLTRB(10, 6, 0, 2),
+            padding: EdgeInsets.fromLTRB(10, 2, 0, 2),
             child: Text('On the map',
-                style: TextStyle(fontFamily: serif, fontSize: 13, letterSpacing: 1.2, color: sepia)),
+                style: TextStyle(fontFamily: caps, fontSize: 15, letterSpacing: 0.9, color: ink)),
           ),
           const Spacer(),
           IconButton(
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            padding: EdgeInsets.zero,
             tooltip: 'Close',
-            visualDensity: VisualDensity.compact,
             onPressed: onClose,
-            icon: const Icon(Icons.close, size: 16, color: sepia),
+            icon: const Icon(Symbols.close, size: 20, color: ink),
           ),
         ]),
+        const SizedBox(height: 2),
         row('Heritage', 'Listed buildings, monuments, parks, battlefields', s.mapShowHeritage,
             (x, v) => x.mapShowHeritage = v),
         row('Nature sites', 'SSSIs, bird SPAs, nature reserves, wetlands', s.mapShowNature, (x, v) => x.mapShowNature = v),
@@ -1994,46 +2593,56 @@ class _LayersPanel extends StatelessWidget {
         row('Hides & viewpoints', 'Where OpenStreetMap has them', s.mapShowHides, (x, v) => x.mapShowHides = v),
         row('Wikipedia places', 'With a line about each', s.mapShowWiki, (x, v) => x.mapShowWiki = v),
         if (wildlifePicturesOn)
-        InkWell(
-          onTap: () => settings.update((x) => x.mapWildlife = !x.mapWildlife),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
-            child: Row(children: [
-              const Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Wildlife pictures', style: TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
-                  Text('A few, for decoration: a deer in the woods',
-                      style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia, height: 1.2)),
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              hoverColor: ink.withValues(alpha: 0.08),
+              highlightColor: ink.withValues(alpha: 0.12),
+              onTap: () => settings.update((x) => x.mapWildlife = !x.mapWildlife),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
+                child: Row(children: [
+                  const Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Wildlife pictures', style: TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
+                      Text('A few, for decoration: a deer in the woods',
+                          style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia, height: 1.2)),
+                    ]),
+                  ),
+                  Transform.scale(
+                    scale: .78,
+                    child: Switch(
+                      value: s.mapWildlife,
+                      onChanged: (v) => settings.update((x) => x.mapWildlife = v),
+                    ),
+                  ),
                 ]),
               ),
-              Transform.scale(
-                scale: .75,
-                child: Switch(
-                  value: s.mapWildlife,
-                  activeTrackColor: madder,
-                  onChanged: (v) => settings.update((x) => x.mapWildlife = v),
-                ),
-              ),
-            ]),
+            ),
           ),
-        ),
-        const Divider(height: 1, color: paperDeep),
         Padding(
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 2),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Divider(height: 1, color: rule.withValues(alpha: 0.55)),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(10, 2, 10, 2),
           child: Text('Bird records',
-              style: const TextStyle(fontFamily: serif, fontSize: 15, color: ink, height: 1.2)),
+              style: TextStyle(fontFamily: caps, fontSize: 13.5, letterSpacing: 0.6, color: ink, height: 1.2)),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
           child: species.isEmpty
               ? const Text('No birds heard here yet',
-                  style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia))
+                  style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12.5, color: sepia))
               : DropdownButton<String>(
                   isExpanded: true,
                   value: chosen,
                   underline: const SizedBox.shrink(),
-                  style: const TextStyle(fontFamily: serif, fontSize: 14, color: ink),
+                  iconEnabledColor: ink,
+                  style: const TextStyle(fontFamily: serif, fontSize: 14.5, color: ink),
                   dropdownColor: paper,
+                  borderRadius: BorderRadius.circular(14),
                   items: [
                     const DropdownMenuItem(
                         value: '',
@@ -2046,7 +2655,7 @@ class _LayersPanel extends StatelessWidget {
         ),
         if (chosen.isNotEmpty)
           const Padding(
-            padding: EdgeInsets.fromLTRB(10, 0, 10, 8),
+            padding: EdgeInsets.fromLTRB(10, 0, 10, 4),
             child: Text('Where it has been recorded, from GBIF: darker hexagons, more records.',
                 style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 12, color: sepia)),
           ),

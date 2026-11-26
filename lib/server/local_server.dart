@@ -107,7 +107,11 @@ class LocalServer {
     if (settings.mode != AppMode.listen || selected == null) return {'available': false};
     final sessions = store.walkOf(selected);
     final model = plateModel?.call() ?? 'all';
-    final heard = [for (final x in sessions) ...store.forPlate(model, session: x)];
+    final heard = [
+      for (final x in sessions)
+        for (final d in store.forPlate(model, session: x))
+          if (!settings.isIgnoredSpecies(d.common, d.sci)) d
+    ];
     return api.walk(sessions, selected, heard);
   }
 
@@ -121,7 +125,10 @@ class LocalServer {
     // arrows on the plate; the page is told period=all, and the dates it
     // sends are set aside in favour of the session.
     final session = store.selected;
-    final all = store.forPlate(plateModel?.call() ?? 'all', session: session);
+    final all = [
+      for (final d in store.forPlate(plateModel?.call() ?? 'all', session: session))
+        if (!settings.isIgnoredSpecies(d.common, d.sci)) d
+    ];
     final bySession = session != null;
     String? from(String key) => bySession ? null : q[key];
 
@@ -149,7 +156,7 @@ class LocalServer {
       final id = int.tryParse(path.split('/').last);
       final f = id == null ? null : store.clipFile(id);
       if (f == null || !await f.exists()) return _notFound(res);
-      return _file(req, f, 'audio/wav');
+      return _file(req, f, f.path.endsWith('.m4a') ? 'audio/mp4' : 'audio/wav');
     }
     if (path.startsWith('/api/v2/spectrogram/')) {
       final id = int.tryParse(path.split('/').last);

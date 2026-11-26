@@ -247,10 +247,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_onnxruntime
-      sha256: "94565ad2a3f6f92b2e09c1b274c8e5f47f7c0cda0675c5484d5e16a2c4761123"
+      sha256: "1e0f72a806808c73ea38231ffe14af8db4d27c535ffadadac4b66c29893148bd"
       url: "https://pub.dev"
     source: hosted
-    version: "1.9.0"
+    version: "1.9.1"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -461,6 +461,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.13.0"
+  material_symbols_icons:
+    dependency: "direct main"
+    description:
+      name: material_symbols_icons
+      sha256: bd513edc2bc9b034108d5518c48cf5cebbb67d0653728cc452368cb27ca80bb0
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.2960.0"
   material_ui:
     dependency: transitive
     description:

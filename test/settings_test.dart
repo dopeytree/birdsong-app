@@ -15,24 +15,25 @@ void main() {
     return Settings.load(root);
   }
 
-  test('the plate modes run a to g', () {
-    expect([for (var i = 1; i <= plateModes.length; i++) plateLetter(i)].join(), 'abcdefg');
+  test('the plate modes run a to c', () {
+    expect([for (var i = 1; i <= plateModes.length; i++) plateLetter(i)].join(), 'abc');
     expect(plateModes.map((m) => m.key).toList(),
-        ['calls', 'latest', 'top', 'index', 'noindex', 'time', 'equal']);
+        ['time', 'spotlight', 'equal']);
   });
 
-  test('a mode is kept by its key', () async {
+  test('a mode is kept by its key (and old latest/top map to spotlight)', () async {
     final s = await loadWith({'plateView': 'top'});
-    expect(plateModes[s.plateMode - 1].key, 'top');
-    expect(s.toJson()['plateView'], 'top');
+    expect(plateModes[s.plateMode - 1].key, 'spotlight');
+    expect(s.toJson()['plateView'], 'spotlight');
   });
 
   test('a number saved in the first order finds the same mode', () async {
-    // 5 was the index alone; it is d now.
-    final s = await loadWith({'plateMode': 5});
-    expect(plateLetter(s.plateMode), 'd');
-    // 2 was recent ramblings; it is f now.
-    expect(plateLetter((await loadWith({'plateMode': 2})).plateMode), 'f');
+    // 2 was recent ramblings; it is a now.
+    expect(plateLetter((await loadWith({'plateMode': 2})).plateMode), 'a');
+    // 6 was latest; maps to spotlight (b).
+    expect(plateLetter((await loadWith({'plateMode': 6})).plateMode), 'b');
+    // 3 was equal (no pecking order); it is c now.
+    expect(plateLetter((await loadWith({'plateMode': 3})).plateMode), 'c');
   });
 
   test('an old single station becomes the first saved station', () async {
@@ -69,11 +70,41 @@ void main() {
 
   test('a station is read from a number, a BirdWeather page or an address', () {
     expect(Station.fromInput('', '1234').kind, 'BirdWeather 1234');
+    expect(Station.fromInput('', '#1234').kind, 'BirdWeather 1234');
+    expect(Station.fromInput('', '# 1234').birdweather, '1234');
     expect(Station.fromInput('', 'https://app.birdweather.com/stations/987').birdweather, '987');
+    expect(Station.fromInput('', 'https://app.birdweather.com/stations/#987').birdweather, '987');
     final b = Station.fromInput('', 'http://192.168.1.50:8080');
     expect(b.kind, 'BirdNET-Go');
     expect(b.name, 'BirdNET-Go');
     expect(Station.fromInput('Garden', '1234').name, 'Garden');
+  });
+
+  test('song scribble mode migrates legacy bool and persists', () async {
+    expect((await loadWith({})).songScribbleMode, 'scribble');
+    expect((await loadWith({'songScribble': false})).songScribbleMode, 'off');
+    final w = await loadWith({'songScribbleMode': 'wave'});
+    expect(w.songScribbleMode, 'wave');
+    expect(w.songScribble, isTrue);
+    expect(w.toJson()['songScribbleMode'], 'wave');
+  });
+
+  test('ignored species defaults filter non-bird sounds and persist custom entries', () async {
+    final s = await loadWith({});
+    expect(s.isIgnoredSpecies('Human vocal'), isTrue);
+    expect(s.isIgnoredSpecies('Humans'), isTrue);
+    expect(s.isIgnoredSpecies('Domestic Dog'), isTrue);
+    expect(s.isIgnoredSpecies('Engine'), isTrue);
+    expect(s.isIgnoredSpecies('Domestic sounds'), isTrue);
+    expect(s.isIgnoredSpecies('Home sounds'), isTrue);
+    expect(s.isIgnoredSpecies('Harbor Seal'), isTrue);
+    expect(s.isIgnoredSpecies('European Robin', 'Erithacus rubecula'), isFalse);
+    final custom = await loadWith({'ignoredSpecies': ['Gull']});
+    expect(custom.isIgnoredSpecies('Herring Gull'), isTrue);
+    expect(custom.isIgnoredSpecies('Human vocal'), isFalse);
+    expect(custom.toJson()['ignoredSpecies'], ['Gull']);
+    expect(custom.nativeAllNameTickets, isFalse);
+    expect((await loadWith({'nativeAllNameTickets': true})).toJson()['nativeAllNameTickets'], isTrue);
   });
 
   test('removing the station on show moves to the next, or back here', () async {

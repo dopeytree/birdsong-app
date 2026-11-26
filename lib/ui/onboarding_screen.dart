@@ -2,15 +2,20 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:record/record.dart';
 
 import '../app_state.dart';
 import '../engine/model_catalog.dart';
+import '../main.dart' show caps, ink, madder, paper, paperDeep, rule, sepia, serif;
 import '../settings.dart';
 import 'format.dart' show megabytes;
+import 'paper_surface.dart';
+import 'splash.dart' show Cardinal;
+import 'station_editor.dart' show openBirdWeatherMap;
 
 /// First launch: choose where birds come from, fetch a model, switch on
-/// Core ML, allow the microphone, and start.
+/// Core ML, allow permissions, and open birdsongs.ai (never auto-recording).
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, required this.app, required this.onDone});
 
@@ -48,17 +53,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _url = TextEditingController(text: s.birdnetUrl);
     _station = TextEditingController(text: s.birdweatherStation);
     app.models.addListener(_modelsChanged);
-    // Someone coming back to the welcome keeps a model they already have.
-    for (final id in _starterIds) {
-      final spec = _byId(id);
-      if (app.models.isInstalled(spec)) {
-        _model = id;
-        break;
+    // Keep the user's current model if they revisit the welcome screens.
+    if (_starterIds.contains(s.plateModel) && app.models.isInstalled(_byId(s.plateModel))) {
+      _model = s.plateModel;
+    } else {
+      for (final id in _starterIds) {
+        final spec = _byId(id);
+        if (app.models.isInstalled(spec)) {
+          _model = id;
+          break;
+        }
       }
     }
   }
 
-  // The Next button waits on the download, so redraw as it progresses.
   void _modelsChanged() {
     if (mounted) setState(() {});
   }
@@ -99,12 +107,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _skip() {
-    s.update((x) => x.onboarded = true);
+    s.update((x) {
+      x.plateMode = defaultPlateMode;
+      x.onboarded = true;
+    });
     widget.onDone(0);
   }
 
   void _finishStation() {
-    // a BirdWeather number wins when both are filled in, as before
     final bw = _station.text.trim(), url = _url.text.trim();
     final input = bw.isNotEmpty ? bw : url;
     if (input.isNotEmpty) {
@@ -114,65 +124,93 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
     s.update((x) {
       x.mode = AppMode.station;
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = 'calls';
       x.onboarded = true;
     });
     widget.onDone(0);
   }
 
   void _finishListen() {
+    // Never lose or hide existing sessions when re-running the welcome screens:
+    // if prior detections exist from another model (or 'all' was already set),
+    // keep plateModel as 'all' so every recorded walk stays visible.
+    final hasOtherModelSessions = app.store.all.any((d) => d.model != _model);
     s.update((x) {
       x.mode = AppMode.listen;
-      x.activeModels = {_model};
-      x.plateModel = _model;
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = 'time';
+      if (x.activeModels.isEmpty) {
+        x.activeModels = {_model};
+      } else {
+        x.activeModels = {...x.activeModels, _model};
+      }
+      x.plateModel = (hasOtherModelSessions || x.plateModel == 'all') ? 'all' : _model;
       x.useCoreMl = _coreMl;
-      // With a location, the geomodel drops birds that don't live there.
       if (_locAllowed == true) x.useGeomodel = true;
       x.onboarded = true;
     });
     widget.onDone(0);
-    app.engine.start();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final listen = _mode == AppMode.listen;
     final steps = listen ? 4 : 2;
     return Scaffold(
+      backgroundColor: paper,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
+            constraints: const BoxConstraints(maxWidth: 520),
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     children: [
-                      Text('Step ${_step + 1} of $steps', style: theme.textTheme.bodySmall),
+                      _stepPills(steps),
                       const Spacer(),
                       TextButton(onPressed: _skip, child: const Text('Skip')),
                     ],
                   ),
-                  LinearProgressIndicator(value: (_step + 1) / steps),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
                   Expanded(
-                    child: SingleChildScrollView(
-                      child: switch (_step) {
-                        0 => _welcome(theme),
-                        1 => listen ? _modelStep(theme) : _stationStep(theme),
-                        2 => _speedStep(theme),
-                        _ => _micStep(theme),
-                      },
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 240),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: SlideTransition(
+                          position: Tween<Offset>(begin: const Offset(0.03, 0), end: Offset.zero).animate(anim),
+                          child: child,
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        key: ValueKey('$_step|$listen'),
+                        child: switch (_step) {
+                          0 => _welcome(),
+                          1 => listen ? _modelStep() : _stationStep(),
+                          2 => _speedStep(),
+                          _ => _micStep(),
+                        },
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       if (_step > 0)
-                        TextButton(
-                            onPressed: () => setState(() => _step--), child: const Text('Back')),
+                        TextButton.icon(
+                          onPressed: () {
+                            hapticTap();
+                            setState(() => _step--);
+                          },
+                          icon: const Icon(Symbols.chevron_left, size: 18),
+                          label: const Text('Back'),
+                        ),
                       const Spacer(),
                       _nextButton(listen),
                     ],
@@ -186,114 +224,269 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  Widget _stepPills(int total) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < total; i++)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.only(right: 6),
+            height: 6,
+            width: i == _step ? 24 : 8,
+            decoration: BoxDecoration(
+              color: i <= _step ? ink : rule.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _nextButton(bool listen) {
     if (!listen && _step == 1) {
-      return FilledButton(onPressed: _finishStation, child: const Text('Show the plate'));
+      return FilledButton.icon(
+        onPressed: () {
+          hapticTap();
+          _finishStation();
+        },
+        icon: const Icon(Symbols.arrow_forward, size: 18),
+        label: const Text('Open birdsongs.ai'),
+      );
     }
     if (listen && _step == 3) {
       return FilledButton.icon(
-        onPressed: _finishListen,
-        icon: const Icon(Icons.mic),
-        label: const Text('Start listening'),
+        onPressed: () {
+          hapticTap();
+          _finishListen();
+        },
+        icon: const Icon(Symbols.arrow_forward, size: 18),
+        label: const Text('Open birdsongs.ai'),
       );
     }
     final waitingForModel = listen && _step == 1 && !app.models.isInstalled(_spec);
-    return FilledButton(
-      onPressed: waitingForModel ? null : () => setState(() => _step++),
-      child: const Text('Next'),
+    return FilledButton.icon(
+      onPressed: waitingForModel
+          ? null
+          : () {
+              hapticTap();
+              setState(() => _step++);
+            },
+      icon: const Icon(Symbols.arrow_forward, size: 18),
+      label: const Text('Continue'),
+    );
+  }
+
+  Widget _header(String title, String subtitle, {Widget? crest}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (crest != null) ...[
+          crest,
+          const SizedBox(height: 12),
+        ],
+        Text(
+          title,
+          style: const TextStyle(fontFamily: caps, fontSize: 28, letterSpacing: 1.0, height: 1.15, color: ink),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          style: const TextStyle(fontFamily: serif, fontSize: 16.5, height: 1.45, color: sepia),
+        ),
+      ],
     );
   }
 
   // ---- step 1: where do the birds come from --------------------------------
 
-  Widget _welcome(ThemeData theme) {
+  Widget _welcome() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Birdsong', style: theme.textTheme.displaySmall),
-        const SizedBox(height: 8),
-        const Text('The birds you hear, drawn as a plate of 1800s illustrations. '
-            'Where should they come from?'),
-        const SizedBox(height: 20),
-        _choice(
+        _header(
+          'birdsongs.ai',
+          'The birds you hear, illustrated as natural-history plates. Choose how you want to listen.',
+          crest: const Cardinal(height: 64),
+        ),
+        const SizedBox(height: 22),
+        _optionCard(
           selected: _mode == AppMode.listen,
-          icon: Icons.hearing,
+          icon: Symbols.mic,
           title: 'Listen here & now',
-          body: 'Identifies birds through the microphone, on the device. '
-              'Nothing else needed, and no audio leaves it.',
+          body: 'Identifies birds on this device using the microphone. Works offline and no audio leaves your device.',
           onTap: () => setState(() => _mode = AppMode.listen),
         ),
-        _choice(
+        const SizedBox(height: 10),
+        _optionCard(
           selected: _mode == AppMode.station,
-          icon: Icons.router,
-          title: 'A remote station',
-          body: 'Show what your BirdNET-Go or a BirdWeather station has heard.',
+          icon: Symbols.sensors,
+          title: 'Connect a remote station',
+          body: 'Follow what your BirdNET-Go station or a public BirdWeather station has heard.',
           onTap: () => setState(() => _mode = AppMode.station),
         ),
-        const SizedBox(height: 8),
-        Text('You can change this at any time under Settings.',
-            style: theme.textTheme.bodySmall),
+        const SizedBox(height: 14),
+        const Text(
+          'You can switch between local and remote at any time from the top bar.',
+          style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 13.5, color: sepia),
+        ),
       ],
     );
   }
 
-  Widget _choice({
+  Widget _optionCard({
     required bool selected,
     required IconData icon,
     required String title,
     required String body,
-    required VoidCallback onTap,
+    String? badge,
+    VoidCallback? onTap,
   }) {
-    final theme = Theme.of(context);
-    return Card(
-      color: selected ? theme.colorScheme.primaryContainer : null,
-      child: ListTile(
-        leading: Icon(icon),
-        title: Text(title),
-        subtitle: Text(body),
-        trailing: selected ? const Icon(Icons.check_circle) : null,
-        onTap: onTap,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        hoverColor: ink.withValues(alpha: 0.06),
+        highlightColor: ink.withValues(alpha: 0.10),
+        onTap: onTap == null
+            ? null
+            : () {
+                hapticTap();
+                onTap();
+              },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: selected ? paperDeep.withValues(alpha: 0.82) : paperDeep.withValues(alpha: 0.34),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: selected ? ink : paperDeep.withValues(alpha: 0.7),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 20, color: selected ? paper : ink),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(fontFamily: caps, fontSize: 15.5, letterSpacing: 0.5, color: ink),
+                          ),
+                        ),
+                        if (badge != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: paperDeep,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              badge,
+                              style: const TextStyle(fontFamily: caps, fontSize: 10.5, letterSpacing: 0.4, color: sepia),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      body,
+                      style: const TextStyle(fontFamily: serif, fontSize: 14.5, height: 1.4, color: sepia),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(
+                  selected ? Symbols.check_circle : Symbols.radio_button_unchecked,
+                  fill: selected ? 1.0 : 0.0,
+                  size: 20,
+                  color: selected ? ink : rule,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   // ---- step 2 (station): the address ---------------------------------------
 
-  Widget _stationStep(ThemeData theme) {
+  Widget _stationStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Your station', style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _url,
-          decoration: const InputDecoration(
-            labelText: 'BirdNET-Go address',
-            hintText: 'http://192.168.1.50:8080',
-          ),
-          keyboardType: TextInputType.url,
-          autocorrect: false,
+        _header(
+          'Your station',
+          'Enter your BirdNET-Go address on your home network, or any public BirdWeather station ID.',
         ),
-        TextField(
-          controller: _station,
-          decoration: const InputDecoration(
-            labelText: 'or a public BirdWeather station number',
-            hintText: '12345',
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          decoration: BoxDecoration(
+            color: paperDeep.withValues(alpha: 0.38),
+            borderRadius: BorderRadius.circular(16),
           ),
-          keyboardType: TextInputType.number,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _url,
+                decoration: const InputDecoration(
+                  labelText: 'BirdNET-Go address',
+                  hintText: 'http://192.168.1.50:8080',
+                ),
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _station,
+                decoration: const InputDecoration(
+                  labelText: 'or a public BirdWeather station number',
+                  hintText: '12345',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 10),
+              TextButton.icon(
+                style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                onPressed: openBirdWeatherMap,
+                icon: const Icon(Symbols.map, size: 18),
+                label: const Text('Browse public stations on BirdWeather'),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
-        Text(
-            'iOS will ask to let Birdsong find devices on your local network: '
-            'allow it, or the station can\'t be reached.',
-            style: theme.textTheme.bodySmall),
+        const Text(
+          'iOS will ask to let birdsongs.ai find devices on your local network: allow it so your BirdNET-Go station can be reached.',
+          style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 13.5, color: sepia),
+        ),
       ],
     );
   }
 
   // ---- step 2 (listen): a model --------------------------------------------
 
-  Widget _modelStep(ThemeData theme) {
+  Widget _modelStep() {
     return ListenableBuilder(
       listenable: app.models,
       builder: (context, _) {
@@ -302,152 +495,246 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Download a model', style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            const Text('The model is what recognises the birds. It is downloaded once '
-                'and then works offline.'),
-            const SizedBox(height: 16),
-            for (final id in _starterIds)
-              _modelChoice(_byId(id), recommended: id == _starterIds.first, busy: busy),
+            _header(
+              'Choose a model',
+              'Downloaded once to your device so bird recognition works completely offline.',
+            ),
+            const SizedBox(height: 20),
+            for (final id in _starterIds) ...[
+              () {
+                final spec = _byId(id);
+                return _optionCard(
+                  selected: _model == spec.id,
+                  icon: Symbols.psychology,
+                  title: spec.name,
+                  badge: id == _starterIds.first ? 'Recommended' : null,
+                  body: '${megabytes(spec.totalBytes)} · ${spec.note}',
+                  onTap: busy ? null : () => setState(() => _model = spec.id),
+                );
+              }(),
+              const SizedBox(height: 10),
+            ],
             if (m.errors[_model] != null)
               Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text('Download failed: ${m.errors[_model]}',
-                    style: TextStyle(color: theme.colorScheme.error)),
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Download failed: ${m.errors[_model]}',
+                  style: const TextStyle(fontFamily: serif, fontSize: 14, color: madder),
+                ),
               ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             if (m.isInstalled(_spec))
-              const Row(children: [
-                Icon(Icons.check_circle, color: Colors.green),
-                SizedBox(width: 8),
-                Text('Downloaded and ready.'),
-              ])
-            else if (m.isDownloading(_spec)) ...[
-              LinearProgressIndicator(value: m.progress[_model]),
-              const SizedBox(height: 6),
-              Text('${((m.progress[_model] ?? 0) * 100).round()}% of ${megabytes(_spec.totalBytes)}'),
-            ] else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: paperDeep.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Symbols.check_circle, fill: 1.0, size: 18, color: ink),
+                    SizedBox(width: 8),
+                    Text('Downloaded and ready.', style: TextStyle(fontFamily: serif, fontSize: 15, color: ink)),
+                  ],
+                ),
+              )
+            else if (m.isDownloading(_spec))
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: paperDeep.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(value: m.progress[_model], minHeight: 6),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Downloading · ${((m.progress[_model] ?? 0) * 100).round()}% of ${megabytes(_spec.totalBytes)}',
+                      style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14, color: sepia),
+                    ),
+                  ],
+                ),
+              )
+            else
               FilledButton.icon(
                 onPressed: busy
                     ? null
                     : () {
                         m.install(_spec);
-                        // The location filter is small; fetch it alongside.
                         if (!m.isInstalled(geomodel)) m.install(geomodel);
                       },
-                icon: const Icon(Icons.download),
+                icon: const Icon(Symbols.download, size: 18),
                 label: Text('Download ${megabytes(_spec.totalBytes)}'),
               ),
             const SizedBox(height: 12),
-            Text('More models, to compare side by side, are under Models.',
-                style: theme.textTheme.bodySmall),
+            const Text(
+              'More models are available under Settings whenever you want to compare them.',
+              style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 13.5, color: sepia),
+            ),
           ],
         );
       },
     );
   }
 
-  Widget _modelChoice(ModelSpec spec, {required bool recommended, required bool busy}) {
-    final theme = Theme.of(context);
-    final selected = _model == spec.id;
-    return Card(
-      color: selected ? theme.colorScheme.primaryContainer : null,
-      child: ListTile(
-        title: Text(recommended ? '${spec.name} (recommended)' : spec.name),
-        subtitle: Text('${megabytes(spec.totalBytes)} · ${spec.note}'),
-        trailing: selected ? const Icon(Icons.check_circle) : null,
-        onTap: busy ? null : () => setState(() => _model = spec.id),
-      ),
-    );
-  }
-
   // ---- step 3 (listen): speed ----------------------------------------------
 
-  Widget _speedStep(ThemeData theme) {
+  Widget _speedStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Speed', style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 8),
+        _header(
+          'Performance',
+          _apple
+              ? 'Use Apple\'s GPU and Neural Engine for faster, lower-power listening.'
+              : 'On this device the model runs directly on the processor.',
+        ),
+        const SizedBox(height: 20),
         if (_apple) ...[
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Use the GPU and Neural Engine'),
-            subtitle: const Text('Runs the model through Apple\'s Core ML rather than '
-                'the processor alone. If a model can\'t run that way, Birdsong '
-                'falls back to the processor by itself.'),
-            value: _coreMl,
-            onChanged: (v) => setState(() => _coreMl = v),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 10, 12),
+            decoration: BoxDecoration(
+              color: paperDeep.withValues(alpha: 0.42),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _coreMl ? ink : paperDeep,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Symbols.bolt, size: 20, color: _coreMl ? paper : ink),
+              ),
+              title: const Text(
+                'Core ML acceleration',
+                style: TextStyle(fontFamily: caps, fontSize: 15.5, letterSpacing: 0.5, color: ink),
+              ),
+              subtitle: const Text(
+                'Falls back automatically to the CPU if a model cannot use Core ML.',
+                style: TextStyle(fontFamily: serif, fontSize: 14, color: sepia),
+              ),
+              value: _coreMl,
+              onChanged: (v) => setState(() => _coreMl = v),
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-              'The Listen tab shows the time each window takes, so you can try it '
-              'both ways. The first start with this on can take a while, as the '
-              'model is prepared for the chip.',
-              style: theme.textTheme.bodySmall),
-        ] else
-          const Text('On this device the model runs on the processor. '
-              'The Listen tab shows the time each window takes.'),
+          const SizedBox(height: 12),
+          const Text(
+            'The first recording with Core ML on takes a few extra seconds while the chip compiles the model.',
+            style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 13.5, color: sepia),
+          ),
+        ],
       ],
     );
   }
 
-  // ---- step 4 (listen): the microphone -------------------------------------
+  // ---- step 4 (listen): permissions ----------------------------------------
 
-  Widget _micStep(ThemeData theme) {
+  Widget _micStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Microphone and location', style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 8),
-        const Text('Birdsong needs the microphone to hear the birds. Sound is analysed '
-            'on this device and never sent anywhere. Short recordings of each '
-            'detection are kept on the device so you can play them back.'),
-        const SizedBox(height: 16),
-        if (_micAllowed == true)
-          const Row(children: [
-            Icon(Icons.check_circle, color: Colors.green),
-            SizedBox(width: 8),
-            Text('Microphone allowed.'),
-          ])
-        else
-          OutlinedButton.icon(
-            onPressed: _askMic,
-            icon: const Icon(Icons.mic_none),
-            label: const Text('Allow the microphone'),
-          ),
-        if (_micAllowed == false)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-                'It was refused. Allow Birdsong under the device\'s Settings > '
-                'Privacy > Microphone, then try again.',
-                style: TextStyle(color: theme.colorScheme.error)),
-          ),
-        const SizedBox(height: 24),
-        const Text('Location is optional. Each listening session is marked with where '
-            'it happened, and the app leaves out birds that don\'t live there.'),
+        _header(
+          'Permissions',
+          'Allow access when you\'re ready — recording only begins when you tap the record button.',
+        ),
+        const SizedBox(height: 20),
+        _permissionCard(
+          icon: Symbols.mic,
+          title: 'Microphone',
+          body: 'Required to identify birds around you. All analysis stays on your device.',
+          allowed: _micAllowed,
+          actionLabel: 'Allow microphone',
+          deniedNote: 'Refused. Enable it under Settings > Privacy > Microphone.',
+          onAction: _askMic,
+        ),
         const SizedBox(height: 12),
-        if (_locAllowed == true)
-          const Row(children: [
-            Icon(Icons.check_circle, color: Colors.green),
-            SizedBox(width: 8),
-            Text('Location allowed.'),
-          ])
-        else
-          OutlinedButton.icon(
-            onPressed: _askLocation,
-            icon: const Icon(Icons.place_outlined),
-            label: const Text('Allow location'),
-          ),
-        if (_locAllowed == false)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text('Not allowed. Sessions will have no place; you can allow it later '
-                'under the device\'s Settings > Privacy > Location Services.',
-                style: theme.textTheme.bodySmall),
-          ),
+        _permissionCard(
+          icon: Symbols.location_on,
+          title: 'Location (optional)',
+          body: 'Maps your walk, notes the weather, and filters out species unlikely in your region.',
+          allowed: _locAllowed,
+          actionLabel: 'Allow location',
+          deniedNote: 'Not allowed. Sessions will still record without a map location.',
+          onAction: _askLocation,
+        ),
       ],
+    );
+  }
+
+  Widget _permissionCard({
+    required IconData icon,
+    required String title,
+    required String body,
+    required bool? allowed,
+    required String actionLabel,
+    required String deniedNote,
+    required VoidCallback onAction,
+  }) {
+    final granted = allowed == true;
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: granted ? paperDeep.withValues(alpha: 0.72) : paperDeep.withValues(alpha: 0.36),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: granted ? ink : paperDeep.withValues(alpha: 0.7),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 19, color: granted ? paper : ink),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontFamily: caps, fontSize: 15.5, letterSpacing: 0.5, color: ink),
+                ),
+              ),
+              if (granted)
+                const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Symbols.check_circle, fill: 1.0, size: 18, color: ink),
+                    SizedBox(width: 4),
+                    Text('Allowed', style: TextStyle(fontFamily: caps, fontSize: 12, color: ink)),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(body, style: const TextStyle(fontFamily: serif, fontSize: 14.5, height: 1.4, color: sepia)),
+          if (!granted) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: onAction,
+              icon: Icon(icon, size: 17),
+              label: Text(actionLabel),
+            ),
+          ],
+          if (allowed == false)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(deniedNote, style: const TextStyle(fontFamily: serif, fontSize: 13, color: madder)),
+            ),
+        ],
+      ),
     );
   }
 }

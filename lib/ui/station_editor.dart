@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart' show paper, sepia;
@@ -94,7 +95,7 @@ class _StationDialogState extends State<_StationDialog> {
             TextButton.icon(
               style: TextButton.styleFrom(padding: EdgeInsets.zero),
               onPressed: openBirdWeatherMap,
-              icon: const Icon(Icons.map_outlined, size: 18),
+              icon: const Icon(Symbols.map, size: 18),
               label: const Text('Find a station on BirdWeather'),
             ),
           ],

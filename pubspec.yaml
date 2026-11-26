@@ -10,10 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # ONNX Runtime for the bird models. Pinned to the release BirdNET Live ships
-  # (it carries the session config key that turns off the Arm KleidiAI kernels,
-  # see lib/engine/classifier.dart).
-  flutter_onnxruntime: 1.9.0
+  # ONNX Runtime for the bird models. Pinned to 1.9.1 (keeps ORT 1.28.0 with the
+  # Arm KleidiAI fix and drops the unused onnxruntime_extensions SwiftPM target
+  # whose download.onnxruntime.ai host is gone).
+  flutter_onnxruntime: 1.9.1
 
   # Microphone as a stream of 16-bit PCM.
   record: ^7.1.2
@@ -43,6 +43,7 @@ dependencies:
   # Where each listening session happened.
   geolocator: ^14.1.1
   animations: ^3.0.0
+  material_symbols_icons: ^4.2960.0
 
 dev_dependencies:
   flutter_test:

@@ -49,6 +49,7 @@ class Settings extends ChangeNotifier {
         if (x.mode == AppMode.listen) {
           x.mode = AppMode.station;
           x.stationId = x.station!.id;
+          x.plateMode = defaultPlateMode;
           return;
         }
         final i = x.stations.indexWhere((st) => st.id == x.station?.id);
@@ -73,6 +74,8 @@ class Settings extends ChangeNotifier {
         }
         x.stationId = st.id;
         x.mode = AppMode.station;
+        x.plateMode = defaultPlateMode;
+        x.nativeSizeBy = 'calls';
       });
 
   /// Forgets a station; a plate that was showing it moves to the next one,
@@ -86,6 +89,8 @@ class Settings extends ChangeNotifier {
         if (x.stations.isEmpty) {
           x.stationId = null;
           x.mode = AppMode.listen;
+          x.plateMode = defaultPlateMode;
+          x.nativeSizeBy = 'time';
         } else {
           x.stationId = x.stations[i.clamp(0, x.stations.length - 1)].id;
         }
@@ -104,11 +109,63 @@ class Settings extends ChangeNotifier {
   /// call quality too). Other apps' audio keeps playing either way.
   String micSource = 'phone';
 
+  /// Listen here: saved clip audio format — 'aac' (AAC 128 kbps .m4a, default)
+  /// or 'wav' (uncompressed PCM .wav).
+  String clipFormat = 'aac';
+
+  /// Sync sessions, recordings, plate choices, preferences and logs via iCloud
+  /// Drive on Apple devices (enabled by default on iOS and macOS).
+  bool icloudSync = Platform.isIOS || Platform.isMacOS;
+
+  /// Timestamp (epoch ms) of the latest portable preference edit, used when
+  /// merging settings across devices via iCloud Drive.
+  int syncUpdatedAt = 0;
+
+  /// True while [mergeFromSyncJson] is notifying listeners so [ICloudSync]
+  /// does not trigger a redundant upload loop.
+  bool applyingRemoteSync = false;
+
   /// Listen here: the same species from the same model within this many
   /// seconds counts as the same call.
   double repeatSeconds = 10.0;
 
   bool animalsOnly = true;
+
+  /// Default species / sound names ignored from detections and the plate.
+  static const defaultIgnoredSpecies = <String>[
+    'Human',
+    'Humans',
+    'Dog',
+    'Engine',
+    'Domestic sounds',
+    'Home sounds',
+    'Harbor Seal',
+  ];
+
+  /// Species or sound names to ignore (case-insensitive whole-word match
+  /// against common or scientific name). Editable in Settings > Listening.
+  List<String> ignoredSpecies = List<String>.of(defaultIgnoredSpecies);
+
+  String? _ignoredKey;
+  List<RegExp> _ignoredRes = const [];
+
+  /// Whether a species or sound label matches [ignoredSpecies].
+  bool isIgnoredSpecies(String common, [String sci = '']) {
+    if (ignoredSpecies.isEmpty) return false;
+    final key = ignoredSpecies.join('\u0000');
+    if (key != _ignoredKey) {
+      _ignoredKey = key;
+      _ignoredRes = [
+        for (final raw in ignoredSpecies)
+          if (raw.trim().isNotEmpty)
+            RegExp(r'\b' + RegExp.escape(raw.trim()) + r'\b', caseSensitive: false),
+      ];
+    }
+    for (final re in _ignoredRes) {
+      if (re.hasMatch(common) || (sci.isNotEmpty && re.hasMatch(sci))) return true;
+    }
+    return false;
+  }
 
   bool useGeomodel = false;
   double? latitude;
@@ -156,15 +213,29 @@ class Settings extends ChangeNotifier {
   /// Whether the plate is Flutter's own ([webPlate] off).
   bool get nativePlate => !webPlate;
 
+  /// Sort order saved for "No pecking order":
+  /// defaults to 'family' (Species), ascending, labels off.
+  String equalSort = 'family';
+
+  /// Sort direction for [equalSort]: true = ascending, false = descending.
+  bool equalSortAsc = true;
+
+  /// Name-ticket labels toggle saved specifically for "No pecking order"
+  /// (per-view filter state so cycling views never bleeds labels onto Home).
+  bool equalLabels = false;
+
   /// The Flutter plate's heading: the title line ("Birdsong #3/12") and the
   /// lines under it (when, where, the weather), as the web plate's Title
   /// and Date switches.
   bool nativeShowTitle = true;
   bool nativeShowDate = true;
 
-  /// A pencil scribble of the sound, with the bird being heard, along the
-  /// bottom of the plate between the buttons (Listen here only).
-  bool songScribble = true;
+  /// What runs along the bottom of the plate between the buttons (Listen here):
+  /// 'scribble' (sepia pencil line), 'wave' (lighter black waveform for
+  /// slower devices), or 'off'.
+  String songScribbleMode = 'scribble';
+
+  bool get songScribble => songScribbleMode != 'off';
 
   /// The Flutter plate's collage: 'calls' (noisiest species), 'time'
   /// (recent ramblings) or 'equal' (no pecking order).
@@ -209,6 +280,21 @@ class Settings extends ChangeNotifier {
   /// place, weather) in the title's ink (the default) or in sepia.
   bool nativeHeadingInk = true;
 
+  /// The Flutter plate: show a bird's info ticket on mouse hover (off by
+  /// default so clicking opens the bird card, as on touch devices).
+  bool nativeHoverInfo = false;
+
+  /// The Flutter plate: show name tickets on all birds in the collage (off by
+  /// default; toggled from the Filters bar or Display settings).
+  bool nativeAllNameTickets = false;
+
+  /// Show the latest detected species along the bottom of the screen (both
+  /// local and remote).
+  bool nativeShowLatestDetection = true;
+
+  /// Render the bottom latest-detection readout inside a paper ticket box.
+  bool nativeBottomTicket = true;
+
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
 
@@ -251,6 +337,11 @@ class Settings extends ChangeNotifier {
   /// decoration (from the map's own tiles; nothing looked up).
   bool mapWildlife = true;
 
+  /// Map button appearance: 'ink' (all-black icons with hover-only background,
+  /// default), 'paper' (round warm paper background with madder icons), or
+  /// 'madder' (solid madder).
+  String mapButtonStyle = 'ink';
+
   static Future<Settings> load(Directory dir) async {
     final s = Settings._(File('${dir.path}/settings.json'));
     try {
@@ -289,19 +380,31 @@ class Settings extends ChangeNotifier {
     threshold = (j['threshold'] as num?)?.toDouble() ?? threshold;
     hopSeconds = (j['hopSeconds'] as num?)?.toDouble() ?? hopSeconds;
     micSource = j['micSource'] == 'headset' ? 'headset' : 'phone';
+    clipFormat = j['clipFormat'] == 'wav' ? 'wav' : 'aac';
+    icloudSync = (j['icloudSync'] as bool?) ?? icloudSync;
+    final syncedAt = j['syncUpdatedAt'];
+    if (syncedAt is num && syncedAt.isFinite) syncUpdatedAt = math.max(0, syncedAt.toInt());
     repeatSeconds = (j['repeatSeconds'] as num?)?.toDouble() ?? repeatSeconds;
     animalsOnly = (j['animalsOnly'] as bool?) ?? animalsOnly;
+    final ignored = j['ignoredSpecies'];
+    if (ignored is List) {
+      ignoredSpecies = [
+        for (final x in ignored.whereType<String>())
+          if (x.trim().isNotEmpty) x.trim(),
+      ];
+    }
     useGeomodel = (j['useGeomodel'] as bool?) ?? useGeomodel;
     latitude = (j['latitude'] as num?)?.toDouble();
     longitude = (j['longitude'] as num?)?.toDouble();
     geoThreshold = (j['geoThreshold'] as num?)?.toDouble() ?? geoThreshold;
     useCoreMl = (j['useCoreMl'] as bool?) ?? useCoreMl;
     recordWeather = (j['recordWeather'] as bool?) ?? recordWeather;
-    // plateView, by key; or plateMode, its number in the first order (1 to 7).
+    // plateView, by key; or legacy plateMode numbers from the old 7-view list.
     const firstOrder = ['calls', 'time', 'equal', 'noindex', 'index', 'latest', 'top'];
     final oldN = (j['plateMode'] as num?)?.toInt();
-    final key = j['plateView'] as String? ??
+    var key = j['plateView'] as String? ??
         (oldN != null && oldN >= 1 && oldN <= firstOrder.length ? firstOrder[oldN - 1] : null);
+    if (key == 'latest' || key == 'top') key = 'spotlight';
     final at = plateModes.indexWhere((m) => m.key == key);
     if (at >= 0) plateMode = at + 1;
     final active = j['activeModels'];
@@ -337,9 +440,34 @@ class Settings extends ChangeNotifier {
       modelOverrides = next;
     }
     webPlate = (j['webPlate'] as bool?) ?? webPlate;
+    var rawSort = j['equalSort'] as String?;
+    if (rawSort == 'size') rawSort = 'weight';
+    if (rawSort == 'sci') rawSort = 'family';
+    if (const [
+      'calls',
+      'recent',
+      'active',
+      'name',
+      'family',
+      'rare',
+      'weight',
+      'wingspan',
+      'region',
+      'colour',
+      'artist',
+    ].contains(rawSort)) {
+      equalSort = rawSort!;
+    }
+    equalSortAsc = (j['equalSortAsc'] as bool?) ?? equalSortAsc;
+    equalLabels = (j['equalLabels'] as bool?) ?? equalLabels;
     nativeShowTitle = (j['nativeShowTitle'] as bool?) ?? nativeShowTitle;
     nativeShowDate = (j['nativeShowDate'] as bool?) ?? nativeShowDate;
-    songScribble = (j['songScribble'] as bool?) ?? songScribble;
+    final scribbleMode = j['songScribbleMode'];
+    if (const ['scribble', 'wave', 'off'].contains(scribbleMode)) {
+      songScribbleMode = scribbleMode as String;
+    } else if (j['songScribble'] is bool) {
+      songScribbleMode = (j['songScribble'] as bool) ? 'scribble' : 'off';
+    }
     nativePlateStyle = const ['cutout', 'tint', 'plain'].contains(j['nativePlateStyle'])
         ? j['nativePlateStyle'] as String
         : nativePlateStyle;
@@ -353,6 +481,10 @@ class Settings extends ChangeNotifier {
     nativeTotals = (j['nativeTotals'] as bool?) ?? nativeTotals;
     nativeTitleCaps = (j['nativeTitleCaps'] as bool?) ?? nativeTitleCaps;
     nativeHeadingInk = (j['nativeHeadingInk'] as bool?) ?? nativeHeadingInk;
+    nativeHoverInfo = (j['nativeHoverInfo'] as bool?) ?? nativeHoverInfo;
+    nativeAllNameTickets = (j['nativeAllNameTickets'] as bool?) ?? nativeAllNameTickets;
+    nativeShowLatestDetection = (j['nativeShowLatestDetection'] as bool?) ?? nativeShowLatestDetection;
+    nativeBottomTicket = (j['nativeBottomTicket'] as bool?) ?? nativeBottomTicket;
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -369,6 +501,9 @@ class Settings extends ChangeNotifier {
     mapShowHides = (j['mapShowHides'] as bool?) ?? mapShowHides;
     mapRecordsSci = (j['mapRecordsSci'] as String?) ?? mapRecordsSci;
     mapWildlife = (j['mapWildlife'] as bool?) ?? mapWildlife;
+    mapButtonStyle = const ['paper', 'ink', 'madder'].contains(j['mapButtonStyle'])
+        ? j['mapButtonStyle'] as String
+        : mapButtonStyle;
     // Settings saved before defaults v2 still carry the first test build's
     // defaults (3 s, 50 %); move those, and only those, to the new ones.
     if (((j['defaults'] as num?) ?? 1) < 2) {
@@ -384,6 +519,7 @@ class Settings extends ChangeNotifier {
         'hopSeconds': hopSeconds,
         'repeatSeconds': repeatSeconds,
         'animalsOnly': animalsOnly,
+        'ignoredSpecies': List<String>.of(ignoredSpecies),
         'microphone': micSource,
         'locationFilter': useGeomodel,
         if (useGeomodel) 'locationFilterThreshold': geoThreshold,
@@ -404,15 +540,19 @@ class Settings extends ChangeNotifier {
         'threshold': threshold,
         'hopSeconds': hopSeconds,
         'micSource': micSource,
+        'clipFormat': clipFormat,
+        'icloudSync': icloudSync,
+        'syncUpdatedAt': syncUpdatedAt,
         'repeatSeconds': repeatSeconds,
         'animalsOnly': animalsOnly,
+        'ignoredSpecies': List<String>.of(ignoredSpecies),
         'useGeomodel': useGeomodel,
         'latitude': latitude,
         'longitude': longitude,
         'geoThreshold': geoThreshold,
         'useCoreMl': useCoreMl,
         'recordWeather': recordWeather,
-        'plateView': plateModes[plateMode - 1].key,
+        'plateView': plateModes[(plateMode - 1).clamp(0, plateModes.length - 1)].key,
         'activeModels': activeModels.toList(),
         'plateModel': plateModel,
         'modelCheckAt': modelCheckAt,
@@ -420,9 +560,13 @@ class Settings extends ChangeNotifier {
         'modelSkipped': modelSkipped.toList(),
         'modelOverrides': modelOverrides,
         'webPlate': webPlate,
+        'equalSort': equalSort,
+        'equalSortAsc': equalSortAsc,
+        'equalLabels': equalLabels,
         'nativeShowTitle': nativeShowTitle,
         'nativeShowDate': nativeShowDate,
         'songScribble': songScribble,
+        'songScribbleMode': songScribbleMode,
         'nativeSizeBy': nativeSizeBy,
         'nativePlateStyle': nativePlateStyle,
         'nativeMarkAt': nativeMarkAt,
@@ -433,6 +577,10 @@ class Settings extends ChangeNotifier {
         'nativeTotals': nativeTotals,
         'nativeTitleCaps': nativeTitleCaps,
         'nativeHeadingInk': nativeHeadingInk,
+        'nativeHoverInfo': nativeHoverInfo,
+        'nativeAllNameTickets': nativeAllNameTickets,
+        'nativeShowLatestDetection': nativeShowLatestDetection,
+        'nativeBottomTicket': nativeBottomTicket,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,
@@ -446,16 +594,187 @@ class Settings extends ChangeNotifier {
         'mapShowHides': mapShowHides,
         'mapRecordsSci': mapRecordsSci,
         'mapWildlife': mapWildlife,
+        'mapButtonStyle': mapButtonStyle,
       };
 
-  void update(void Function(Settings s) change) {
-    change(this);
-    notifyListeners();
-    // one save after another, so a quick run of changes lands in order
+  /// Portable user preferences synced across devices via iCloud Drive
+  /// (excludes device-specific hardware/transient state such as Core ML,
+  /// microphone source, local GPS, installed models, or active view).
+  Map<String, dynamic> toSyncJson() => {
+        'updatedAt': syncUpdatedAt,
+        'stations': [for (final st in stations) st.toJson()],
+        if (stationKeepPast.isNotEmpty) 'stationKeepPast': stationKeepPast,
+        'threshold': threshold,
+        'hopSeconds': hopSeconds,
+        'clipFormat': clipFormat,
+        'repeatSeconds': repeatSeconds,
+        'animalsOnly': animalsOnly,
+        'ignoredSpecies': List<String>.of(ignoredSpecies),
+        'recordWeather': recordWeather,
+        'equalSort': equalSort,
+        'equalSortAsc': equalSortAsc,
+        'equalLabels': equalLabels,
+        'nativeShowTitle': nativeShowTitle,
+        'nativeShowDate': nativeShowDate,
+        'songScribbleMode': songScribbleMode,
+        'nativePlateStyle': nativePlateStyle,
+        'nativeMarkAt': nativeMarkAt,
+        'nativeFit': nativeFit,
+        'nativeParts': nativeParts,
+        'nativeLimit': nativeLimit,
+        'nativeTotals': nativeTotals,
+        'nativeTitleCaps': nativeTitleCaps,
+        'nativeHeadingInk': nativeHeadingInk,
+        'nativeHoverInfo': nativeHoverInfo,
+        'nativeAllNameTickets': nativeAllNameTickets,
+        'nativeShowLatestDetection': nativeShowLatestDetection,
+        'nativeBottomTicket': nativeBottomTicket,
+        'mapBirds': mapBirds,
+        'mapExtras': mapExtras,
+        'mapPassedAbout': mapPassedAbout,
+        'mapShowHeritage': mapShowHeritage,
+        'mapShowNature': mapShowNature,
+        'mapShowAncient': mapShowAncient,
+        'mapShowWiki': mapShowWiki,
+        'mapShowReserves': mapShowReserves,
+        'mapShowHides': mapShowHides,
+        'mapWildlife': mapWildlife,
+        'mapButtonStyle': mapButtonStyle,
+      };
+
+  /// Merges portable preferences synced from iCloud Drive. Stations are unioned
+  /// by id so adding one on iPhone never erases one added on Mac; scalar
+  /// preferences update whenever [remote] carries a newer `updatedAt`.
+  /// Returns true when local settings changed.
+  bool mergeFromSyncJson(Map<String, dynamic> remote) {
+    final before = jsonEncode(toSyncJson());
+    final remoteUpdated = (remote['updatedAt'] as num?)?.toInt() ?? 0;
+    final newer = remoteUpdated > syncUpdatedAt;
+
+    final rStations = remote['stations'];
+    if (rStations is List) {
+      final byId = {for (final st in stations) st.id: st};
+      for (final raw in rStations.whereType<Map>()) {
+        final st = Station.fromJson(Map<String, dynamic>.from(raw));
+        if (!byId.containsKey(st.id) || newer) {
+          byId[st.id] = st;
+        }
+      }
+      stations = byId.values.toList();
+    }
+
+    final keep = remote['stationKeepPast'];
+    if (keep is Map) {
+      for (final e in keep.entries) {
+        if (e.value is bool && (!stationKeepPast.containsKey('${e.key}') || newer)) {
+          stationKeepPast['${e.key}'] = e.value as bool;
+        }
+      }
+    }
+
+    if (newer) {
+      syncUpdatedAt = remoteUpdated;
+      threshold = (remote['threshold'] as num?)?.toDouble() ?? threshold;
+      hopSeconds = (remote['hopSeconds'] as num?)?.toDouble() ?? hopSeconds;
+      if (remote['clipFormat'] == 'wav' || remote['clipFormat'] == 'aac') {
+        clipFormat = remote['clipFormat'] as String;
+      }
+      repeatSeconds = (remote['repeatSeconds'] as num?)?.toDouble() ?? repeatSeconds;
+      animalsOnly = (remote['animalsOnly'] as bool?) ?? animalsOnly;
+      final ignored = remote['ignoredSpecies'];
+      if (ignored is List) {
+        ignoredSpecies = [
+          for (final x in ignored.whereType<String>())
+            if (x.trim().isNotEmpty) x.trim(),
+        ];
+      }
+      recordWeather = (remote['recordWeather'] as bool?) ?? recordWeather;
+      final rawSort = remote['equalSort'] as String?;
+      if (const [
+        'calls',
+        'recent',
+        'active',
+        'name',
+        'family',
+        'rare',
+        'weight',
+        'wingspan',
+        'region',
+        'colour',
+        'artist',
+      ].contains(rawSort)) {
+        equalSort = rawSort!;
+      }
+      equalSortAsc = (remote['equalSortAsc'] as bool?) ?? equalSortAsc;
+      equalLabels = (remote['equalLabels'] as bool?) ?? equalLabels;
+      nativeShowTitle = (remote['nativeShowTitle'] as bool?) ?? nativeShowTitle;
+      nativeShowDate = (remote['nativeShowDate'] as bool?) ?? nativeShowDate;
+      final scribble = remote['songScribbleMode'];
+      if (const ['scribble', 'wave', 'off'].contains(scribble)) {
+        songScribbleMode = scribble as String;
+      }
+      if (const ['cutout', 'tint', 'plain'].contains(remote['nativePlateStyle'])) {
+        nativePlateStyle = remote['nativePlateStyle'] as String;
+      }
+      if (const ['centre', 'below', 'fade', 'none'].contains(remote['nativeMarkAt'])) {
+        nativeMarkAt = remote['nativeMarkAt'] as String;
+      }
+      nativeFit = (remote['nativeFit'] as bool?) ?? nativeFit;
+      nativeParts = (remote['nativeParts'] as bool?) ?? nativeParts;
+      nativeLimit = math.max(0, (remote['nativeLimit'] as num?)?.toInt() ?? nativeLimit);
+      nativeTotals = (remote['nativeTotals'] as bool?) ?? nativeTotals;
+      nativeTitleCaps = (remote['nativeTitleCaps'] as bool?) ?? nativeTitleCaps;
+      nativeHeadingInk = (remote['nativeHeadingInk'] as bool?) ?? nativeHeadingInk;
+      nativeHoverInfo = (remote['nativeHoverInfo'] as bool?) ?? nativeHoverInfo;
+      nativeAllNameTickets = (remote['nativeAllNameTickets'] as bool?) ?? nativeAllNameTickets;
+      nativeShowLatestDetection = (remote['nativeShowLatestDetection'] as bool?) ?? nativeShowLatestDetection;
+      nativeBottomTicket = (remote['nativeBottomTicket'] as bool?) ?? nativeBottomTicket;
+      if (remote['mapBirds'] == 'all' || remote['mapBirds'] == 'first') {
+        mapBirds = remote['mapBirds'] as String;
+      }
+      mapExtras = (remote['mapExtras'] as bool?) ?? mapExtras;
+      mapPassedAbout = (remote['mapPassedAbout'] as bool?) ?? mapPassedAbout;
+      mapShowHeritage = (remote['mapShowHeritage'] as bool?) ?? mapShowHeritage;
+      mapShowNature = (remote['mapShowNature'] as bool?) ?? mapShowNature;
+      mapShowAncient = (remote['mapShowAncient'] as bool?) ?? mapShowAncient;
+      mapShowWiki = (remote['mapShowWiki'] as bool?) ?? mapShowWiki;
+      mapShowReserves = (remote['mapShowReserves'] as bool?) ?? mapShowReserves;
+      mapShowHides = (remote['mapShowHides'] as bool?) ?? mapShowHides;
+      mapWildlife = (remote['mapWildlife'] as bool?) ?? mapWildlife;
+      if (const ['paper', 'ink', 'madder'].contains(remote['mapButtonStyle'])) {
+        mapButtonStyle = remote['mapButtonStyle'] as String;
+      }
+    }
+
+    final after = jsonEncode(toSyncJson());
+    if (before == after) return false;
+    applyingRemoteSync = true;
+    try {
+      notifyListeners();
+    } finally {
+      applyingRemoteSync = false;
+    }
+    _writeDisk();
+    return true;
+  }
+
+  void _writeDisk() {
     final json = const JsonEncoder.withIndent('  ').convert(toJson());
     _saving = _saving.then((_) => _file.writeAsString(json)).then((_) {}, onError: (Object e) {
       debugPrint('settings: could not save ($e)');
     });
+  }
+
+  void update(void Function(Settings s) change) {
+    final beforeSync = jsonEncode(toSyncJson());
+    change(this);
+    final afterSync = jsonEncode(toSyncJson());
+    if (beforeSync != afterSync) {
+      syncUpdatedAt = DateTime.now().millisecondsSinceEpoch;
+    }
+    notifyListeners();
+    // one save after another, so a quick run of changes lands in order
+    _writeDisk();
   }
 
   Future<void> _saving = Future.value();
@@ -501,15 +820,10 @@ class PlateMode {
 }
 
 const plateModes = <PlateMode>[
-  PlateMode('calls', 'Noisiest species', sizeBy: 'calls'),                       // a
-  PlateMode('latest', 'The latest bird, and when',                                // b
+  PlateMode('time', 'Recent ramblings', sizeBy: 'time'),                           // a (default): Most recent -> Map
+  PlateMode('spotlight', 'Latest & most heard',                                    // b: Combined Latest + Most heard (after Map)
       query: 'view=latest&show=time,title,date', currentOnly: true),
-  PlateMode('top', 'Most heard this session',                                     // c
-      query: 'view=top&show=title,date', currentOnly: true),
-  PlateMode('index', 'The index alone', query: 'view=index&show=title,date'),     // d
-  PlateMode('noindex', 'The collage, no index', query: 'hide=index'),             // e
-  PlateMode('time', 'Recent ramblings', sizeBy: 'time'),                          // f
-  PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                        // g
+  PlateMode('equal', 'No pecking order', sizeBy: 'equal'),                         // c: Equal size -> back to Most recent
 ];
 
 /// The view the app opens on until another is chosen: recent ramblings.
@@ -522,12 +836,13 @@ String plateLetter(int n) => String.fromCharCode(0x60 + n);
 class Station {
   Station({required this.id, required this.name, this.birdnetUrl = '', this.birdweather = ''});
 
-  /// Reads what someone typed or pasted: a BirdWeather station number or
-  /// page (app.birdweather.com/stations/1234), else a BirdNET-Go address.
+  /// Reads what someone typed or pasted: a BirdWeather station number (with
+  /// or without a leading #) or page (app.birdweather.com/stations/1234),
+  /// else a BirdNET-Go address.
   factory Station.fromInput(String name, String input, {String? id}) {
     final t = input.trim();
-    final bw = RegExp(r'birdweather\.com/stations/(\d+)').firstMatch(t)?.group(1) ??
-        (RegExp(r'^\d+$').hasMatch(t) ? t : null);
+    final bw = RegExp(r'birdweather\.com/stations/#?(\d+)').firstMatch(t)?.group(1) ??
+        RegExp(r'^#?\s*(\d+)$').firstMatch(t)?.group(1);
     final kind = bw != null ? 'BirdWeather $bw' : 'BirdNET-Go';
     return Station(
       id: id ?? 's${DateTime.now().microsecondsSinceEpoch}-${_made++}',

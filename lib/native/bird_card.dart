@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart' show ink, madder, paper, paperDeep, rule, sepia, serif;
@@ -11,6 +12,7 @@ import '../store/detection_store.dart';
 import 'collage_view.dart' show PlateImage, calls;
 import 'index_view.dart' show thousands;
 import 'plate_library.dart';
+import 'species_traits.dart';
 
 const _months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -198,6 +200,7 @@ class BirdCard extends StatefulWidget {
     required this.source,
     required this.art,
     required this.onChosen,
+    this.traits,
   });
 
   final PlateLibrary lib;
@@ -205,10 +208,13 @@ class BirdCard extends StatefulWidget {
   final CardSource source;
   final PlateArt? art;
   final ValueChanged<PlateArt?> onChosen;
+  final SpeciesTraits? traits;
 
-  /// Open the card over [context].
+  /// Open the card over [context]. `useSafeArea: false` ensures mobile
+  /// [Dialog.fullscreen] runs truly edge-to-edge on iPhone without dark bars.
   static Future<void> show(BuildContext context, BirdCard card) => showDialog<void>(
         context: context,
+        useSafeArea: false,
         barrierColor: const Color(0x8C2A241C), // rgba(42,36,28,.55)
         builder: (_) => card,
       );
@@ -238,6 +244,7 @@ class _BirdCardState extends State<BirdCard> {
   @override
   void initState() {
     super.initState();
+    widget.traits?.wantAll([widget.source.sci]);
     // Play alongside a session that is recording and whatever music is on,
     // as the recorder does (engine/listen_engine.dart).
     _player
@@ -309,48 +316,165 @@ class _BirdCardState extends State<BirdCard> {
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
+    final pad = MediaQuery.paddingOf(context);
     final narrow = screen.width <= 720;
+    final topPad = narrow ? (pad.top > 24 ? math.max(16.0, pad.top - 16.0) : math.max(8.0, pad.top)) : 0.0;
+    final bottomPad = narrow ? math.max(16.0, pad.bottom) : 0.0;
     final body = narrow ? 16.0 : 18.0;
     final text = TextStyle(fontFamily: serif, fontSize: body, height: 1.5, color: ink);
-    final left = _left(text, screen, narrow), right = _right(text);
+    final inner = Stack(
+      children: [
+        SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            narrow ? 20 : 28.8,
+            narrow ? topPad + 44 : 28.8,
+            narrow ? 20 : 28.8,
+            narrow ? bottomPad + 24 : 28.8,
+          ),
+          child: DefaultTextStyle(
+            style: text,
+            child: narrow
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _artSection(text, screen, true),
+                      const SizedBox(height: 12),
+                      _nameAndBlurb(text, padRightForClose: false),
+                      _recordingsSection(text),
+                      _detailsAndCharts(text),
+                      _creditFooter(),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 105,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _artSection(text, screen, false),
+                                _recordingsSection(text),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 32),
+                          Expanded(
+                            flex: 100,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _nameAndBlurb(text, padRightForClose: true),
+                                _detailsAndCharts(text),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      _creditFooter(),
+                    ],
+                  ),
+          ),
+        ),
+        Positioned(
+          top: narrow ? topPad : 8,
+          right: narrow ? 6 : 8,
+          child: IconButton(
+            tooltip: 'Close',
+            icon: const Icon(Symbols.close),
+            color: ink,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ],
+    );
+    if (narrow) {
+      return Dialog.fullscreen(
+        backgroundColor: paper,
+        child: inner,
+      );
+    }
     return Dialog(
-      backgroundColor: paper,
+      backgroundColor: paper.withValues(alpha: 0.97),
       surfaceTintColor: Colors.transparent,
+      elevation: 10,
+      shadowColor: const Color(0x382A241C),
       insetPadding: EdgeInsets.symmetric(horizontal: screen.width * .03, vertical: screen.height * .04),
-      shape: const RoundedRectangleBorder(side: BorderSide(color: sepia)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: rule.withValues(alpha: 0.7)),
+      ),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: math.min(960, screen.width * .94), maxHeight: screen.height * .92),
+        child: inner,
+      ),
+    );
+  }
+
+  void _openFullImage(PlateArt art) {
+    final screen = MediaQuery.sizeOf(context);
+    final pad = MediaQuery.paddingOf(context);
+    final topPad = pad.top > 24 ? math.max(16.0, pad.top - 16.0) : math.max(8.0, pad.top);
+    showDialog<void>(
+      context: context,
+      useSafeArea: false,
+      barrierColor: const Color(0x8C2A241C),
+      builder: (c) => Dialog.fullscreen(
+        backgroundColor: paper,
         child: Stack(
           children: [
-            // outline:1px solid rule; outline-offset:-7px
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: Padding(
-                  padding: EdgeInsets.all(6),
-                  child: DecoratedBox(decoration: BoxDecoration(border: Border.fromBorderSide(BorderSide(color: rule)))),
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(c).pop(),
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(20, topPad + 44, 20, math.max(24.0, pad.bottom + 12)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ConstrainedBox(
+                            constraints: BoxConstraints(maxHeight: screen.height * 0.72),
+                            child: PlateImage(
+                              art: art,
+                              width: math.min(screen.width - 40, screen.height * 0.72),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.source.common,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontFamily: serif, fontSize: 20, height: 1.2, color: ink),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.source.sci,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-            SingleChildScrollView(
-              padding: const EdgeInsets.all(28.8),
-              child: DefaultTextStyle(
-                style: text,
-                child: narrow
-                    ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [left, const SizedBox(height: 16), right])
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 105, child: left),
-                          const SizedBox(width: 32),
-                          Expanded(flex: 100, child: right),
-                        ],
-                      ),
-              ),
-            ),
             Positioned(
-              top: 14.4,
-              right: 17.6,
-              child: _Link('Close', onTap: () => Navigator.of(context).pop(), size: body * .95),
+              top: topPad,
+              right: 8,
+              child: IconButton(
+                tooltip: 'Close',
+                icon: const Icon(Symbols.close),
+                color: ink,
+                onPressed: () => Navigator.of(c).pop(),
+              ),
             ),
           ],
         ),
@@ -358,57 +482,76 @@ class _BirdCardState extends State<BirdCard> {
     );
   }
 
-  /// The plate, its credit, and the latest recordings.
-  Widget _left(TextStyle text, Size screen, bool narrow) {
+  /// The plate artwork (tap to view full screen).
+  Widget _artSection(TextStyle text, Size screen, bool narrow) {
     final art = _art;
-    final caption = TextStyle(fontFamily: serif, fontSize: text.fontSize! * .82, height: 1.35, color: sepia);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (art != null)
-          ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: screen.height * (narrow ? .45 : .52)),
-            child: PlateImage(art: art, width: math.min(500, screen.width * .9)),
-          ),
-        const SizedBox(height: 8),
-        Text.rich(
-          art == null
-              ? const TextSpan(text: 'No plate has been found for this species.')
-              : TextSpan(text: art.credit, children: [
-                  if (art.from.page != null) ...[
-                    const TextSpan(text: ' '),
-                    WidgetSpan(
-                      alignment: PlaceholderAlignment.baseline,
-                      baseline: TextBaseline.alphabetic,
-                      child: _Link('View the source', onTap: () => _open(art.from.page!), size: caption.fontSize!, italic: false),
-                    ),
-                  ],
-                ]),
-          style: caption,
+    if (art == null) {
+      return Text(
+        'No plate has been found for this species.',
+        style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: text.fontSize! * .85, color: sepia),
+      );
+    }
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _openFullImage(art),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: screen.height * (narrow ? .42 : .52)),
+          child: PlateImage(art: art, width: math.min(500, screen.width * .9)),
         ),
-        FutureBuilder<List<CardRecording>>(
-          future: _recs,
-          builder: (context, snap) {
-            final recs = snap.data ?? const <CardRecording>[];
-            if (recs.isEmpty) return const SizedBox();
-            final newest = recs.first;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 19.2),
-                _small('Latest recordings', text),
-                if (newest.spectrogramFile != null || newest.spectrogramUrl != null)
-                  _Spectrogram(file: newest.spectrogramFile, url: newest.spectrogramUrl),
-                const DecoratedBox(decoration: BoxDecoration(border: Border(top: BorderSide(color: rule)))),
-                for (final r in recs) _recording(r, text),
-                const SizedBox(height: 17.6),
-              ],
-            );
-          },
-        ),
-      ],
+      ),
     );
   }
+
+  /// Subtle legal attribution at the bottom of the pop-up.
+  Widget _creditFooter() {
+    final art = _art;
+    if (art == null) return const SizedBox.shrink();
+    final creditText = art.credit.replaceFirst(RegExp(r'^After\s+'), '');
+    final style = TextStyle(fontFamily: serif, fontSize: 11.5, height: 1.35, color: sepia.withValues(alpha: 0.85));
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: Container(
+        padding: const EdgeInsets.only(top: 8),
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: rule))),
+        child: Text.rich(
+          TextSpan(text: creditText, children: [
+            if (art.from.page != null) ...[
+              const TextSpan(text: ' '),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                child: _Link('Source', onTap: () => _open(art.from.page!), size: 11.5, italic: false),
+              ),
+            ],
+          ]),
+          style: style,
+        ),
+      ),
+    );
+  }
+
+  /// The latest recordings and spectrogram.
+  Widget _recordingsSection(TextStyle text) => FutureBuilder<List<CardRecording>>(
+        future: _recs,
+        builder: (context, snap) {
+          final recs = snap.data ?? const <CardRecording>[];
+          if (recs.isEmpty) return const SizedBox();
+          final newest = recs.first;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 19.2),
+              _small('Latest recordings', text),
+              if (newest.spectrogramFile != null || newest.spectrogramUrl != null)
+                _Spectrogram(file: newest.spectrogramFile, url: newest.spectrogramUrl),
+              const DecoratedBox(decoration: BoxDecoration(border: Border(top: BorderSide(color: rule)))),
+              for (final r in recs) _recording(r, text),
+              const SizedBox(height: 17.6),
+            ],
+          );
+        },
+      );
 
   Widget _recording(CardRecording d, TextStyle text) {
     final size = text.fontSize! * .95;
@@ -445,16 +588,15 @@ class _BirdCardState extends State<BirdCard> {
     );
   }
 
-  /// Names, Wikipedia, particulars, the two bar charts, other plates.
-  Widget _right(TextStyle text) {
+  /// Names and Wikipedia blurb.
+  Widget _nameAndBlurb(TextStyle text, {required bool padRightForClose}) {
     final f = widget.source, size = text.fontSize!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(height: size * .6),
-        // a little short of the Close link
+        SizedBox(height: size * .4),
         Padding(
-          padding: const EdgeInsets.only(right: 48),
+          padding: EdgeInsets.only(right: padRightForClose ? 44 : 0),
           child: Text(f.common, style: TextStyle(fontSize: size * 2 * 16 / 18, height: 1.1)),
         ),
         SizedBox(height: size * .15),
@@ -483,9 +625,45 @@ class _BirdCardState extends State<BirdCard> {
             );
           },
         ),
+      ],
+    );
+  }
+
+  /// Particulars, the two bar charts, and other plates.
+  Widget _detailsAndCharts(TextStyle text) {
+    final f = widget.source, size = text.fontSize!;
+    final traits = widget.traits;
+    Widget buildParticulars(List<(String, String)> extra, List<int>? hoursList) {
+      final t = traits?.of(f.sci);
+      final meanHour = hoursList == null ? null : circularMeanHour(hoursList);
+      final existingKeys = {for (final r in [...f.rows, ...extra]) r.$1.toLowerCase()};
+      final bioRows = <(String, String)>[
+        if (meanHour != null) ('Most active', formatActiveHour(meanHour)),
+        if (t?.family != null && !existingKeys.contains('family')) ('Family', t!.family!),
+        if (t?.region != null) ('Native range', t!.region!),
+        if (t?.wingspanCm != null) ('Wingspan', formatWingspan(t!.wingspanCm!)),
+        if (t?.massGrams != null) ('Weight', formatWeight(t!.massGrams!)),
+      ];
+      return _particulars([...f.rows, ...extra, ...bioRows], text);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         FutureBuilder<List<(String, String)>>(
           future: _more,
-          builder: (context, snap) => _particulars([...f.rows, ...?snap.data], text),
+          builder: (context, moreSnap) => FutureBuilder<({List<int> hours, String label})?>(
+            future: _hours,
+            builder: (context, hourSnap) {
+              final extra = moreSnap.data ?? const <(String, String)>[];
+              final hrs = hourSnap.data?.hours;
+              if (traits == null) return buildParticulars(extra, hrs);
+              return ListenableBuilder(
+                listenable: traits,
+                builder: (context, _) => buildParticulars(extra, hrs),
+              );
+            },
+          ),
         ),
         SizedBox(height: size * 1.2),
         FutureBuilder<({List<int> hours, String label})?>(

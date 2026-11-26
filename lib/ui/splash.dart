@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../main.dart' show caps, paper, sepia, serif;
+import 'bird_chime.dart';
 import 'home_shell.dart';
 
 
@@ -103,7 +106,7 @@ class Splash extends StatelessWidget {
                             ),
                           ],
                         )
-                      : Text('Birdsong could not start:\n$error',
+                      : Text('birdsongs.ai could not start:\n$error',
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontFamily: serif, color: sepia)),
                 ),
@@ -157,6 +160,7 @@ class _BootState extends State<Boot> {
   @override
   void initState() {
     super.initState();
+    unawaited(BirdChime.play(force: true));
     widget.boot.then((a) {
       if (!mounted) return;
       setState(() => _app = a);

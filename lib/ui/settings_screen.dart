@@ -3,27 +3,57 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, rootBundle;
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:plate_share/plate_share.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
 import '../engine/listen_engine.dart';
 import '../engine/model_catalog.dart';
-import '../main.dart' show sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, paperDeep, rule, sepia, serif;
 import '../server/page_control.dart';
 import '../settings.dart';
+import '../store/detection_store.dart';
 import 'format.dart';
+import 'paper_surface.dart';
 import 'splash.dart' show Cardinal, SupportQuote;
 import 'station_editor.dart';
 import 'station_history.dart';
+
+enum _SettingsTab {
+  display('Display', Symbols.palette),
+  map('Map', Symbols.map),
+  stations('Stations', Symbols.sensors),
+  listening('Listening', Symbols.mic),
+  models('Models', Symbols.psychology),
+  location('Location', Symbols.location_on),
+  data('Data', Symbols.storage),
+  about('About', Symbols.info);
+
+  const _SettingsTab(this.label, this.icon);
+  final String label;
+  final IconData icon;
+}
 
 /// Everything that isn't the plate: where birds come from, listening,
 /// models, the location filter and stored data. Opened from the plate's
 /// menu button.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.app});
+  const SettingsScreen({
+    super.key,
+    required this.app,
+    this.onGoHome,
+    this.onOpenMap,
+    this.onOpenCalendar,
+    this.onOpenBestSession,
+  });
 
   final AppState app;
+  final VoidCallback? onGoHome;
+  final VoidCallback? onOpenMap;
+  final VoidCallback? onOpenCalendar;
+  final VoidCallback? onOpenBestSession;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -33,6 +63,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _lat;
   late final TextEditingController _lon;
   final _limit = TextEditingController();
+  final _ignoreAdd = TextEditingController();
+  late _SettingsTab _tab = widget.app.engine.running ? _SettingsTab.listening : _SettingsTab.display;
+  bool _converting = false;
+  String? _convertNote;
 
   /// The page's version, from assets/web/UPSTREAM.json (tool/sync_web.py).
   late final Future<String?> _webVersion = rootBundle
@@ -64,7 +98,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _lat.dispose();
     _lon.dispose();
     _limit.dispose();
+    _ignoreAdd.dispose();
     super.dispose();
+  }
+
+  void _addIgnored() {
+    final term = _ignoreAdd.text.trim();
+    if (term.isEmpty) return;
+    final exists = s.ignoredSpecies.any((x) => x.toLowerCase() == term.toLowerCase());
+    if (!exists) {
+      s.update((x) => x.ignoredSpecies = [...x.ignoredSpecies, term]);
+    }
+    _ignoreAdd.clear();
   }
 
   void _saveLocation() => s.update((x) {
@@ -72,97 +117,313 @@ class _SettingsScreenState extends State<SettingsScreen> {
         x.longitude = double.tryParse(_lon.text.trim());
       });
 
+  /// Finds the local session with the highest distinct (non-ignored) species count.
+  ({Session session, int species})? _bestLocalSession() {
+    final model = s.plateModel;
+    Session? best;
+    var bestCount = 0;
+    for (final ses in app.store.sessions) {
+      final count = {
+        for (final d in app.store.forPlate(model, session: ses))
+          if (!s.isIgnoredSpecies(d.common, d.sci)) d.sci
+      }.length;
+      if (count > bestCount || (count == bestCount && count > 0 && best != null && ses.start.isAfter(best.start))) {
+        best = ses;
+        bestCount = count;
+      }
+    }
+    return best == null ? null : (session: best, species: bestCount);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListenableBuilder(
-        listenable: Listenable.merge([s, app.engine, app.models, app.store, app.updates]),
-        builder: (context, _) {
-          final listen = s.mode == AppMode.listen;
-          // On a wide window (a Mac, an iPad) the settings keep to a
-          // readable column in the middle.
-          final side = ((MediaQuery.sizeOf(context).width - 680) / 2).clamp(16.0, 400.0);
-          return ListView(
-            padding: EdgeInsets.fromLTRB(side, 4, side, 32),
-            children: [
-              // the same menu whether listening here or showing a station:
-              // the plate, the map and the experiments apply to both
-              s.webPlate ? _displaySection(context, listen) : _flutterDisplaySection(context),
-              _mapSection(context),
-              _section(
-                context,
-                'Experimental',
-                summary: s.webPlate ? 'The old web plate' : 'Nothing switched on',
-                [
-                  _switch('Use the old web plate', s.webPlate, (v) => s.update((x) => x.webPlate = v)),
-                  Text(
-                    'The plate as the web page drew it, before it was moved into Flutter. '
-                    'Its own Display options show above while it is on.',
-                    style: Theme.of(context).textTheme.bodySmall,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text(
+          'birdsongs.ai',
+          style: TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 1.0, color: ink),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Close',
+            icon: const Icon(Symbols.close),
+            onPressed: () {
+              hapticTap();
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Use the actual panel width (e.g. 420 px inside the desktop sidebar,
+          // or full screen on mobile) so sidebar and mobile show the exact same
+          // settings without squishing.
+          final side = ((constraints.maxWidth - 680) / 2).clamp(16.0, 400.0);
+          return ListenableBuilder(
+            listenable: Listenable.merge([s, app.engine, app.models, app.store, app.updates, app.icloud]),
+            builder: (context, _) {
+              final listen = s.mode == AppMode.listen;
+              final best = listen ? _bestLocalSession() : null;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _quickLaunchBar(context, side, best),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: side),
+                    child: Text(
+                      'Settings',
+                      style: TextStyle(fontFamily: caps, fontSize: 12, letterSpacing: 1.0, color: sepia),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  _iconBar(side),
+                  const SizedBox(height: 6),
+                  Divider(height: 1, color: rule.withValues(alpha: 0.45)),
+                  Expanded(
+                    child: ListView(
+                      padding: EdgeInsets.fromLTRB(side, 14, side, 32),
+                      children: _tabBody(context, listen),
+                    ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 8),
-              SegmentedButton<AppMode>(
-                segments: const [
-                  ButtonSegment(
-                      value: AppMode.listen,
-                      icon: Icon(Icons.mic_none_outlined),
-                      label: Text('Listen here & now')),
-                  ButtonSegment(
-                      value: AppMode.station, icon: Icon(Icons.sensors), label: Text('Remote station')),
-                ],
-                selected: {s.mode},
-                showSelectedIcon: false,
-                onSelectionChanged: (v) {
-                  // a remote station with none saved yet: ask for one
-                  if (v.first == AppMode.station && s.stations.isEmpty) {
-                    editStation(context, s);
-                    return;
-                  }
-                  s.update((x) => x.mode = v.first);
-                },
-              ),
-              const SizedBox(height: 8),
-              // the saved stations, then listening here: both, either way
-              _remote(context),
-              _listening(context),
-              _models(context),
-              _location(context),
-              _data(context),
-              // what keeping the stations' days is doing (station_archive.dart)
-              if (s.stations.isNotEmpty)
-                _section(
-                  context,
-                  'Station history',
-                  summary: 'Days kept on this device, and the log',
-                  [StationHistory(root: app.store.root, stations: s.stations)],
-                ),
-              const Divider(height: 32),
-              _credits(context, listen),
-              const Divider(height: 1),
-              _support(context),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: app.engine.running
-                      ? null
-                      : () {
-                          s.update((x) => x.onboarded = false);
-                          Navigator.of(context).pop();
-                        },
-                  child: const Text('Show the welcome again'),
-                ),
-              ),
-            ],
+              );
+            },
           );
         },
       ),
     );
   }
+
+  Widget _quickLaunchBar(BuildContext context, double side, ({Session session, int species})? best) {
+    Widget tile({
+      required IconData icon,
+      required String label,
+      String? detail,
+      required VoidCallback onTap,
+    }) {
+      return Expanded(
+        child: Material(
+          color: paperDeep.withValues(alpha: 0.38),
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            hoverColor: ink.withValues(alpha: 0.08),
+            highlightColor: ink.withValues(alpha: 0.12),
+            onTap: () {
+              hapticTap();
+              onTap();
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 21, color: ink),
+                  const SizedBox(height: 5),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontFamily: caps, fontSize: 11.5, letterSpacing: 0.4, color: ink),
+                  ),
+                  if (detail != null) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      detail,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 11, color: sepia),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final tiles = <Widget>[
+      tile(
+        icon: Symbols.home,
+        label: 'Home',
+        onTap: () {
+          Navigator.of(context).pop();
+          if (widget.onGoHome != null) {
+            widget.onGoHome!();
+          } else {
+            s.update((x) {
+              x.plateMode = defaultPlateMode;
+              x.nativeSizeBy = x.mode == AppMode.station ? 'calls' : 'time';
+            });
+          }
+        },
+      ),
+      if (widget.onOpenMap != null)
+        tile(
+          icon: Symbols.map,
+          label: 'Map',
+          onTap: () {
+            Navigator.of(context).pop();
+            widget.onOpenMap!();
+          },
+        ),
+      if (widget.onOpenCalendar != null)
+        tile(
+          icon: Symbols.calendar_today,
+          label: 'Calendar',
+          onTap: () {
+            Navigator.of(context).pop();
+            widget.onOpenCalendar!();
+          },
+        ),
+      if (best != null)
+        tile(
+          icon: Symbols.emoji_events,
+          label: 'Best walk',
+          detail: '${best.species} sp.',
+          onTap: () {
+            Navigator.of(context).pop();
+            if (widget.onOpenBestSession != null) {
+              widget.onOpenBestSession!();
+            } else {
+              app.store.select(best.session);
+              s.update((x) {
+                x.mode = AppMode.listen;
+                x.plateMode = defaultPlateMode;
+                x.nativeSizeBy = 'time';
+              });
+            }
+          },
+        ),
+    ];
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(side, 6, side, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < tiles.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            tiles[i],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _iconBar(double side) {
+    return Container(
+      color: paper,
+      padding: EdgeInsets.symmetric(horizontal: side - 4, vertical: 6),
+      child: Wrap(
+        spacing: 2,
+        runSpacing: 4,
+        alignment: WrapAlignment.spaceBetween,
+        children: [
+          for (final tab in _SettingsTab.values)
+            _iconButton(tab),
+        ],
+      ),
+    );
+  }
+
+  Widget _iconButton(_SettingsTab tab) {
+    final active = _tab == tab;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      hoverColor: ink.withValues(alpha: 0.08),
+      highlightColor: ink.withValues(alpha: 0.12),
+      onTap: () {
+        hapticTap();
+        setState(() => _tab = tab);
+      },
+      child: Container(
+        width: 46,
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+        decoration: active
+            ? const BoxDecoration(
+                border: Border(bottom: BorderSide(color: ink, width: 2)),
+              )
+            : null,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(tab.icon, size: 20, color: active ? ink : ink.withValues(alpha: 0.55)),
+            const SizedBox(height: 2),
+            Text(
+              tab.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: caps,
+                fontSize: 9.5,
+                letterSpacing: 0.2,
+                color: active ? ink : sepia,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _tabBody(BuildContext context, bool listen) => switch (_tab) {
+        _SettingsTab.display => [
+            s.webPlate ? _displaySection(context, listen, open: true) : _flutterDisplaySection(context, open: true),
+          ],
+        _SettingsTab.map => [
+            _mapSection(context, open: true),
+          ],
+        _SettingsTab.stations => [
+            _remote(context),
+            if (s.stations.isNotEmpty) ...[
+              const Divider(height: 24, color: rule),
+              _section(
+                context,
+                'Station history',
+                summary: 'Days kept on this device, and the log',
+                open: true,
+                [StationHistory(root: app.store.root, stations: s.stations)],
+              ),
+            ],
+          ],
+        _SettingsTab.listening => [
+            _listening(context, open: true),
+          ],
+        _SettingsTab.models => [
+            _models(context, open: true),
+          ],
+        _SettingsTab.location => [
+            _location(context, open: true),
+          ],
+        _SettingsTab.data => [
+            _data(context, open: true),
+          ],
+        _SettingsTab.about => [
+            _credits(context, listen, open: true),
+            const Divider(height: 16, color: rule),
+            _support(context, open: true),
+            const Divider(height: 16, color: rule),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: app.engine.running
+                    ? null
+                    : () {
+                        s.update((x) => x.onboarded = false);
+                        Navigator.of(context).pop();
+                      },
+                child: const Text('Show the welcome again'),
+              ),
+            ),
+          ],
+      };
 
   // ---- sections -------------------------------------------------------------
 
@@ -194,7 +455,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           for (final st in s.stations)
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.sensors,
+              leading: Icon(Symbols.sensors,
                   color: st.id == shown ? theme.colorScheme.primary : theme.disabledColor),
               title: Text(st.name),
               subtitle: Text(st.isBirdWeather ? st.kind : st.birdnetUrl,
@@ -203,18 +464,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => s.update((x) {
                 x.stationId = st.id;
                 x.mode = AppMode.station;
+                x.plateMode = defaultPlateMode;
               }),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
                     tooltip: 'Edit',
-                    icon: const Icon(Icons.edit_outlined),
+                    icon: const Icon(Symbols.edit),
                     onPressed: () => editStation(context, s, station: st),
                   ),
                   IconButton(
                     tooltip: 'Remove',
-                    icon: const Icon(Icons.delete_outline),
+                    icon: const Icon(Symbols.delete),
                     onPressed: () => _confirmRemove(context, st),
                   ),
                 ],
@@ -231,12 +493,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               FilledButton.tonalIcon(
                 onPressed: () => editStation(context, s),
-                icon: const Icon(Icons.add),
+                icon: const Icon(Symbols.add),
                 label: const Text('Add a station'),
               ),
               TextButton.icon(
                 onPressed: openBirdWeatherMap,
-                icon: const Icon(Icons.map_outlined, size: 18),
+                icon: const Icon(Symbols.map, size: 18),
                 label: const Text('Find one on BirdWeather'),
               ),
             ],
@@ -255,25 +517,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const Text('Only the saved address goes; nothing on the station changes.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Remove')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: madder, foregroundColor: paper),
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Remove'),
+          ),
         ],
       ),
     );
     if (ok == true) s.removeStation(st.id);
   }
 
-  Widget _listening(BuildContext context) {
+  Widget _listening(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
     final engine = app.engine;
     final locked = engine.running;
-    return _section(
-      context,
-      'Listening',
-      summary: engine.running
-          ? 'Listening · ${engine.levelDb.toStringAsFixed(0)} dBFS'
-          : '${(s.threshold * 100).round()}% · every ${s.hopSeconds.toStringAsFixed(1)} s',
-      open: engine.running,
-      [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         if (engine.error != null)
           Text(engine.error!, style: TextStyle(color: theme.colorScheme.error)),
         if (engine.running) ...[
@@ -304,14 +565,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 8),
         _slider('Threshold ${(s.threshold * 100).round()}%', s.threshold, 0.05, 0.95, 18,
             (v) => s.update((x) => x.threshold = v)),
-        _slider('Every ${s.hopSeconds.toStringAsFixed(1)} s', s.hopSeconds, 0.5, 5, 9,
-            (v) => s.update((x) => x.hopSeconds = v)),
-        _slider('Repeat after ${s.repeatSeconds.round()} s', s.repeatSeconds, 3, 60, 19,
-            (v) => s.update((x) => x.repeatSeconds = v)),
         _switch('Animals only', s.animalsOnly, (v) => s.update((x) => x.animalsOnly = v)),
-        if (Platform.isIOS || Platform.isMacOS)
-          _switch('Core ML (GPU / Neural Engine)', s.useCoreMl,
-              locked ? null : (v) => s.update((x) => x.useCoreMl = v)),
+        const Divider(height: 20, color: rule),
+        _section(
+          context,
+          'More listening options',
+          summary: 'Format, timing, ignored species and Core ML',
+          [
+            if (PlateShare.supported) ...[
+              _dropdown(
+                'Recording format',
+                s.clipFormat,
+                const {
+                  'aac': 'AAC 128 kbps (.m4a, smaller)',
+                  'wav': 'WAV (uncompressed)',
+                },
+                (v) => s.update((x) => x.clipFormat = v),
+              ),
+              Text(
+                'Saved clips include 2 seconds of pre-record before each detection.',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+            ],
+            _slider('Every ${s.hopSeconds.toStringAsFixed(1)} s', s.hopSeconds, 0.5, 5, 9,
+                (v) => s.update((x) => x.hopSeconds = v)),
+            _slider('Repeat after ${s.repeatSeconds.round()} s', s.repeatSeconds, 3, 60, 19,
+                (v) => s.update((x) => x.repeatSeconds = v)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: Text('Ignored species', style: theme.textTheme.titleSmall)),
+                if (s.ignoredSpecies.join('\u0000') != Settings.defaultIgnoredSpecies.join('\u0000'))
+                  TextButton(
+                    onPressed: () => s.update((x) => x.ignoredSpecies = List<String>.of(Settings.defaultIgnoredSpecies)),
+                    child: const Text('Reset defaults'),
+                  ),
+              ],
+            ),
+            Text(
+              'Detections matching these names are ignored while listening and hidden from the plate.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            if (s.ignoredSpecies.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final term in s.ignoredSpecies)
+                    InputChip(
+                      label: Text(term),
+                      visualDensity: VisualDensity.compact,
+                      onDeleted: () => s.update((x) => x.ignoredSpecies = [
+                            for (final item in x.ignoredSpecies)
+                              if (item != term) item,
+                          ]),
+                    ),
+                ],
+              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _ignoreAdd,
+                    decoration: const InputDecoration(
+                      hintText: 'Add species or sound to ignore',
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _addIgnored(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(onPressed: _addIgnored, child: const Text('Add')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (Platform.isIOS || Platform.isMacOS)
+              _switch('Core ML (GPU / Neural Engine)', s.useCoreMl,
+                  locked ? null : (v) => s.update((x) => x.useCoreMl = v)),
+          ],
+        ),
       ],
     );
   }
@@ -332,7 +666,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _models(BuildContext context) {
+  Widget _models(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
     final m = app.models;
     final specs = effectiveCatalog(s.modelOverrides);
@@ -344,7 +678,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'Models',
       summary: '${s.activeModels.where((id) => installed.any((x) => x.id == id)).length} listening'
           ' · ${installed.length} downloaded',
-      open: installed.isEmpty,
+      open: open || installed.isEmpty,
       [
         if (locked)
           Text('Stop listening to change models.', style: theme.textTheme.bodySmall),
@@ -437,13 +771,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             else if (installed)
               IconButton(
                 tooltip: 'Delete',
-                icon: const Icon(Icons.delete_outline),
+                icon: const Icon(Symbols.delete),
                 onPressed: locked ? null : () => m.remove(spec),
               )
             else
               IconButton(
                 tooltip: 'Download',
-                icon: const Icon(Icons.download),
+                icon: const Icon(Symbols.download),
                 onPressed: () => m.install(spec),
               ),
           ],
@@ -476,17 +810,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _location(BuildContext context) {
+  Widget _location(BuildContext context, {bool open = false}) {
     final m = app.models;
     final locked = app.engine.running;
     final geoReady = m.isInstalled(geomodel);
-    return _section(
-      context,
-      'Location filter',
-      summary: s.useGeomodel
-          ? (geoReady ? 'On' : 'On · geomodel not downloaded')
-          : 'Off',
-      [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         _switch('Drop species unlikely here', s.useGeomodel,
             locked ? null : (v) => s.update((x) => x.useGeomodel = v)),
         _switch('Note the weather (MET Norway)', s.recordWeather,
@@ -496,44 +826,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? LinearProgressIndicator(value: m.progress[geomodel.id])
               : TextButton.icon(
                   onPressed: () => m.install(geomodel),
-                  icon: const Icon(Icons.download),
+                  icon: const Icon(Symbols.download),
                   label: Text('Geomodel, ${megabytes(geomodel.totalBytes)}'),
                 ),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _lat,
-                decoration: const InputDecoration(labelText: 'Latitude', hintText: 'GPS'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                onSubmitted: (_) => _saveLocation(),
-              ),
+        const Divider(height: 20, color: rule),
+        _section(
+          context,
+          'More location options',
+          summary: 'Manual coordinates and threshold',
+          [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _lat,
+                    decoration: const InputDecoration(labelText: 'Latitude', hintText: 'GPS'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                    onSubmitted: (_) => _saveLocation(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _lon,
+                    decoration: const InputDecoration(labelText: 'Longitude', hintText: 'GPS'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                    onSubmitted: (_) => _saveLocation(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(onPressed: _saveLocation, child: const Text('Save')),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _lon,
-                decoration: const InputDecoration(labelText: 'Longitude', hintText: 'GPS'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                onSubmitted: (_) => _saveLocation(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton(onPressed: _saveLocation, child: const Text('Save')),
+            _slider('Above ${(s.geoThreshold * 100).toStringAsFixed(0)}% likely', s.geoThreshold,
+                0.01, 0.2, 19, (v) => s.update((x) => x.geoThreshold = v)),
           ],
         ),
-        _slider('Above ${(s.geoThreshold * 100).toStringAsFixed(0)}% likely', s.geoThreshold,
-            0.01, 0.2, 19, (v) => s.update((x) => x.geoThreshold = v)),
       ],
     );
   }
 
-  Widget _data(BuildContext context) {
+  Future<void> _batchConvert() async {
+    if (_converting || !PlateShare.supported) return;
+    setState(() {
+      _converting = true;
+      _convertNote = 'Converting WAV recordings to AAC…';
+    });
+    final res = await app.store.batchConvertWavToAac(
+      (wav, m4a) => PlateShare.encodeAac(wav, m4a, bitrate: 128000),
+      onProgress: (done, total) {
+        if (!mounted) return;
+        setState(() => _convertNote = 'Converting $done of $total…');
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      _converting = false;
+      if (res.converted == 0 && res.failed == 0) {
+        _convertNote = 'No uncompressed WAV recordings found.';
+      } else {
+        final saved = megabytes(res.savedBytes);
+        _convertNote = 'Converted ${res.converted} recordings (saved $saved)'
+            '${res.failed > 0 ? ' · ${res.failed} failed' : ''}.';
+      }
+    });
+  }
+
+  Widget _data(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
     final store = app.store;
+    final icloud = app.icloud;
     return _section(
       context,
       'Data',
+      open: open,
       summary: '${store.sessions.length} sessions · ${store.all.length} detections',
       [
         FutureBuilder<int>(
@@ -541,10 +907,123 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (context, snap) =>
               Text('Recordings ${megabytes(snap.data ?? 0)}', style: theme.textTheme.bodySmall),
         ),
-        const SizedBox(height: 8),
+        if (PlateShare.supported) ...[
+          const SizedBox(height: 12),
+          FutureBuilder<int>(
+            future: store.wavClipCount(),
+            builder: (context, snap) {
+              final count = snap.data ?? 0;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _converting || app.engine.running || count == 0 ? null : _batchConvert,
+                    icon: const Icon(Symbols.compress),
+                    label: Text(count > 0
+                        ? 'Convert $count WAV recordings to AAC'
+                        : 'All recordings compressed'),
+                  ),
+                  if (_convertNote != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(_convertNote!, style: theme.textTheme.bodySmall),
+                    ),
+                ],
+              );
+            },
+          ),
+          const Divider(height: 24, color: rule),
+          _switch('iCloud sync', s.icloudSync, (v) {
+            s.update((x) => x.icloudSync = v);
+            if (v) icloud.syncNow(manual: true);
+          }),
+          Text(
+            'Syncs sessions, recordings, chosen bird plates, saved map pins, settings, remote stations and logs '
+            'via iCloud Drive across your iPhone, iPad and Mac.',
+            style: theme.textTheme.bodySmall,
+          ),
+          if (s.icloudSync) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: icloud.syncing ? null : () => icloud.syncNow(manual: true),
+                  icon: icloud.syncing
+                      ? const SizedBox.square(
+                          dimension: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Symbols.cloud_sync, size: 18),
+                  label: Text(icloud.syncing ? 'Syncing…' : 'Sync now'),
+                ),
+              ],
+            ),
+            if (icloud.status != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(icloud.status!, style: theme.textTheme.bodySmall),
+              ),
+            if (icloud.error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(icloud.error!, style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),
+              ),
+            const SizedBox(height: 6),
+            _section(
+              context,
+              'iCloud sync log',
+              summary: 'Recent uploads and downloads',
+              [
+                FutureBuilder<List<String>>(
+                  future: icloud.readLogLines(),
+                  builder: (context, snap) {
+                    final lines = snap.data ?? const <String>[];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 160),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: paperDeep.withValues(alpha: 0.42),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: lines.isEmpty
+                              ? Text('No sync activity yet.', style: theme.textTheme.bodySmall)
+                              : ListView.builder(
+                                  shrinkWrap: true,
+                                  itemCount: lines.length,
+                                  itemBuilder: (_, idx) => Text(
+                                    lines[idx],
+                                    style: const TextStyle(fontFamily: 'Menlo', fontSize: 11, height: 1.35, color: ink),
+                                  ),
+                                ),
+                        ),
+                        if (lines.isNotEmpty)
+                          Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: TextButton.icon(
+                              onPressed: () async {
+                                await Clipboard.setData(ClipboardData(text: lines.join('\n')));
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(const SnackBar(content: Text('Sync log copied.')));
+                                }
+                              },
+                              icon: const Icon(Symbols.content_copy, size: 16),
+                              label: const Text('Copy log'),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
+        ],
+        const Divider(height: 24, color: rule),
         OutlinedButton.icon(
           onPressed: app.engine.running ? null : () => _confirmClear(context),
-          icon: const Icon(Icons.delete_sweep_outlined),
+          icon: const Icon(Symbols.delete_sweep),
           label: const Text('Forget everything heard'),
         ),
       ],
@@ -561,35 +1040,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     app.page?.set(key, value);
   }
 
-  /// The Flutter plate's Display options (the web plate's, below, while
-  /// Experimental > Use the old web plate is on).
-  Widget _flutterDisplaySection(BuildContext context) => _section(
-        context,
-        'Display',
-        summary: PageControl.sizeBy[s.nativeSizeBy] ?? '',
-        [
+  /// The Flutter plate's Display options: core everyday controls upfront,
+  /// fine-grained tweaks tucked cleanly under "More display options".
+  Widget _flutterDisplaySection(BuildContext context, {bool open = false}) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           _switch('Fit on one screen', s.nativeFit, (v) => s.update((x) => x.nativeFit = v)),
-          _switch('Title', s.nativeShowTitle, (v) => s.update((x) => x.nativeShowTitle = v)),
-          _switch('Date', s.nativeShowDate, (v) => s.update((x) => x.nativeShowDate = v)),
-          _switch('Song scribble while listening', s.songScribble, (v) => s.update((x) => x.songScribble = v)),
-          _switch('Species and calls under the date', s.nativeTotals, (v) => s.update((x) => x.nativeTotals = v)),
-          _switch('Heading in small capitals', s.nativeTitleCaps, (v) => s.update((x) => x.nativeTitleCaps = v)),
-          _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
-              const {'ink': 'Black, as the title (default)', 'sepia': 'Sepia'},
-              (v) => s.update((x) => x.nativeHeadingInk = v == 'ink')),
-          _dropdown('Latest marked by', s.nativeMarkAt, const {...PageControl.markAt, 'none': 'Nothing'},
-              (v) => s.update((x) => x.nativeMarkAt = v)),
-          _dropdown('Size by', s.nativeSizeBy, PageControl.sizeBy, (v) => s.update((x) => x.nativeSizeBy = v)),
           _dropdown(
-              'Plates on paper',
-              s.nativePlateStyle,
+              'Song scribble',
+              s.songScribbleMode,
               const {
-                'cutout': 'Cut out, as the web plate does',
-                'tint': 'Tinted into the page',
-                'plain': 'As they come',
+                'scribble': 'Pencil scribble (default)',
+                'wave': 'Simple wave (black, lighter)',
+                'off': 'Off',
               },
-              (v) => s.update((x) => x.nativePlateStyle = v)),
-          _switch('Skulls, wings and eggs', s.nativeParts, (v) => s.update((x) => x.nativeParts = v)),
+              (v) => s.update((x) => x.songScribbleMode = v)),
+          _switch('Show latest detection', s.nativeShowLatestDetection,
+              (v) => s.update((x) => x.nativeShowLatestDetection = v)),
+          if (s.nativeShowLatestDetection)
+            _switch('Latest detection ticket', s.nativeBottomTicket,
+                (v) => s.update((x) => x.nativeBottomTicket = v)),
+          _switch('Name tickets on all birds', s.nativeAllNameTickets,
+              (v) => s.update((x) => x.nativeAllNameTickets = v)),
+          _switch('Show bird info on hover', s.nativeHoverInfo, (v) => s.update((x) => x.nativeHoverInfo = v)),
           _dropdown(
               'Limit species',
               '${s.nativeLimit}',
@@ -600,14 +1073,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   '${s.nativeLimit}': 'The ${s.nativeLimit} most heard',
               },
               (v) => s.update((x) => x.nativeLimit = int.tryParse(v) ?? 0)),
+          const Divider(height: 20, color: rule),
+          _section(
+            context,
+            'More display options',
+            summary: 'Heading, plates, markers and legacy view',
+            [
+              _switch('Title', s.nativeShowTitle, (v) => s.update((x) => x.nativeShowTitle = v)),
+              _switch('Date', s.nativeShowDate, (v) => s.update((x) => x.nativeShowDate = v)),
+              _switch('Species and calls under the date', s.nativeTotals, (v) => s.update((x) => x.nativeTotals = v)),
+              _switch('Heading in small capitals', s.nativeTitleCaps, (v) => s.update((x) => x.nativeTitleCaps = v)),
+              _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
+                  const {'ink': 'Black, as the title (default)', 'sepia': 'Sepia'},
+                  (v) => s.update((x) => x.nativeHeadingInk = v == 'ink')),
+              _dropdown('Latest marked by', s.nativeMarkAt, const {...PageControl.markAt, 'none': 'Nothing'},
+                  (v) => s.update((x) => x.nativeMarkAt = v)),
+              _dropdown('Size by', s.nativeSizeBy, PageControl.sizeBy, (v) => s.update((x) => x.nativeSizeBy = v)),
+              _dropdown(
+                  'Plates on paper',
+                  s.nativePlateStyle,
+                  const {
+                    'cutout': 'Cut out, as the web plate does',
+                    'tint': 'Tinted into the page',
+                    'plain': 'As they come',
+                  },
+                  (v) => s.update((x) => x.nativePlateStyle = v)),
+              _switch('Skulls, wings and eggs', s.nativeParts, (v) => s.update((x) => x.nativeParts = v)),
+              _switch('Use the old web plate', s.webPlate, (v) => s.update((x) => x.webPlate = v)),
+            ],
+          ),
         ],
       );
 
   /// The web plate's Display options, read from and set through the page.
-  Widget _displaySection(BuildContext context, bool listen) {
+  Widget _displaySection(BuildContext context, bool listen, {bool open = false}) {
     final d = _display;
     if (d == null) {
-      return _section(context, 'Display', summary: 'Open the plate first', const []);
+      return _section(context, 'Display', open: open, summary: 'Open the plate first', const []);
     }
     bool on(String k) => d[k] == true;
     String pick(String k, Map<String, String> from, String fallback) {
@@ -618,6 +1120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return _section(
       context,
       'Display',
+      open: open,
       summary: PageControl.sizeBy[pick('sizeBy', PageControl.sizeBy, 'calls')],
       [
         _switch('Fit on one screen', on('fit'), (v) => _setDisplay('fit', v)),
@@ -661,28 +1164,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'all': 'Every call',
   };
 
-  Widget _mapSection(BuildContext context) {
+  Widget _mapSection(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
-    return _section(
-      context,
-      'Map',
-      summary: s.showMap ? 'Showing the walk · ${mapBirds[s.mapBirds]}' : 'Showing the collage',
-      [
-        _switch('Show the walk on a map', s.showMap, (v) => s.update((x) => x.showMap = v)),
-        _dropdown('Crosses', s.mapBirds, mapBirds, (v) => s.update((x) => x.mapBirds = v)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         _switch('Landmarks, heritage and nature sites', s.mapExtras,
             (v) => s.update((x) => x.mapExtras = v)),
-        if (s.mapExtras)
-          _switch('Descriptions in Passed on the way', s.mapPassedAbout,
-              (v) => s.update((x) => x.mapPassedAbout = v)),
-        if (kDebugMode)
-          _switch('Timing readout on the map (debug)', s.mapDebugReadout,
-              (v) => s.update((x) => x.mapDebugReadout = v)),
-        Text(
-          'The map is drawn from OpenFreeMap and open elevation data, so the area of each walk '
-          'is sent to them. Landmarks also send it to Historic England, Natural England and '
-          'Wikipedia, and list what the walk passed above the map.',
-          style: theme.textTheme.bodySmall,
+        _dropdown('Bird pins', s.mapBirds, mapBirds, (v) => s.update((x) => x.mapBirds = v)),
+        const Divider(height: 20, color: rule),
+        _section(
+          context,
+          'More map options',
+          summary: 'Button style, descriptions and privacy',
+          [
+            _dropdown(
+              'Map buttons',
+              s.mapButtonStyle,
+              const {
+                'ink': 'All black icons (default)',
+                'paper': 'Paper circle, madder icons',
+                'madder': 'Solid madder',
+              },
+              (v) => s.update((x) => x.mapButtonStyle = v),
+            ),
+            if (s.mapExtras)
+              _switch('Descriptions in Passed on the way', s.mapPassedAbout,
+                  (v) => s.update((x) => x.mapPassedAbout = v)),
+            if (kDebugMode)
+              _switch('Timing readout on the map (debug)', s.mapDebugReadout,
+                  (v) => s.update((x) => x.mapDebugReadout = v)),
+            const SizedBox(height: 6),
+            Text(
+              'The map is drawn from OpenFreeMap and open elevation data, so the area of each walk '
+              'is sent to them. Landmarks also send it to Historic England, Natural England and '
+              'Wikipedia, and list what the walk passed above the map.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
         ),
       ],
     );
@@ -695,18 +1214,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
 
   /// As the page's own Credits.
-  Widget _credits(BuildContext context, bool listen) {
+  Widget _credits(BuildContext context, bool listen, {bool open = false}) {
     final theme = Theme.of(context);
     final detections = listen
         ? 'BirdNET, run on this device (${effectiveById(s.plateModel, s.modelOverrides)?.family ?? 'the chosen model'})'
         : s.stationDigits.isNotEmpty
             ? 'BirdWeather'
             : 'BirdNET-Go';
-    return _section(context, 'Credits', [
+    return _section(context, 'Credits', open: open, [
       FutureBuilder<String?>(
         future: _webVersion,
         builder: (context, snap) => Text(
-          'Birdsong${snap.data == null ? '' : ' v${snap.data}'}. Created by Ed Stone. '
+          'birdsongs.ai${snap.data == null ? '' : ' v${snap.data}'}. Created by Ed Stone. '
           'Detections by $detections. Bird cut-outs from the Fugleramme project by '
           'Arne Giacomo, after Gould, the von Wright brothers, Audubon and others, used under '
           'CC BY-SA 4.0. Descriptions from Wikipedia, CC BY-SA. Weather from MET Norway, CC BY 4.0. '
@@ -730,15 +1249,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   /// As the page's own Support.
-  Widget _support(BuildContext context) {
+  Widget _support(BuildContext context, {bool open = false}) {
     final theme = Theme.of(context);
-    return _section(context, 'Support', [
+    return _section(context, 'Support', open: open, [
       const Center(child: Cardinal(height: 110)),
       const SizedBox(height: 12),
       const SupportQuote(size: 15),
       const SizedBox(height: 16),
       Text(
-        'One hopes you are enjoying Birdsong. If something is amiss, or it does not yet do '
+        'One hopes you are enjoying birdsongs.ai. If something is amiss, or it does not yet do '
         'what you want of it, say so on GitHub.',
         style: theme.textTheme.bodyMedium,
       ),
@@ -750,13 +1269,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ValueChanged<String> onChanged) =>
       Row(
         children: [
-          SizedBox(width: 130, child: Text(label)),
-          DropdownButton<String>(
-            value: value,
-            items: [
-              for (final e in items.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
-            ],
-            onChanged: (v) => v == null ? null : onChanged(v),
+          SizedBox(width: 120, child: Text(label)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: value,
+              items: [
+                for (final e in items.entries)
+                  DropdownMenuItem(value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis)),
+              ],
+              onChanged: (v) => v == null ? null : onChanged(v),
+            ),
           ),
         ],
       );
@@ -797,7 +1321,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const Text('Deletes all sessions, detections and recordings. Models stay.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: madder, foregroundColor: paper),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );

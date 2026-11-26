@@ -4,7 +4,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:material_symbols_icons/symbols.dart';
 
+import '../main.dart' show paperDeep;
 import '../native/station_archive.dart';
 import '../settings.dart';
 
@@ -111,8 +113,11 @@ class _StationHistoryState extends State<StationHistory> {
           Container(
             height: 200,
             width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(border: Border.all(color: theme.dividerColor)),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: paperDeep.withValues(alpha: 0.42),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: (_seen[st.id]?.lines ?? const []).isEmpty
                 ? Text('Nothing yet. Days are kept while the station is shown on the plate.',
                     style: theme.textTheme.bodySmall)
@@ -135,7 +140,7 @@ class _StationHistoryState extends State<StationHistory> {
                       .showSnackBar(const SnackBar(content: Text('The log is copied.')));
                 }
               },
-              icon: const Icon(Icons.copy, size: 16),
+              icon: const Icon(Symbols.content_copy, size: 16),
               label: const Text('Copy the log'),
             ),
           ),

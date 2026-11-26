@@ -62,6 +62,15 @@ void main() {
     final t0 = DateTime(2026, 11, 21, 9);
     final a = await store.startSession(at: t0, lat: 51.15, lon: -2.78);
     store.addTrackPoint(a, TrackPoint(at: t0.add(const Duration(minutes: 1)), lat: 51.155, lon: -2.78));
+    await store.add(
+      model: 'bnl-v3-10k',
+      sci: 'Erithacus rubecula',
+      common: 'European Robin',
+      confidence: 0.9,
+      at: t0.add(const Duration(minutes: 2)),
+      windowSeconds: 3,
+      scores: const [],
+    );
     await store.endSession(a, at: t0.add(const Duration(minutes: 30)));
     final live = await store.startSession(at: t0.add(const Duration(hours: 2)), lat: 51.26, lon: -2.64);
 

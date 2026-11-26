@@ -28,9 +28,9 @@ String lasting(Duration d) {
   return '${m ~/ 60}hr${r == 0 ? '' : _two(r)}';
 }
 
-/// "Wed 18 Nov, 22:19 for 13m", or "for 1hr32".
+/// "Wed 18 Nov.  22:19 ~ 13m", or "~ 1hr32".
 String span(DateTime from, DateTime to) =>
-    '${day(from)}, ${clock(from)} for ${lasting(to.difference(from))}';
+    '${day(from)}.  ${clock(from)} ~ ${lasting(to.difference(from))}';
 
 /// "51.454° N, 2.588° W"
 String place(double lat, double lon) =>

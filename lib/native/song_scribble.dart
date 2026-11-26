@@ -5,22 +5,52 @@ import 'package:flutter/scheduler.dart';
 
 import '../engine/listen_engine.dart';
 import '../engine/scribble_trace.dart';
-import '../main.dart' show sepia, serif;
+import '../main.dart' show ink, paper, rule, sepia, serif;
+import '../ui/paper_surface.dart';
 
 /// The song scribble: along the bottom of the plate, between the buttons,
 /// a pencil line drawn from the sound as it is heard, drifting to the left,
-/// with the bird being heard named in a gap in the middle. A faint resting
-/// line while not listening. Settings > Display > Song scribble.
+/// with the latest detected bird shown in a crisp paper ticket (or plain
+/// italic text) in the middle gap — consistently for both local and remote.
 class SongScribble extends StatefulWidget {
-  const SongScribble({super.key, required this.engine});
+  const SongScribble({
+    super.key,
+    required this.engine,
+    this.showLine = true,
+    this.simpleWave = false,
+    this.remote = false,
+    this.latestName,
+    this.showLatest = true,
+    this.useTicket = true,
+    this.onTapLatest,
+  });
 
   final ListenEngine engine;
+  final bool showLine;
+  final bool simpleWave;
+  final bool remote;
+
+  /// Latest detected species name in the active local session or remote feed.
+  final String? latestName;
+
+  /// Whether to show the latest detected bird along the bottom at all.
+  final bool showLatest;
+
+  /// Whether to draw the latest detection inside a paper ticket box.
+  final bool useTicket;
+
+  /// Optional tap callback to open the latest detected bird's card.
+  final VoidCallback? onTapLatest;
 
   @override
   State<SongScribble> createState() => _SongScribbleState();
 }
 
 class _SongScribbleState extends State<SongScribble> with SingleTickerProviderStateMixin {
+  /// A quiet trace shared by remote views so they draw the exact same resting
+  /// line as local mode when not recording.
+  static final ScribbleTrace _quiet = ScribbleTrace();
+
   late final Ticker _ticker = createTicker(_frame);
   Duration _last = Duration.zero, _painted = Duration.zero;
 
@@ -37,14 +67,43 @@ class _SongScribbleState extends State<SongScribble> with SingleTickerProviderSt
   double _measuredAt = 0, _nameWidth = 0;
 
   static const _nameStyle =
-      TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 16, height: 1, color: sepia);
+      TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, height: 1.15, color: ink);
+
+  ScribbleTrace get _trace => widget.remote ? _quiet : widget.engine.scribble;
+
+  String? get _activeLabel {
+    if (!widget.showLatest) return null;
+    if (!widget.remote && widget.engine.liveName != null) return widget.engine.liveName;
+    return widget.latestName;
+  }
 
   @override
   void initState() {
     super.initState();
-    _head = widget.engine.scribble.count.toDouble();
+    _head = _trace.count.toDouble();
+    final initial = _activeLabel;
+    if (initial != null) {
+      _name = initial;
+      _open = 1.0;
+    }
     widget.engine.addListener(_changed);
     _changed();
+  }
+
+  @override
+  void didUpdateWidget(SongScribble old) {
+    super.didUpdateWidget(old);
+    if (old.remote != widget.remote) {
+      _head = _trace.count.toDouble();
+    }
+    if (old.remote != widget.remote ||
+        old.latestName != widget.latestName ||
+        old.showLatest != widget.showLatest ||
+        old.useTicket != widget.useTicket) {
+      final target = _activeLabel;
+      if (target != null) _name = target;
+      _changed();
+    }
   }
 
   @override
@@ -55,98 +114,167 @@ class _SongScribbleState extends State<SongScribble> with SingleTickerProviderSt
   }
 
   void _changed() {
-    final on = widget.engine.running;
-    if (on && !_ticker.isActive) {
+    final target = _activeLabel;
+    final want = target != null ? 1.0 : 0.0;
+    final running = !widget.remote && widget.engine.running;
+    final needAnim = running || (_open - want).abs() > 0.001;
+    if (needAnim && !_ticker.isActive) {
       _last = Duration.zero;
-      _head = widget.engine.scribble.count.toDouble();
+      _head = _trace.count.toDouble();
       _ticker.start();
-    } else if (!on && _ticker.isActive) {
+    } else if (!needAnim && _ticker.isActive) {
       _ticker.stop();
       setState(() {
-        _head = widget.engine.scribble.count.toDouble();
-        _open = 0;
-        _name = null;
+        _head = _trace.count.toDouble();
+        _open = want;
+        _name = target;
       });
+    } else if (!needAnim) {
+      if (mounted) {
+        setState(() {
+          _open = want;
+          _name = target;
+        });
+      }
     }
   }
 
   void _frame(Duration t) {
     final dt = _last == Duration.zero ? 0.0 : (t - _last).inMicroseconds / 1e6;
     _last = t;
-    final count = widget.engine.scribble.count.toDouble();
-    _head = (_head + dt * 1000 / ScribbleTrace.sliceMs).clamp(count - 12, count).toDouble();
-    final live = widget.engine.liveName;
-    if (live != null) _name = live;
-    _open = (_open + (live != null ? dt : -dt) / .45).clamp(0.0, 1.0);
+    final running = !widget.remote && widget.engine.running;
+    if (running) {
+      final count = widget.engine.scribble.count.toDouble();
+      _head = (_head + dt * 1000 / ScribbleTrace.sliceMs).clamp(count - 12, count).toDouble();
+    }
+    final target = _activeLabel;
+    if (target != null) _name = target;
+    final want = target != null ? 1.0 : 0.0;
+    _open = (_open + (want > _open ? dt : -dt) / .35).clamp(0.0, 1.0);
     if (_open == 0) _name = null;
-    // about sixty a second is plenty, even on a faster screen
-    if (t - _painted < const Duration(milliseconds: 15)) return;
+    if (!running && (_open - want).abs() <= 0.001) {
+      _open = want;
+      _ticker.stop();
+      setState(() {});
+      return;
+    }
+    // about 60 fps for pencil scribble, 30 fps for the lighter wave mode
+    final frameMs = widget.simpleWave ? 32 : 15;
+    if (t - _painted < Duration(milliseconds: frameMs)) return;
     _painted = t;
     setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: LayoutBuilder(builder: (context, box) {
-        final w = box.maxWidth;
-        final trace = widget.engine.scribble;
-        // the head can lag 12 slices behind: keep the window inside what is kept
-        final shown = math.min(trace.capacity - 16, math.max(8, (w / ScribbleTrace.unit).round()));
-        final from = _head - shown;
-        final base = from.floor();
-        final win = trace.window(base, shown + 2);
-        final name = _name;
-        var gap = 0.0;
-        if (name != null) {
-          if (name != _measured || w != _measuredAt) {
-            final tp = TextPainter(
-                text: TextSpan(text: name, style: _nameStyle),
-                maxLines: 1,
-                textDirection: TextDirection.ltr)
-              ..layout(maxWidth: math.max(0, w - 60));
-            _measured = name;
-            _measuredAt = w;
-            _nameWidth = tp.width;
-            tp.dispose();
-          }
-          gap = (_nameWidth + 18) * Curves.easeInOut.transform(_open);
+    return LayoutBuilder(builder: (context, box) {
+      final w = box.maxWidth;
+      final trace = _trace;
+      // the head can lag 12 slices behind: keep the window inside what is kept
+      final shown = math.min(trace.capacity - 16, math.max(8, (w / ScribbleTrace.unit).round()));
+      final from = _head - shown;
+      final base = from.floor();
+      final win = trace.window(base, shown + 2);
+      final name = _name;
+      final ticketExtra = widget.useTicket ? 26.0 : 18.0;
+      var gap = 0.0;
+      if (name != null && _open > 0) {
+        if (name != _measured || w != _measuredAt) {
+          final tp = TextPainter(
+              text: TextSpan(text: name, style: _nameStyle),
+              maxLines: 1,
+              textDirection: TextDirection.ltr)
+            ..layout(maxWidth: math.max(0, w - 48));
+          _measured = name;
+          _measuredAt = w;
+          _nameWidth = tp.width;
+          tp.dispose();
         }
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            RepaintBoundary(
-              child: CustomPaint(
-                painter: SongScribblePainter(
-                  level: win.level,
-                  pitch: win.pitch,
-                  phase: win.phase,
-                  base: base.toDouble(),
-                  shift: from - base,
-                  gap: gap,
+        gap = (_nameWidth + ticketExtra) * Curves.easeInOut.transform(_open);
+      }
+      final nameStyle = widget.useTicket
+          ? _nameStyle
+          : (widget.simpleWave ? _nameStyle.copyWith(color: ink) : _nameStyle.copyWith(color: sepia));
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          if (widget.showLine)
+            IgnorePointer(
+              child: RepaintBoundary(
+                child: CustomPaint(
+                  painter: widget.simpleWave
+                      ? SimpleWavePainter(
+                          level: win.level,
+                          shift: from - base,
+                          gap: gap,
+                        )
+                      : SongScribblePainter(
+                          level: win.level,
+                          pitch: win.pitch,
+                          phase: win.phase,
+                          base: base.toDouble(),
+                          shift: from - base,
+                          gap: gap,
+                        ),
                 ),
               ),
             ),
-            if (name != null)
-              Center(
-                child: Opacity(
-                  opacity: Curves.easeIn.transform(_open),
-                  child: Semantics(
-                    liveRegion: true,
-                    label: 'Hearing $name',
-                    child: ExcludeSemantics(
+          if (name != null && _open > 0.01)
+            Center(
+              child: Opacity(
+                opacity: Curves.easeIn.transform(_open),
+                child: Semantics(
+                  liveRegion: true,
+                  button: widget.onTapLatest != null,
+                  label: 'Latest detection: $name',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onTapLatest == null
+                        ? null
+                        : () {
+                            hapticTap();
+                            widget.onTapLatest!();
+                          },
+                    child: MouseRegion(
+                      cursor: widget.onTapLatest != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
                       child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: math.max(0, w - 60)),
-                        child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _nameStyle),
+                        constraints: BoxConstraints(maxWidth: math.max(0, w - 40)),
+                        child: widget.useTicket
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+                                decoration: BoxDecoration(
+                                  color: paper.withValues(alpha: 0.92),
+                                  border: Border.all(color: rule, width: 0.9),
+                                  borderRadius: BorderRadius.circular(4),
+                                  boxShadow: const [
+                                    BoxShadow(color: Color(0x222A241C), offset: Offset(0, 2), blurRadius: 6),
+                                  ],
+                                ),
+                                child: Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: nameStyle,
+                                ),
+                              )
+                            : Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                child: Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: nameStyle,
+                                ),
+                              ),
                       ),
                     ),
                   ),
                 ),
               ),
-          ],
-        );
-      }),
-    );
+            ),
+        ],
+      );
+    });
   }
 }
 
@@ -286,4 +414,76 @@ class SongScribblePainter extends CustomPainter {
   @override
   bool shouldRepaint(SongScribblePainter old) =>
       old.level != level || old.pitch != pitch || old.phase != phase || old.shift != shift || old.gap != gap;
+}
+
+/// A lightweight single-pass black waveform for less capable / mobile devices.
+/// Draws one [Path] with one [Canvas.drawPath] call and no per-pixel noise.
+class SimpleWavePainter extends CustomPainter {
+  const SimpleWavePainter({
+    required this.level,
+    this.shift = 0,
+    this.gap = 0,
+    this.color = ink,
+  });
+
+  final List<double> level;
+  final double shift;
+  final double gap;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || level.length < 3) return;
+    final w = size.width, mid = size.height / 2;
+    final span = level.length - 2;
+    final half = gap / 2;
+    const step = 3.0;
+    final path = Path();
+    // Resting baseline (split cleanly around the name gap)
+    if (gap <= 0) {
+      path
+        ..moveTo(0, mid)
+        ..lineTo(w, mid);
+    } else {
+      final leftEnd = math.max(0.0, w / 2 - half);
+      final rightStart = math.min(w, w / 2 + half);
+      if (leftEnd > 0) {
+        path
+          ..moveTo(0, mid)
+          ..lineTo(leftEnd, mid);
+      }
+      if (rightStart < w) {
+        path
+          ..moveTo(rightStart, mid)
+          ..lineTo(w, mid);
+      }
+    }
+    for (var x = 1.5; x < w; x += step) {
+      final fromMid = (x - w / 2).abs();
+      if (gap > 0 && fromMid < half) continue;
+      final s = shift + x / w * span;
+      var a = SongScribblePainter._at(level, s);
+      final edge = SongScribblePainter._smooth(math.min(x, w - x) / 14);
+      final clear = gap <= 0 ? 1.0 : SongScribblePainter._smooth((fromMid - half) / 16);
+      a *= edge * clear;
+      final h = a * size.height * .44;
+      if (h > .6) {
+        path
+          ..moveTo(x, mid - h)
+          ..lineTo(x, mid + h);
+      }
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.1
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(SimpleWavePainter old) =>
+      old.level != level || old.shift != shift || old.gap != gap || old.color != color;
 }

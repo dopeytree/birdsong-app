@@ -38,6 +38,7 @@ class Detection {
     this.windowSeconds,
     this.scores = const [],
     this.hasClip = false,
+    this.clipExt = 'wav',
     this.reviewStatus = 'unreviewed',
     this.lat,
     this.lon,
@@ -60,6 +61,9 @@ class Detection {
   List<RankedScore> scores;
   bool hasClip;
 
+  /// Audio clip file extension ('m4a' or 'wav').
+  String clipExt;
+
   /// unreviewed, correct, wrong or unsure.
   String reviewStatus;
 
@@ -69,7 +73,7 @@ class Detection {
   double? lon;
   bool get hasPlace => lat != null && lon != null;
 
-  String get clipPath => 'audio/$id.wav';
+  String get clipPath => 'audio/$id.$clipExt';
   String get spectrogramPath => 'spectrograms/$id.bmp';
 
   /// One line of detections.jsonl. Field names follow BirdNET Live's export.
@@ -111,6 +115,7 @@ class Detection {
             )
         ],
         hasClip: j['clip'] != null,
+        clipExt: (j['clip'] as String?)?.endsWith('.m4a') == true ? 'm4a' : 'wav',
         reviewStatus: (j['reviewStatus'] as String?) ?? 'unreviewed',
         lat: (j['latitude'] as num?)?.toDouble(),
         lon: (j['longitude'] as num?)?.toDouble(),
@@ -355,6 +360,11 @@ class DetectionStore extends ChangeNotifier {
   /// The app's data folder; sessions live in [sessionsDir] inside it.
   final Directory root;
   Directory get sessionsDir => Directory('${root.path}/sessions');
+  File get _tombstonesFile => File('${sessionsDir.path}/deleted.json');
+
+  /// Deleted session folder names -> UTC ISO deletion timestamp, so deletes
+  /// propagate cleanly across devices synced via iCloud Drive.
+  final Map<String, String> deletedFolders = {};
 
   /// Before session folders: detections/detections.jsonl and sessions.jsonl.
   Directory get _legacyDir => Directory('${root.path}/detections');
@@ -383,7 +393,68 @@ class DetectionStore extends ChangeNotifier {
 
   Directory dirOf(Session x) => Directory('${sessionsDir.path}/${x.folder ??= x.folderName}');
 
+  Future<void> _loadTombstones() async {
+    deletedFolders.clear();
+    try {
+      if (await _tombstonesFile.exists()) {
+        final raw = jsonDecode(await _tombstonesFile.readAsString());
+        if (raw is Map) {
+          for (final e in raw.entries) {
+            if (e.key is String && e.value is String) {
+              deletedFolders[e.key as String] = e.value as String;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('tombstones read: $e');
+    }
+  }
+
+  Future<void> _saveTombstones() async {
+    try {
+      await sessionsDir.create(recursive: true);
+      await _writeAtomic(_tombstonesFile, const JsonEncoder.withIndent('  ').convert(deletedFolders));
+    } catch (e) {
+      debugPrint('tombstones write: $e');
+    }
+  }
+
+  /// Apply session deletions received from another device via iCloud sync.
+  /// Returns the number of local session folders removed.
+  Future<int> applyRemoteTombstones(Map<String, String> remote) async {
+    var added = false;
+    var removed = 0;
+    for (final e in remote.entries) {
+      final prev = deletedFolders[e.key];
+      if (prev == null || e.value.compareTo(prev) > 0) {
+        deletedFolders[e.key] = e.value;
+        added = true;
+      }
+    }
+    final liveFolders = {
+      for (final s in sessions)
+        if (s.live && s.folder != null) s.folder!,
+    };
+    for (final folder in deletedFolders.keys) {
+      if (liveFolders.contains(folder)) continue;
+      final dir = Directory('${sessionsDir.path}/$folder');
+      if (await dir.exists()) {
+        try {
+          await dir.delete(recursive: true);
+          removed++;
+        } catch (e) {
+          debugPrint('applyRemoteTombstones $folder: $e');
+        }
+      }
+    }
+    if (added) await _saveTombstones();
+    if (removed > 0) await reload();
+    return removed;
+  }
+
   Future<void> _load() async {
+    await _loadTombstones();
     await for (final e in sessionsDir.list()) {
       if (e is! Directory) continue;
       final file = File('${e.path}/session.json');
@@ -627,14 +698,13 @@ class DetectionStore extends ChangeNotifier {
     return x;
   }
 
-  /// Close a session. One that heard nothing and lasted under a minute is
-  /// dropped, folder and all, so a mistaken tap on the microphone leaves no
-  /// trace.
+  /// Close a session. One that heard nothing is dropped, folder and all, so
+  /// empty recordings never clutter the calendar.
   Future<void> endSession(Session x, {DateTime? at, String reason = 'manual'}) async {
     x.end = at ?? DateTime.now();
     x.stopReason = reason;
     final heard = all.any((d) => x.contains(d.at));
-    if (!heard && x.end!.difference(x.start) < const Duration(minutes: 1)) {
+    if (!heard) {
       sessions.remove(x);
       _dirty.remove(x);
       if (_selectedId == x.id) _selectedId = null;
@@ -644,6 +714,25 @@ class DetectionStore extends ChangeNotifier {
       _dirty.remove(x);
       await _write(x);
     }
+    notifyListeners();
+  }
+
+  /// Permanently delete a session, its detections, and its recordings folder.
+  Future<void> deleteSession(Session x) async {
+    if (x.live) return;
+    sessions.remove(x);
+    _dirty.remove(x);
+    all.removeWhere((d) => x.contains(d.at));
+    if (_selectedId == x.id) {
+      _selectedId = sessions.isEmpty ? null : sessions.last.id;
+    }
+    final folder = x.folder;
+    if (folder != null && folder.isNotEmpty) {
+      deletedFolders[folder] = _utc(DateTime.now());
+      await _saveTombstones();
+    }
+    final dir = dirOf(x);
+    if (await dir.exists()) await dir.delete(recursive: true);
     notifyListeners();
   }
 
@@ -805,21 +894,103 @@ class DetectionStore extends ChangeNotifier {
   Future<int> clipBytes() async {
     var n = 0;
     await for (final e in sessionsDir.list(recursive: true)) {
-      if (e is File && (e.path.endsWith('.wav') || e.path.endsWith('.bmp'))) {
+      if (e is File &&
+          (e.path.endsWith('.wav') || e.path.endsWith('.m4a') || e.path.endsWith('.bmp'))) {
         n += await e.length();
       }
     }
     return n;
   }
 
+  /// Number of saved WAV clips that can be compressed to AAC.
+  Future<int> wavClipCount() async {
+    var n = 0;
+    for (final d in all) {
+      if (d.hasClip && d.clipExt == 'wav' && await clipFile(d.id).exists()) {
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /// Convert all existing WAV recordings to compressed AAC (.m4a) using
+  /// [encode] (which takes inputPath and outputPath and returns true on
+  /// success). Updates detections.jsonl and deletes the WAV only after
+  /// encoding succeeds.
+  Future<({int converted, int failed, int savedBytes})> batchConvertWavToAac(
+    Future<bool> Function(String wavPath, String m4aPath) encode, {
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final targets = <Detection>[];
+    for (final d in all) {
+      if (d.hasClip && d.clipExt == 'wav' && await clipFile(d.id).exists()) {
+        targets.add(d);
+      }
+    }
+    var converted = 0, failed = 0, savedBytes = 0;
+    for (var i = 0; i < targets.length; i++) {
+      final d = targets[i];
+      final wavFile = clipFile(d.id);
+      if (!await wavFile.exists()) continue;
+      final wavSize = await wavFile.length();
+      final m4aPath = wavFile.path.replaceFirst(RegExp(r'\.wav$'), '.m4a');
+      final ok = await encode(wavFile.path, m4aPath);
+      final m4aFile = File(m4aPath);
+      if (ok && await m4aFile.exists() && await m4aFile.length() > 0) {
+        final m4aSize = await m4aFile.length();
+        savedBytes += max(0, wavSize - m4aSize);
+        d.clipExt = 'm4a';
+        final ses = sessionOf(d);
+        if (ses != null) _dirty.add(ses);
+        try {
+          await wavFile.delete();
+        } catch (e) {
+          debugPrint('batchConvert delete ${wavFile.path}: $e');
+        }
+        converted++;
+      } else {
+        failed++;
+      }
+      onProgress?.call(i + 1, targets.length);
+    }
+    await flush();
+    notifyListeners();
+    return (converted: converted, failed: failed, savedBytes: savedBytes);
+  }
+
+  /// Re-read all session folders from disk (e.g. after iCloud sync pulls in
+  /// sessions recorded on another device).
+  Future<void> reload() async {
+    await flush();
+    final keepSelected = _selectedId;
+    sessions.clear();
+    all.clear();
+    _nextId = 1;
+    _nextSessionId = 1;
+    await _load();
+    sessions.sort((a, b) => a.start.compareTo(b.start));
+    all.sort((a, b) => a.at.compareTo(b.at));
+    if (keepSelected != null && sessions.any((x) => x.id == keepSelected)) {
+      _selectedId = keepSelected;
+    } else {
+      _selectedId = null;
+    }
+    notifyListeners();
+  }
+
   /// Forget everything except a session still listening (which is emptied).
   Future<void> clear() async {
     await flush();
     for (final x in sessions.where((x) => !x.live).toList()) {
+      final folder = x.folder;
+      if (folder != null && folder.isNotEmpty) {
+        deletedFolders[folder] = _utc(DateTime.now());
+      }
       final dir = dirOf(x);
       if (await dir.exists()) await dir.delete(recursive: true);
       sessions.remove(x);
     }
+    if (deletedFolders.isNotEmpty) await _saveTombstones();
     all.clear();
     _selectedId = null;
     for (final x in sessions) {

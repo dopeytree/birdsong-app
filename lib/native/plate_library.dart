@@ -76,9 +76,17 @@ class PlateArt {
 /// Commons answered for each species (kept 30 days), and choices.json, the
 /// plate picked by hand on a bird's card.
 class PlateLibrary {
-  PlateLibrary._(this.dir);
+  PlateLibrary._(this.dir, this.choicesFile);
 
   final Directory dir;
+
+  /// Durable location for user-chosen bird illustrations (`<appData>/plate_choices.json`),
+  /// kept outside the OS cache directory and synced via iCloud Drive.
+  final File choicesFile;
+
+  /// Incremented whenever the user picks a plate locally (so [ICloudSync] pushes
+  /// the choice) or remote choices are merged from iCloud.
+  static final ValueNotifier<int> choicesChanged = ValueNotifier<int>(0);
 
   static const _art = 'https://raw.githubusercontent.com/arnegiacomo/fugleramme/main/assets';
   static const _commons = 'https://commons.wikimedia.org';
@@ -113,14 +121,54 @@ class PlateLibrary {
   /// "Offer skulls, wings and eggs among the plates". Never chosen first.
   bool parts = false;
 
-  static Future<PlateLibrary> open() async {
+  static Future<PlateLibrary> open({Directory? dataDir}) async {
     final base = await getApplicationCacheDirectory();
     final dir = Directory('${base.path}/plates');
     await dir.create(recursive: true);
-    final lib = PlateLibrary._(dir);
+    final support = dataDir ?? await getApplicationSupportDirectory();
+    await support.create(recursive: true);
+    final choicesFile = File('${support.path}/plate_choices.json');
+    final lib = PlateLibrary._(dir, choicesFile);
     lib._found = await lib._readMap('found.json');
-    lib._choices = await lib._readMap('choices.json');
+    if (await choicesFile.exists()) {
+      lib._choices = await _readJsonMap(choicesFile);
+    } else {
+      // Migrate choices from the old cache-only choices.json into durable storage.
+      final legacy = await lib._readMap('choices.json');
+      if (legacy.isNotEmpty) {
+        lib._choices = legacy;
+        try {
+          await choicesFile.writeAsString(const JsonEncoder.withIndent('  ').convert(legacy));
+        } catch (_) {}
+      }
+    }
     return lib;
+  }
+
+  static Future<Map<String, dynamic>> _readJsonMap(File file) async {
+    try {
+      if (await file.exists()) return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    } catch (_) {}
+    return {};
+  }
+
+  /// Reloads user-chosen plates from [choicesFile] (e.g. after an iCloud sync
+  /// pulls newer choices from another device) and returns the scientific names
+  /// whose chosen illustration URL changed.
+  Future<Set<String>> reloadChoices() async {
+    final fresh = await _readJsonMap(choicesFile);
+    final changed = <String>{};
+    final allKeys = <String>{..._choices.keys, ...fresh.keys};
+    for (final sci in allKeys) {
+      final oldUrl = (_choices[sci] as Map?)?['url'];
+      final newUrl = (fresh[sci] as Map?)?['url'];
+      if (oldUrl != newUrl) {
+        changed.add(sci);
+        _asked.removeWhere((key, _) => key.endsWith('|$sci'));
+      }
+    }
+    _choices = fresh;
+    return changed;
   }
 
   Future<Map<String, dynamic>> _readMap(String name) async {
@@ -164,7 +212,7 @@ class PlateLibrary {
         PlateCandidate(
           '$_art/artwork/classic/$key',
           ready: true,
-          credit: '${_artists[_cutoutSource[key]] == null ? '' : 'After ${_artists[_cutoutSource[key]]}. '}'
+          credit: '${_artists[_cutoutSource[key]] == null ? '' : '${_artists[_cutoutSource[key]]}. '}'
               'Cut-out from the Fugleramme project, CC BY-SA 4.0.',
           page: _cutoutPage[key],
         ),
@@ -287,11 +335,17 @@ class PlateLibrary {
 
   /// Use [c] for a species from now on (its card's choice), and say what it is.
   Future<PlateArt?> choose(String sci, PlateCandidate c, PlateStyle style) {
-    _choices[sci] = c.toJson();
-    File('${dir.path}/choices.json').writeAsString(jsonEncode(_choices)).catchError((Object e) {
+    _choices[sci] = {
+      ...c.toJson(),
+      'chosenAt': DateTime.now().millisecondsSinceEpoch,
+    };
+    final encoded = const JsonEncoder.withIndent('  ').convert(_choices);
+    choicesFile.writeAsString(encoded).then((_) {
+      choicesChanged.value++;
+    }).catchError((Object e) {
       debugPrint('choices: $e');
-      return File('');
     });
+    File('${dir.path}/choices.json').writeAsString(encoded).catchError((Object _) => File(''));
     _asked.removeWhere((key, _) => key.endsWith('|$sci'));
     return _asked['${style.name}|$sci'] =
         load(c, style).then<PlateArt?>((a) => a).catchError((Object e) {

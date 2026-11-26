@@ -17,9 +17,13 @@ LOG="build-log.txt"
     ./tool/bootstrap.sh && echo "STATUS: bootstrap-ok"
     flutter analyze --no-fatal-infos --no-fatal-warnings && echo "STATUS: analyze-ok"
     flutter test && echo "STATUS: test-ok"
-    flutter build macos --debug && echo "STATUS: build-ok"
-    APP=$(ls -d build/macos/Build/Products/Debug/*.app 2>/dev/null | head -1)
-    [ -n "$APP" ] && open "$APP" && echo "STATUS: opened $APP"
+    if flutter build macos --debug; then
+      echo "STATUS: build-ok"
+      APP=$(ls -d build/macos/Build/Products/Debug/*.app 2>/dev/null | head -1)
+      [ -n "$APP" ] && open "$APP" && echo "STATUS: opened $APP"
+    else
+      echo "STATUS: build-failed"
+    fi
   fi
   echo "=== done $(date)"
 } 2>&1 | tee "$LOG"

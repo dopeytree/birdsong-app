@@ -6,14 +6,16 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:plate_share/plate_share.dart';
 
 import '../app_state.dart';
-import '../main.dart' show caps, ink, madder, paper, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
-import '../engine/listen_engine.dart' show maxSessionSpecies;
+import '../ui/bird_chime.dart';
 import '../ui/format.dart';
+import '../ui/paper_surface.dart';
 import '../ui/plate_buttons.dart';
 import 'song_scribble.dart';
 import '../ui/settings_button.dart';
@@ -25,6 +27,8 @@ import 'index_view.dart';
 import 'landmarks.dart';
 import 'passed_view.dart';
 import 'plate_library.dart';
+import 'species_sort.dart';
+import 'species_traits.dart';
 import 'station_feed.dart';
 import 'walk_map.dart';
 
@@ -85,6 +89,7 @@ class _Row {
 
 class _NativePlateState extends State<NativePlate> {
   PlateLibrary? _lib;
+  SpeciesTraits? _traits;
 
   // the map's extras, shared by the map and "Passed on the way"
   final _landmarks = LandmarkLookup();
@@ -139,7 +144,7 @@ class _NativePlateState extends State<NativePlate> {
 
   /// The most species drawn on the plate; the rest are in the index only
   /// (the page's maxOnPlate).
-  static const maxOnPlate = 60;
+  static const maxOnPlate = 200;
 
   PlateStyle get _style => PlateStyle.named(app.settings.nativePlateStyle);
 
@@ -209,9 +214,9 @@ class _NativePlateState extends State<NativePlate> {
   /// while one alone is shown.
   Widget _lightToggle(StationFeed f, Color lines, {bool end = false}) {
     final icon = switch (f.light) {
-      Light.all => Icons.brightness_6_outlined,
-      Light.day => Icons.wb_sunny_outlined,
-      Light.night => Icons.nightlight_outlined,
+      Light.all => Symbols.brightness_6,
+      Light.day => Symbols.wb_sunny,
+      Light.night => Symbols.nightlight,
     };
     return Semantics(
       button: true,
@@ -235,35 +240,27 @@ class _NativePlateState extends State<NativePlate> {
     );
   }
 
-  /// The stations button, left of the pill on a remote station: it lists
-  /// them, to choose one, with Add a station (as plate_view.dart's).
+  /// The stations button, left of the pill on a remote station: modern
+  /// translucent popover matching [SpeciesSortBar] to pick or add a station.
   Future<void> _stationsTap(BuildContext context) async {
     final s = app.settings;
-    final box = context.findRenderObject() as RenderBox?;
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
-    if (box == null || overlay == null) return;
-    final at = RelativeRect.fromRect(
-        box.localToGlobal(Offset(0, box.size.height), ancestor: overlay) & box.size, Offset.zero & overlay.size);
     final current = s.mode == AppMode.station ? s.station?.id : null;
-    final picked = await showMenu<String>(
-      context: context,
-      position: at,
-      color: paper,
+    final picked = await showModernMenu<String>(
+      anchorContext: context,
+      minWidth: 210,
       items: [
         for (final st in s.stations)
-          PopupMenuItem(
+          ModernMenuItem(
             value: st.id,
-            child: ListTile(
-              dense: true,
-              leading: Icon(st.id == current ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                  color: Theme.of(context).colorScheme.primary),
-              title: Text(st.name),
-              subtitle: Text(st.kind),
-            ),
+            icon: Symbols.sensors,
+            label: st.name,
+            subtitle: st.kind,
+            selected: st.id == current,
           ),
-        const PopupMenuItem(
+        const ModernMenuItem(
           value: '+',
-          child: ListTile(dense: true, leading: Icon(Icons.add), title: Text('Add a station')),
+          icon: Symbols.add,
+          label: 'Add a station',
         ),
       ],
     );
@@ -275,8 +272,10 @@ class _NativePlateState extends State<NativePlate> {
     s.update((x) {
       x.mode = AppMode.station;
       x.stationId = picked;
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = 'calls';
     });
-    _say(s.station!.name, seconds: 2);
+    _resetHomeFilters();
   }
 
   /// Look for the plates of [rows] not asked for yet.
@@ -307,40 +306,84 @@ class _NativePlateState extends State<NativePlate> {
   /// plate (Settings.plateMode, shared by both). Stepping onto a, f or g
   /// also sets how the collage is sized, as the web plate does.
   void _nextMode() {
+    hapticTap();
     final s = app.settings;
     final next = s.plateMode % plateModes.length + 1;
     final mode = plateModes[next - 1];
+    if (_sortOpen || _indexSortOpen || _zoomTier != 1.0 || _zoomScale != 1.0) {
+      setState(() {
+        _sortOpen = false;
+        _indexSortOpen = false;
+        _zoomTier = 1.0;
+        _zoomScale = 1.0;
+      });
+    }
+    if (next == defaultPlateMode) _resetHomeFilters();
     s.update((x) {
       x.plateMode = next;
       if (mode.sizeBy != null) x.nativeSizeBy = mode.sizeBy!;
     });
-    _say(mode.name, seconds: 2);
+    if (next == defaultPlateMode) {
+      unawaited(BirdChime.play(suppress: app.engine.running || app.engine.starting));
+    }
   }
 
   AppState get app => widget.app;
 
+  int _seenPlateChoicesRev = 0;
+
   @override
   void initState() {
     super.initState();
-    PlateLibrary.open().then((lib) {
+    _seenPlateChoicesRev = app.icloud.plateChoicesRevision;
+    app.icloud.addListener(_onIcloudChanged);
+    PlateLibrary.open(dataDir: app.dataDir).then((lib) {
       if (mounted) {
         setState(() => _lib = lib);
       } else {
         lib.close();
       }
     });
-    _sesId = app.engine.session?.id;
-    app.engine.addListener(_watchSession);
-    WidgetsBinding.instance.addPostFrameCallback((_) => widget.onLoaded?.call());
+    SpeciesTraits.open().then((traits) {
+      if (mounted) {
+        setState(() => _traits = traits);
+      } else {
+        traits.dispose();
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onLoaded?.call();
+      if (app.settings.plateMode == defaultPlateMode) {
+        unawaited(BirdChime.play(suppress: app.engine.running || app.engine.starting));
+      }
+    });
+  }
+
+  void _onIcloudChanged() {
+    final rev = app.icloud.plateChoicesRevision;
+    if (rev == _seenPlateChoicesRev) return;
+    _seenPlateChoicesRev = rev;
+    final lib = _lib;
+    if (lib == null) return;
+    lib.reloadChoices().then((changed) {
+      if (!mounted || changed.isEmpty) return;
+      setState(() {
+        for (final sci in changed) {
+          _art.remove(sci);
+          _asking.remove(sci);
+        }
+      });
+    });
   }
 
   @override
   void dispose() {
+    app.icloud.removeListener(_onIcloudChanged);
     _landmarks.dispose();
     _noteTimer?.cancel();
     _feed?.dispose();
-    app.engine.removeListener(_watchSession);
     _lib?.close();
+    _traits?.dispose();
     super.dispose();
   }
 
@@ -349,14 +392,16 @@ class _NativePlateState extends State<NativePlate> {
     if (f != null) {
       return [
         for (final s in f.species ?? const <StationSpecies>[])
-          _Row(s.sci, s.common)
-            ..count = s.count
-            ..last = s.last
+          if (!app.settings.isIgnoredSpecies(s.common, s.sci))
+            _Row(s.sci, s.common)
+              ..count = s.count
+              ..last = s.last
       ];
     }
     if (ses == null) return [];
     final by = <String, _Row>{};
     for (final d in app.store.forPlate(app.settings.plateModel, session: ses)) {
+      if (app.settings.isIgnoredSpecies(d.common, d.sci)) continue;
       final r = by[d.sci] ??= _Row(d.sci, d.common);
       r.count++;
       if (r.last == null || d.at.isAfter(r.last!)) r.last = d.at;
@@ -372,6 +417,366 @@ class _NativePlateState extends State<NativePlate> {
   bool _noteShown = false;
   Timer? _noteTimer;
 
+  /// Tap the top-left heading to hide it; tap that corner again to reshow it.
+  bool _headingHidden = false;
+
+  /// Resolution multiplier & live zoom scale for high-res decoding and crisp
+  /// zoom-scaled labels on collages.
+  double _zoomTier = 1.0;
+  double _zoomScale = 1.0;
+
+  /// Shared TapRegion group for Index of Species filter trigger + panel.
+  static const _indexFilterTapGroup = Object();
+
+  /// The classic five-species Birdsong sample plate (assets/web/index.html),
+  /// shown whenever there are no recordings yet (fresh install, empty session,
+  /// or an error) alongside the status or error message.
+  static List<_Row> _sampleRows() {
+    final now = DateTime.now();
+    const spec = [
+      (common: 'Northern Cardinal', sci: 'Cardinalis cardinalis', count: 222, h: 13, m: 50),
+      (common: 'Blue Jay', sci: 'Cyanocitta cristata', count: 44, h: 13, m: 53),
+      (common: 'Snowy Owl', sci: 'Bubo scandiacus', count: 33, h: 13, m: 54),
+      (common: 'European Greenfinch', sci: 'Chloris chloris', count: 22, h: 13, m: 55),
+      (common: 'Eurasian Blue Tit', sci: 'Cyanistes caeruleus', count: 11, h: 13, m: 54),
+    ];
+    return [
+      for (final s in spec)
+        _Row(s.sci, s.common)
+          ..count = s.count
+          ..last = DateTime(now.year, now.month, now.day, s.h, s.m),
+    ];
+  }
+
+  /// Whether the sort slide-out is open on No pecking order or Index of Species.
+  bool _sortOpen = false;
+  bool _indexSortOpen = false;
+
+  /// Per-view filter state for Home (View 1 + Index of Species). Home always
+  /// starts with filters off on launch, return Home, Local/Remote switch, or
+  /// Calendar selection, while No pecking order keeps its own saved settings.
+  String _homeSort = 'family';
+  bool _homeSortAsc = true;
+  bool _homeLabels = false;
+  String _homeSearch = '';
+  String _equalSearch = '';
+  bool _pickedFromCalendar = false;
+
+  /// Cached dominant plumage colour key per species (for Colour sort).
+  final Map<String, double> _colourKey = {};
+  final Set<String> _colourLoading = {};
+
+  /// Cached circular mean activity hour per species for Remote stations
+  /// (keyed by "<stationScope>|<sci>").
+  final Map<String, double?> _remoteActiveHour = {};
+  final Set<String> _remoteActiveLoading = {};
+  AppMode? _lastAppMode;
+
+  // Heartbeat trigger: increments whenever a new detection arrives (local or
+  // remote) so [_HeartCounter] plays a 2-second red heartbeat animation.
+  String? _heartScope;
+  int _heartSeenCalls = -1;
+  int _heartBeatToken = 0;
+
+  void _checkHeartPulse(String scope, int totalCalls) {
+    if (_heartScope != scope) {
+      _heartScope = scope;
+      _heartSeenCalls = totalCalls;
+      return;
+    }
+    if (totalCalls > _heartSeenCalls) {
+      _heartSeenCalls = totalCalls;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _heartBeatToken++);
+      });
+    } else {
+      _heartSeenCalls = totalCalls;
+    }
+  }
+
+  void _ensureRemoteActiveHours(StationFeed f, List<_Row> rows) {
+    final scope = '${f.station.id}:${f.day != null ? ymd(f.day!) : f.span.name}:${f.light.name}';
+    final todo = <StationSpecies>[];
+    for (final r in rows) {
+      final k = '$scope|${r.sci}';
+      if (_remoteActiveHour.containsKey(k) || _remoteActiveLoading.contains(k)) continue;
+      final sp = (f.species ?? const <StationSpecies>[]).where((x) => x.sci == r.sci).firstOrNull;
+      if (sp != null) todo.add(sp);
+    }
+    if (todo.isEmpty) return;
+    // Fetch up to 4 at a time so we don't flood the station API.
+    for (final sp in todo.take(4)) {
+      final k = '$scope|${sp.sci}';
+      _remoteActiveLoading.add(k);
+      f.hourly(sp).then((res) {
+        _remoteActiveLoading.remove(k);
+        final mean = res == null ? null : circularMeanHour(res.hours);
+        _remoteActiveHour[k] = mean;
+        if (mounted && (app.settings.equalSort == 'active' || _homeSort == 'active')) setState(() {});
+      }).catchError((Object e) {
+        debugPrint('activeHour ${sp.sci}: $e');
+        _remoteActiveLoading.remove(k);
+        _remoteActiveHour[k] = null;
+      });
+    }
+  }
+
+  Map<String, double> _localActiveHours(Session? ses) {
+    if (ses == null) return const {};
+    final byHour = <String, List<int>>{};
+    for (final d in app.store.forPlate(app.settings.plateModel, session: ses)) {
+      if (app.settings.isIgnoredSpecies(d.common, d.sci)) continue;
+      (byHour[d.sci] ??= List<int>.filled(24, 0))[d.at.hour]++;
+    }
+    final out = <String, double>{};
+    for (final e in byHour.entries) {
+      final m = circularMeanHour(e.value);
+      if (m != null) out[e.key] = m;
+    }
+    return out;
+  }
+
+  void _selectEqualSort(String key) {
+    final opt = speciesSortOptions.firstWhere(
+      (o) => o.key == key,
+      orElse: () => speciesSortOptions.first,
+    );
+    app.settings.update((x) {
+      x.equalSort = opt.key;
+      x.equalSortAsc = opt.defaultAsc;
+    });
+  }
+
+  void _flipEqualSort() => app.settings.update((x) => x.equalSortAsc = !x.equalSortAsc);
+
+  /// Resets No pecking order filters to defaults: Labels off, sort by Species ascending, search cleared.
+  void _resetEqualFilters() {
+    if (_equalSearch.isNotEmpty) setState(() => _equalSearch = '');
+    app.settings.update((x) {
+      x.equalLabels = false;
+      x.equalSort = 'family';
+      x.equalSortAsc = true;
+    });
+  }
+
+  void _selectHomeSort(String key) {
+    final opt = speciesSortOptions.firstWhere(
+      (o) => o.key == key,
+      orElse: () => speciesSortOptions.first,
+    );
+    setState(() {
+      _homeSort = opt.key;
+      _homeSortAsc = opt.defaultAsc;
+    });
+  }
+
+  void _flipHomeSort() => setState(() => _homeSortAsc = !_homeSortAsc);
+
+  /// Resets Home (View 1 + Index of Species) filters to off: no labels, sort
+  /// by Species ascending, search cleared, and closes the filter panel.
+  void _resetHomeFilters() {
+    if (!mounted) return;
+    if (_homeSort != 'family' || !_homeSortAsc || _homeLabels || _homeSearch.isNotEmpty || _indexSortOpen) {
+      setState(() {
+        _homeSort = 'family';
+        _homeSortAsc = true;
+        _homeLabels = false;
+        _homeSearch = '';
+        _indexSortOpen = false;
+      });
+    }
+  }
+
+  /// Per-view text search across common name, scientific name, taxonomic family
+  /// & order, native region, and plate illustrator. Multi-word queries require
+  /// every word to match somewhere on the species.
+  List<_Row> _filterByQuery(List<_Row> rows, String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return rows;
+    final terms = q.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    if (terms.isEmpty) return rows;
+    return [
+      for (final r in rows)
+        if (() {
+          final t = _traits?.of(r.sci);
+          final haystack = [
+            r.common,
+            r.sci,
+            t?.family ?? '',
+            t?.order ?? '',
+            t?.region ?? '',
+            artistOfPlate(_art[r.sci]),
+          ].join(' ').toLowerCase();
+          return terms.every(haystack.contains);
+        }())
+          r,
+    ];
+  }
+
+  void _ensureColours(List<_Row> rows) {
+    for (final r in rows) {
+      if (_colourKey.containsKey(r.sci) || _colourLoading.contains(r.sci)) continue;
+      final art = _art[r.sci];
+      if (art == null) continue;
+      _colourLoading.add(r.sci);
+      unawaited(_computeColourKey(r.sci, art));
+    }
+  }
+
+  Future<void> _computeColourKey(String sci, PlateArt art) async {
+    try {
+      final bytes = await art.file.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes, targetWidth: 24);
+      final frame = await codec.getNextFrame();
+      final img = frame.image;
+      final data = await img.toByteData(format: ui.ImageByteFormat.rawRgba);
+      img.dispose();
+      codec.dispose();
+      if (data == null) {
+        _colourKey[sci] = 999;
+        return;
+      }
+      final px = data.buffer.asUint8List();
+      // Weighted hue histogram (36 bins) + average lightness for achromatic birds.
+      final bins = List<double>.filled(36, 0);
+      var chromaSum = 0.0, lumSum = 0.0, count = 0.0;
+      for (var i = 0; i + 3 < px.length; i += 4) {
+        final a = px[i + 3];
+        if (a < 128) continue;
+        final r = px[i] / 255.0, g = px[i + 1] / 255.0, b = px[i + 2] / 255.0;
+        final hi = math.max(r, math.max(g, b));
+        final lo = math.min(r, math.min(g, b));
+        final d = hi - lo;
+        final l = (hi + lo) / 2;
+        // Skip near-paper background pixels
+        if (l > 0.90 && d < 0.10) continue;
+        lumSum += l;
+        count += 1;
+        if (d > 0.12) {
+          double h;
+          if (hi == r) {
+            h = ((g - b) / d) % 6;
+          } else if (hi == g) {
+            h = (b - r) / d + 2;
+          } else {
+            h = (r - g) / d + 4;
+          }
+          h = (h * 60 + 360) % 360;
+          final bin = (h / 10).floor().clamp(0, 35);
+          bins[bin] += d;
+          chromaSum += d;
+        }
+      }
+      double key;
+      if (count == 0) {
+        key = 999;
+      } else if (chromaSum / count < 0.07) {
+        // Dark/grey/white birds grouped cleanly at the end by lightness
+        key = 400 + (lumSum / count) * 100;
+      } else {
+        var best = 0;
+        for (var i = 1; i < 36; i++) {
+          if (bins[i] > bins[best]) best = i;
+        }
+        key = best * 10.0 + (lumSum / count);
+      }
+      _colourKey[sci] = key;
+      if (mounted && (app.settings.equalSort == 'colour' || _homeSort == 'colour')) setState(() {});
+    } catch (e) {
+      debugPrint('colour $sci: $e');
+      _colourKey[sci] = 999;
+    } finally {
+      _colourLoading.remove(sci);
+    }
+  }
+
+  /// Sort [rows] using the view's own sort key and direction.
+  List<_Row> _sortRows(List<_Row> rows, {required String sort, required bool asc, Session? ses, StationFeed? feed}) {
+    final dir = asc ? 1 : -1;
+    final out = [...rows];
+    int cmpOptNum(double? a, double? b, String fallbackA, String fallbackB) {
+      if (a == null && b == null) return fallbackA.toLowerCase().compareTo(fallbackB.toLowerCase());
+      if (a == null) return 1; // unknowns always stay at the end
+      if (b == null) return -1;
+      final c = a.compareTo(b);
+      return c != 0 ? c * dir : fallbackA.toLowerCase().compareTo(fallbackB.toLowerCase());
+    }
+
+    int cmpOptStr(String? a, String? b, String fallbackA, String fallbackB) {
+      final aa = (a ?? '').trim().toLowerCase();
+      final bb = (b ?? '').trim().toLowerCase();
+      if (aa.isEmpty && bb.isEmpty) return fallbackA.toLowerCase().compareTo(fallbackB.toLowerCase());
+      if (aa.isEmpty) return 1;
+      if (bb.isEmpty) return -1;
+      final c = aa.compareTo(bb);
+      return c != 0 ? c * dir : fallbackA.toLowerCase().compareTo(fallbackB.toLowerCase());
+    }
+
+    switch (sort) {
+      case 'recent':
+        out.sort((a, b) {
+          final c = (a.last ?? DateTime(0)).compareTo(b.last ?? DateTime(0));
+          return c != 0 ? c * dir : a.common.toLowerCase().compareTo(b.common.toLowerCase());
+        });
+      case 'active':
+        if (feed != null) {
+          _ensureRemoteActiveHours(feed, rows);
+          final scope = '${feed.station.id}:${feed.day != null ? ymd(feed.day!) : feed.span.name}:${feed.light.name}';
+          double? hourOf(_Row r) {
+            final k = '$scope|${r.sci}';
+            if (_remoteActiveHour.containsKey(k)) return _remoteActiveHour[k];
+            final t = r.last;
+            return t == null ? null : t.hour + t.minute / 60.0;
+          }
+          out.sort((a, b) => cmpOptNum(hourOf(a), hourOf(b), a.common, b.common));
+        } else {
+          final map = _localActiveHours(ses);
+          out.sort((a, b) => cmpOptNum(map[a.sci], map[b.sci], a.common, b.common));
+        }
+      case 'name':
+        out.sort((a, b) => a.common.toLowerCase().compareTo(b.common.toLowerCase()) * dir);
+      case 'family':
+        _traits?.wantGbif(rows.map((r) => r.sci));
+        out.sort((a, b) {
+          final ka = _traits?.of(a.sci)?.taxonomicKey(a.sci) ?? 'zzz|zzz|${a.sci.toLowerCase()}';
+          final kb = _traits?.of(b.sci)?.taxonomicKey(b.sci) ?? 'zzz|zzz|${b.sci.toLowerCase()}';
+          return ka.compareTo(kb) * dir;
+        });
+      case 'rare':
+        _traits?.wantRarity(rows.map((r) => r.sci));
+        out.sort((a, b) => cmpOptNum(
+            _traits?.of(a.sci)?.rarityScore, _traits?.of(b.sci)?.rarityScore, a.common, b.common));
+      case 'weight':
+        _traits?.wantWikidata(rows.map((r) => r.sci));
+        out.sort((a, b) => cmpOptNum(
+            _traits?.of(a.sci)?.massGrams, _traits?.of(b.sci)?.massGrams, a.common, b.common));
+      case 'wingspan':
+        _traits?.wantWikidata(rows.map((r) => r.sci));
+        out.sort((a, b) => cmpOptNum(
+            _traits?.of(a.sci)?.wingspanCm, _traits?.of(b.sci)?.wingspanCm, a.common, b.common));
+      case 'region':
+        _traits?.wantWikidata(rows.map((r) => r.sci));
+        out.sort((a, b) => cmpOptStr(
+            _traits?.of(a.sci)?.region, _traits?.of(b.sci)?.region, a.common, b.common));
+      case 'artist':
+        out.sort((a, b) => cmpOptStr(
+            artistOfPlate(_art[a.sci]), artistOfPlate(_art[b.sci]), a.common, b.common));
+      case 'colour':
+        _ensureColours(rows);
+        out.sort((a, b) {
+          final ka = _colourKey[a.sci];
+          final kb = _colourKey[b.sci];
+          return cmpOptNum(ka == 999 ? null : ka, kb == 999 ? null : kb, a.common, b.common);
+        });
+      default: // 'calls'
+        out.sort((a, b) {
+          final c = a.count.compareTo(b.count);
+          return c != 0 ? c * dir : a.common.toLowerCase().compareTo(b.common.toLowerCase());
+        });
+    }
+    return out;
+  }
+
   void _say(String text, {String? action, VoidCallback? onAction, int seconds = 3}) {
     if (!mounted) return;
     _noteTimer?.cancel();
@@ -386,57 +791,94 @@ class _NativePlateState extends State<NativePlate> {
     });
   }
 
-  // Session started, ended, or full and carried on in a new one.
-  int? _sesId;
-  void _watchSession() {
-    final now = app.engine.session?.id;
-    if (now == _sesId) return;
-    final before = _sesId;
-    _sesId = now;
-    final store = app.store;
-    String number(int id) {
-      final i = store.sessions.indexWhere((x) => x.id == id);
-      return i < 0 ? '' : ' #${i + 1}';
-    }
-
-    if (before == null && now != null) {
-      _say('Listening: session${number(now)} started.');
-    } else if (before != null && now != null) {
-      _say('Session${number(before)} is full at $maxSessionSpecies species; '
-          'session${number(now)} started.', seconds: 5);
-    } else if (before != null) {
-      // The store closes (or drops) the session just after the engine stops.
-      Future.delayed(const Duration(milliseconds: 400), () {
-        final found = store.sessions.where((x) => x.id == before);
-        if (found.isEmpty) {
-          _say('Stopped. Nothing was heard, so no session was kept.');
-          return;
-        }
-        final ses = found.first;
-        final species = {
-          for (final d in store.forPlate(app.settings.plateModel, session: ses)) d.sci
-        }.length;
-        _say('Session${number(before)} ended: '
-            '${lasting((ses.end ?? DateTime.now()).difference(ses.start))}, '
-            '$species species.', seconds: 4);
-      });
-    }
-  }
-
   // ---- the walk on a map, in place of the collage --------------------------
 
-  /// The map button: the walk on a map, or back to the plate (shared with
-  /// the web plate, Settings.showMap).
-  void _toggleMap() {
-    final on = !app.settings.showMap;
-    app.settings.update((x) => x.showMap = on);
-    _say(on ? 'The walk, on a map.' : 'The plate.', seconds: 2);
+  void _goHome() {
+    if (_sortOpen || _indexSortOpen || _zoomTier != 1.0 || _zoomScale != 1.0 ||
+        _homeSort != 'family' || !_homeSortAsc || _homeLabels || _homeSearch.isNotEmpty) {
+      setState(() {
+        _sortOpen = false;
+        _indexSortOpen = false;
+        _homeSort = 'family';
+        _homeSortAsc = true;
+        _homeLabels = false;
+        _homeSearch = '';
+        _zoomTier = 1.0;
+        _zoomScale = 1.0;
+      });
+    }
+    app.settings.update((x) {
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = x.mode == AppMode.station ? 'calls' : 'time';
+    });
+    unawaited(BirdChime.play(suppress: app.engine.running || app.engine.starting));
   }
 
-  /// The calendar button (day_picker.dart): a month with the days that
-  /// have a session, and that day's sessions listed under it to pick from;
-  /// OK shows the day's first, and the ‹ › step through the rest.
-  Future<void> _pickDay() async {
+  /// Jumps straight to the local session with the highest distinct species count.
+  void _openBestSession() {
+    final model = app.settings.plateModel;
+    Session? best;
+    var bestCount = 0;
+    for (final ses in app.store.sessions) {
+      final count = {
+        for (final d in app.store.forPlate(model, session: ses))
+          if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d.sci
+      }.length;
+      if (count > bestCount || (count == bestCount && count > 0 && best != null && ses.start.isAfter(best.start))) {
+        best = ses;
+        bestCount = count;
+      }
+    }
+    if (best != null) app.store.select(best);
+    if (_sortOpen || _indexSortOpen || _zoomTier != 1.0 || _zoomScale != 1.0 ||
+        _homeSort != 'family' || !_homeSortAsc || _homeLabels || _homeSearch.isNotEmpty) {
+      setState(() {
+        _sortOpen = false;
+        _indexSortOpen = false;
+        _homeSort = 'family';
+        _homeSortAsc = true;
+        _homeLabels = false;
+        _homeSearch = '';
+        _zoomTier = 1.0;
+        _zoomScale = 1.0;
+      });
+    }
+    app.settings.update((x) {
+      x.mode = AppMode.listen;
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = 'time';
+    });
+    unawaited(BirdChime.play(suppress: app.engine.running || app.engine.starting));
+  }
+
+  /// The map step of the view cycle (and Quick Launch -> Map): opens the walk
+  /// or station in full-screen map mode, zoomed close to the trail. Closing
+  /// returns to View 1.
+  Future<void> _openMap(StationFeed? feed, List<_Row> rows) async {
+    final store = app.store;
+    if (feed == null && store.selected == null) {
+      _goHome();
+      return;
+    }
+    if (app.settings.showMap) app.settings.update((x) => x.showMap = false);
+    _pickedFromCalendar = false;
+    await _mapFullScreen(
+      () => feed != null
+          ? Walk.station(feed.station.name, feed.place)
+          : (store.selected == null
+              ? null
+              : Walk.of(store, store.selected!, app.settings.plateModel,
+                  ignore: app.settings.isIgnoredSpecies)),
+      rows,
+    );
+    if (mounted && !_pickedFromCalendar) _goHome();
+  }
+
+  /// The calendar button (day_picker.dart): picking a session or station day
+  /// always opens the default view (Local or Remote) with Index of Species
+  /// expanded and Home filters reset to off. Returns true when a day/session
+  /// was selected.
+  Future<bool> _pickDay() async {
     final f = _feed;
     if (f != null) {
       // a station: any day since its records began
@@ -452,25 +894,56 @@ class _NativePlateState extends State<NativePlate> {
           },
         ),
       );
-      if (picked != null && mounted) f.setDay(picked);
-      return;
+      if (picked == null || !mounted) return false;
+      f.setDay(picked);
+      setState(() {
+        _sortOpen = false;
+        _indexSortOpen = false;
+        _homeSort = 'family';
+        _homeSortAsc = true;
+        _homeLabels = false;
+        _homeSearch = '';
+        _zoomTier = 1.0;
+        _zoomScale = 1.0;
+      });
+      app.settings.update((x) {
+        x.plateMode = defaultPlateMode;
+        x.nativeSizeBy = 'calls';
+        x.nativeIndexFolded = false;
+      });
+      return true;
     }
     final store = app.store;
-    if (store.sessions.isEmpty) {
-      _say('Nothing recorded yet.', seconds: 2);
-      return;
-    }
     final model = app.settings.plateModel;
     final picked = await DayPicker.show(
       context,
       DayPicker(
         store: store,
         shown: store.selected,
-        speciesIn: (x) => {for (final d in store.forPlate(model, session: x)) d.sci}.length,
+        speciesIn: (x) => {
+          for (final d in store.forPlate(model, session: x))
+            if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d.sci
+        }.length,
       ),
     );
-    if (picked == null || !mounted) return;
+    if (picked == null || !mounted) return false;
     store.select(picked);
+    setState(() {
+      _sortOpen = false;
+      _indexSortOpen = false;
+      _homeSort = 'family';
+      _homeSortAsc = true;
+      _homeLabels = false;
+      _homeSearch = '';
+      _zoomTier = 1.0;
+      _zoomScale = 1.0;
+    });
+    app.settings.update((x) {
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = 'time';
+      x.nativeIndexFolded = false;
+    });
+    return true;
   }
 
   /// A cross on the map: the bird's card, from this session's row when it
@@ -481,8 +954,51 @@ class _NativePlateState extends State<NativePlate> {
   /// its button or Escape closes it, and a bird's cross opens the bird's
   /// card over it. "Passed on the way" sits on the map at the bottom and
   /// opens the list (Ed, 23 Nov).
-  void _mapFullScreen(Walk? Function() walk, List<_Row> rows) {
-    Navigator.of(context).push(PageRouteBuilder<void>(
+  Future<void> _mapFullScreen(Walk? Function() walk, List<_Row> rows) {
+    final mapShotKey = GlobalKey();
+    final mapShareKey = GlobalKey();
+    Future<Uint8List?> mapPicture() async {
+      final box = mapShotKey.currentContext?.findRenderObject();
+      if (box is! RenderRepaintBoundary) return null;
+      final image = await box.toImage(pixelRatio: MediaQuery.devicePixelRatioOf(context));
+      try {
+        final png = await image.toByteData(format: ui.ImageByteFormat.png);
+        return png?.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
+    }
+
+    Future<void> shareMap() async {
+      final box = mapShareKey.currentContext?.findRenderObject() as RenderBox?;
+      final from = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+      var ok = false;
+      try {
+        final png = await mapPicture();
+        if (png != null) ok = await PlateShare.share(text: 'Walk with birdsongs.ai', from: from, png: png);
+      } catch (e) {
+        debugPrint('map share: $e');
+      }
+      if (!ok && mounted) _say("Couldn't take a picture of the map.");
+    }
+
+    Future<void> saveMap() async {
+      var r = 'failed';
+      try {
+        final png = await mapPicture();
+        if (png != null) r = await PlateShare.saveToPhotos(png: png);
+      } catch (e) {
+        debugPrint('map save: $e');
+      }
+      if (!mounted) return;
+      _say(switch (r) {
+        'saved' => 'Saved to Photos.',
+        'denied' => 'birdsongs.ai may not add to Photos: allow it in Settings.',
+        _ => "Couldn't save the map.",
+      });
+    }
+
+    return Navigator.of(context).push(PageRouteBuilder<void>(
       fullscreenDialog: true,
       transitionDuration: const Duration(milliseconds: 180),
       reverseTransitionDuration: const Duration(milliseconds: 140),
@@ -493,14 +1009,27 @@ class _NativePlateState extends State<NativePlate> {
           autofocus: true,
           child: Scaffold(
             backgroundColor: paper,
-            body: SafeArea(
-              child: ListenableBuilder(
-                listenable: Listenable.merge([app.store, app.settings, _landmarks]),
-                builder: (context, _) {
-                  final passed =
-                      app.settings.mapExtras ? (_landmarks.walk?.passed ?? const <Passed>[]) : const <Passed>[];
-                  return Stack(children: [
-                    Positioned.fill(
+            body: ListenableBuilder(
+              listenable: Listenable.merge([app.store, app.settings, _landmarks]),
+              builder: (context, _) {
+                final passed =
+                    app.settings.mapExtras ? (_landmarks.walk?.passed ?? const <Passed>[]) : const <Passed>[];
+                final btnStyle = app.settings.mapButtonStyle;
+                final isMadder = btnStyle == 'madder';
+                final isInk = btnStyle == 'ink';
+                final btnBg = isMadder
+                    ? madder
+                    : isInk
+                        ? paper.withValues(alpha: 0.85)
+                        : paper.withValues(alpha: 0.94);
+                final btnFg = isMadder ? paper : (isInk ? ink : madder);
+                final btnShape = isMadder
+                    ? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4)))
+                    : const CircleBorder(side: BorderSide(color: rule));
+                return Stack(children: [
+                  Positioned.fill(
+                    child: RepaintBoundary(
+                      key: mapShotKey,
                       child: LayoutBuilder(
                         builder: (context, box) => WalkMap(
                           walk: walk(),
@@ -512,28 +1041,103 @@ class _NativePlateState extends State<NativePlate> {
                           onHold: (_) {},
                           landmarks: app.settings.mapExtras ? _landmarks : null,
                           settings: app.settings,
+                          pins: app.pins,
                           species: [for (final r in rows) (sci: r.sci, common: r.common)],
                           fullScreen: true,
-                          onFullScreen: () => Navigator.of(context).maybePop(),
+                          onPoi: passed.isNotEmpty
+                              ? () => showPassed(context, _landmarks, about: app.settings.mapPassedAbout)
+                              : null,
                         ),
                       ),
                     ),
-                    // on the map, not a strip below it; clear of the credit ⓘ (Ed, 23 Nov)
-                    if (passed.isNotEmpty)
-                      Positioned(
-                        left: 16,
-                        right: 40,
-                        bottom: 10,
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          child: _PassedOnMap(
-                            onTap: () => showPassed(context, _landmarks, about: app.settings.mapPassedAbout),
+                  ),
+                  () {
+                    final pad = MediaQuery.paddingOf(context);
+                    final topEdge = pad.top > 24 ? math.max(16.0, pad.top - 14.0) : 10.0;
+                    final bottomEdge = pad.bottom > 0 ? 18.0 : 12.0;
+                    final leftEdge = pad.left > 16 ? math.max(14.0, pad.left - 10.0) : 12.0;
+                    final rightEdge = pad.right > 16 ? math.max(14.0, pad.right - 10.0) : 12.0;
+                    return Positioned.fill(
+                      child: Stack(
+                        children: [
+                          // Top-right menu button on the map (always visible in all views).
+                          Positioned(
+                            right: rightEdge,
+                            top: topEdge,
+                            child: SettingsButton(
+                              app: app,
+                              color: ink,
+                              onGoHome: () => Navigator.of(context).maybePop(),
+                              onOpenMap: () {},
+                              onOpenCalendar: () async {
+                                final picked = await _pickDay();
+                                if (picked && context.mounted) {
+                                  _pickedFromCalendar = true;
+                                  Navigator.of(context).maybePop();
+                                }
+                              },
+                              onOpenBestSession: () {
+                                _openBestSession();
+                                Navigator.of(context).maybePop();
+                              },
+                            ),
                           ),
-                        ),
+                          // Bottom-left icon on the map: closes the map and returns
+                          // to View 1 (Most recent on Local / Most heard on Remote).
+                          Positioned(
+                            left: leftEdge,
+                            bottom: bottomEdge,
+                            child: () {
+                              final isRemote = app.settings.mode == AppMode.station;
+                              final backIcon =
+                                  isRemote ? Symbols.view_quilt : Symbols.auto_awesome_mosaic;
+                              final backTip = isRemote ? 'Most heard' : 'Recent ramblings';
+                              return isInk
+                                  ? IconButton(
+                                      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                                      padding: EdgeInsets.zero,
+                                      iconSize: 22,
+                                      tooltip: backTip,
+                                      icon: Icon(backIcon, color: ink),
+                                      onPressed: () => Navigator.of(context).maybePop(),
+                                    )
+                                  : Material(
+                                      color: btnBg,
+                                      elevation: 2,
+                                      shadowColor: const Color(0x4D3C280A),
+                                      shape: btnShape,
+                                      clipBehavior: Clip.antiAlias,
+                                      child: InkWell(
+                                        onTap: () => Navigator.of(context).maybePop(),
+                                        child: SizedBox(
+                                          width: 38,
+                                          height: 38,
+                                          child: Center(
+                                            child: Icon(backIcon, size: 21, color: btnFg),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                            }(),
+                          ),
+                          // Bottom-right share button on the map (modern style matching filter menu).
+                          if (PlateShare.supported)
+                            Positioned(
+                              right: rightEdge,
+                              bottom: bottomEdge,
+                              child: _shareMenu(
+                                key: mapShareKey,
+                                tooltip: 'Share or save the map',
+                                onShare: shareMap,
+                                onSave: saveMap,
+                              ),
+                            ),
+                        ],
                       ),
-                  ]);
-                },
-              ),
+                    );
+                  }(),
+                ]);
+              },
             ),
           ),
         ),
@@ -548,7 +1152,11 @@ class _NativePlateState extends State<NativePlate> {
     final store = app.store, ses = store.selected;
     if (ses == null) return;
     final model = app.settings.plateModel;
-    final walk = [for (final x in store.walkOf(ses)) ...store.forPlate(model, session: x)];
+    final walk = [
+      for (final x in store.walkOf(ses))
+        for (final d in store.forPlate(model, session: x))
+          if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d
+    ];
     final r = _Row(sci, common);
     for (final d in walk) {
       if (d.sci != sci) continue;
@@ -579,7 +1187,7 @@ class _NativePlateState extends State<NativePlate> {
     var ok = false;
     try {
       final png = await _picture();
-      if (png != null) ok = await PlateShare.share(text: 'Heard with Birdsong', from: from, png: png);
+      if (png != null) ok = await PlateShare.share(text: 'Heard with birdsongs.ai', from: from, png: png);
     } catch (_) {}
     if (!ok && mounted) _say("Couldn't take a picture of the plate.");
   }
@@ -593,7 +1201,7 @@ class _NativePlateState extends State<NativePlate> {
     if (!mounted) return;
     _say(switch (r) {
       'saved' => 'Saved to Photos.',
-      'denied' => 'Birdsong may not add to Photos: allow it in Settings.',
+      'denied' => 'birdsongs.ai may not add to Photos: allow it in Settings.',
       _ => "Couldn't save the plate.",
     });
   }
@@ -617,26 +1225,45 @@ class _NativePlateState extends State<NativePlate> {
         seconds: 6);
   }
 
-  // The pill's sensors half: show the remote station last shown (that is
-  // still the web plate). With none saved yet, it asks for one.
+  // The pill's sensors half: show the remote station last shown, always
+  // landing on the default view (Most heard). With none saved yet, ask for one.
   void _toRemote() {
     final s = app.settings;
     if (s.stations.isEmpty) {
       editStation(context, s);
       return;
     }
+    _resetHomeFilters();
     s.update((x) {
       x.mode = AppMode.station;
       x.stationId = x.station!.id;
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = 'calls';
     });
   }
 
   /// The bird's card (bird_card.dart), as the web plate's: what is on the
   /// plate (the session's) for the facts and recordings, and everything on
   /// this device for how long the bird has been known here.
-  void _openCard(_Row r, {List<Detection>? heard}) {
+  void _openCard(_Row r, {List<Detection>? heard, bool isSample = false}) {
     final lib = _lib;
     if (lib == null) return;
+    if (isSample) {
+      BirdCard.show(
+        context,
+        BirdCard(
+          lib: lib,
+          style: _style,
+          source: _SampleCard(r),
+          art: _art[r.sci],
+          traits: _traits,
+          onChosen: (art) {
+            if (mounted) setState(() => _art[r.sci] = art);
+          },
+        ),
+      );
+      return;
+    }
     final f = _feed;
     if (f != null) {
       final s = (f.species ?? const <StationSpecies>[]).where((x) => x.sci == r.sci).firstOrNull;
@@ -648,6 +1275,7 @@ class _NativePlateState extends State<NativePlate> {
           style: _style,
           source: _StationCard(f, s),
           art: _art[r.sci],
+          traits: _traits,
           onChosen: (art) {
             if (mounted) setState(() => _art[r.sci] = art);
           },
@@ -656,18 +1284,26 @@ class _NativePlateState extends State<NativePlate> {
       return;
     }
     final store = app.store, model = app.settings.plateModel;
-    heard ??= store.forPlate(model, session: store.selected);
+    heard ??= [
+      for (final d in store.forPlate(model, session: store.selected))
+        if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d
+    ];
+    final allModel = [
+      for (final d in store.forPlate(model))
+        if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d
+    ];
     BirdCard.show(
       context,
       BirdCard(
         lib: lib,
         style: _style,
         source: LocalCard(
-          BirdFacts.of(r.sci, r.common, heard, store.forPlate(model)),
+          BirdFacts.of(r.sci, r.common, heard, allModel),
           clipOf: (d) => d.hasClip ? store.clipFile(d.id) : null,
           spectrogramOf: (d) => d.hasClip ? store.spectrogramFile(d.id) : null,
         ),
         art: _art[r.sci],
+        traits: _traits,
         onChosen: (art) {
           if (mounted) setState(() => _art[r.sci] = art);
         },
@@ -679,62 +1315,131 @@ class _NativePlateState extends State<NativePlate> {
   Widget build(BuildContext context) {
     final feed = _syncFeed();
     return ListenableBuilder(
-      listenable: Listenable.merge([app.settings, app.store, app.engine, if (feed != null) feed]),
+      listenable: Listenable.merge([
+        app.settings,
+        app.store,
+        app.engine,
+        if (feed != null) feed,
+        if (_traits != null) _traits!,
+      ]),
       builder: (context, _) {
         final store = app.store, engine = app.engine;
+        // Whenever Local / Remote mode swaps from anywhere (pill, station list,
+        // Settings), guarantee we land on View 1 (Most recent / Most heard) and
+        // play the birdsong chime (unless actively recording).
+        final curMode = app.settings.mode;
+        if (_lastAppMode != null && _lastAppMode != curMode) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _resetHomeFilters();
+            if (app.settings.plateMode != defaultPlateMode) {
+              app.settings.update((x) {
+                x.plateMode = defaultPlateMode;
+                x.nativeSizeBy = x.mode == AppMode.station ? 'calls' : 'time';
+              });
+            }
+            unawaited(BirdChime.play(suppress: app.engine.running || app.engine.starting));
+          });
+        }
+        _lastAppMode = curMode;
         // a remote station has no sessions
         final ses = feed == null ? store.selected : null;
-        // Limit species: the most heard only, on the plate and in the index
+        final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
+        final spotlight = mode.key == 'spotlight';
+        final equal = mode.key == 'equal';
+        // Limit species: the most heard only, on the plate and in the index.
+        // Default view loads up to maxOnPlate (200); No pecking order loads all.
         final all = _rows(ses), limit = app.settings.nativeLimit;
         final rows = limit > 0 && all.length > limit ? all.sublist(0, limit) : all;
-        final onPlate = rows.take(maxOnPlate).toList();
-        _ensure(onPlate);
+        // When there are no recordings yet (fresh install, empty session, or an
+        // engine/station error), show the classic 5-bird sample plate alongside
+        // the status or error message.
+        final showSample = rows.isEmpty &&
+            (feed == null || feed.error != null || (!feed.loading && feed.species != null));
+        final displayRows = showSample ? _sampleRows() : rows;
+        final activeQuery = equal ? _equalSearch : (spotlight ? '' : _homeSearch);
+        final filteredDisplay = _filterByQuery(displayRows, activeQuery);
+        final onPlate = equal ? filteredDisplay : filteredDisplay.take(maxOnPlate).toList();
+        _ensure(displayRows.take(equal ? displayRows.length : maxOnPlate).toList());
+        final sampleMessage = !showSample
+            ? null
+            : feed != null
+                ? (feed.error ??
+                    'Nothing heard ${switch (feed.light) {
+                      Light.all => '',
+                      Light.day => 'in the daytime ',
+                      Light.night => 'at night ',
+                    }}${feed.day != null ? 'that day' : 'in this period'}. Showing sample plate.')
+                : (engine.error ??
+                    (engine.running
+                        ? 'Listening — birds appear here as they are heard.'
+                        : 'Nothing recorded yet — tap record to listen. Showing sample plate.'));
         // the creature heard last (the page's newestSci)
         String? newest;
+        String? newestCommon;
         DateTime? latest;
         for (final r in all) {
           if (r.last != null && (latest == null || r.last!.isAfter(latest))) {
             latest = r.last;
             newest = r.sci;
+            newestCommon = r.common;
           }
         }
-        final marked = app.settings.nativeMarkAt == 'none' ? null : newest;
+        // Historical data (ended local sessions, past remote days, or multi-day
+        // remote ranges) never shows a live red dot or bottom detection ticket.
+        final isHistorical = showSample ||
+            (feed == null
+                ? (ses == null || !ses.live)
+                : ((feed.day != null && !sameDay(feed.day!, DateTime.now())) ||
+                    (feed.day == null && feed.span != Span.today)));
+        final marked = (isHistorical || app.settings.nativeMarkAt == 'none') ? null : newest;
         WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
         final calls = all.fold<int>(0, (n, r) => n + r.count);
+        _checkHeartPulse(_showingFor(ses), calls);
         final i = store.selectedIndex, n = store.sessions.length;
-        final red = Theme.of(context).colorScheme.primary;
-        final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
-        // views d and e show one bird, unless the map is on: then the map
-        // is drawn as in the other views
-        final mapOn = app.settings.showMap && (ses != null || feed != null);
-        final single = (mode.key == 'latest' || mode.key == 'top') && !mapOn;
-        // the map takes the collage's place, and has one even in view c
-        final showPlate = mode.key != 'index' || mapOn, showIndex = mode.key != 'noindex';
-        final showHeading = mode.key != 'index' && mode.key != 'noindex';
+        final showIndex = !equal;
+        final showHeading = !equal;
+        final showTopRight = !spotlight && !equal;
+        // Smart edge-to-edge corner insets: gives bottom/side controls clean
+        // breathing room from curved phone bezels while still using the full
+        // screen canvas without double SafeArea padding.
+        final mediaPad = MediaQuery.paddingOf(context);
+        final cornerTop = mediaPad.top > 24 ? 18.0 : 10.0;
+        final rowTop = mediaPad.top > 24 ? math.max(16.0, mediaPad.top - 14.0) : 10.0;
+        final cornerBottom = mediaPad.bottom > 0 ? 18.0 : 12.0;
+        final cornerLeft = mediaPad.left > 16 ? math.max(14.0, mediaPad.left - 10.0) : 12.0;
+        final cornerRight = mediaPad.right > 16 ? math.max(14.0, mediaPad.right - 10.0) : 12.0;
+        final topInset = showTopRight ? rowTop : cornerTop;
         final fit = app.settings.nativeFit;
-        _bottomRoom = 40 + 8 + 6.0;
-        // the folded index's heading has a row above the buttons
-        // Folded away, the index's heading moves into the row along the
-        // bottom, between the map and share buttons, and the plate takes
-        // the room; opened, the list is where it always was.
-        final foldedInline = showIndex && showPlate && !single && app.settings.nativeIndexFolded;
-        if (foldedInline) _bottomRoom += 40 + 24;
+        // Reserve accurate room at the bottom for the bottom icon row (+ folded
+        // Index of Species heading above it) so everything fits on one screen.
+        final foldedInline = showIndex && !spotlight && app.settings.nativeIndexFolded;
+        _bottomRoom = equal
+            ? 0.0
+            : (foldedInline ? (42.0 + 10.0 + 44.0 + 6.0) : (44.0 + 8.0));
+        final platePad = equal
+            ? EdgeInsets.zero
+            : EdgeInsets.fromLTRB(
+                mediaPad.left > 16 ? math.max(10.0, mediaPad.left - 12.0) : 0.0,
+                rowTop,
+                mediaPad.right > 16 ? math.max(10.0, mediaPad.right - 12.0) : 0.0,
+                cornerBottom,
+              );
+        final filteredIndexRows = _filterByQuery(rows, _homeSearch);
+        final sortedIndex = _sortRows(filteredIndexRows, sort: _homeSort, asc: _homeSortAsc, ses: ses, feed: feed);
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
               entries: [
-                for (final r in rows)
+                for (final r in sortedIndex)
                   IndexEntry(r.sci, r.common, r.count, noPlate: _art.containsKey(r.sci) && _art[r.sci] == null),
               ],
               width: width,
               fit: fit,
               narrow: screen <= 720,
-              // the index alone: never folded, nothing to fold to
-              folded: showPlate && app.settings.nativeIndexFolded,
-              onFold: showPlate
-                  ? () => app.settings.update((x) => x.nativeIndexFolded = !x.nativeIndexFolded)
-                  : () {},
-              foldable: showPlate,
+              folded: app.settings.nativeIndexFolded,
+              onFold: () => app.settings.update((x) => x.nativeIndexFolded = !x.nativeIndexFolded),
+              foldable: true,
               inline: inline,
-              species: all.length,
+              species: _homeSearch.trim().isNotEmpty ? filteredIndexRows.length : all.length,
               newest: marked,
               // on a station the ‹ › step a day at a time
               steps: feed != null || n > 1,
@@ -742,6 +1447,36 @@ class _NativePlateState extends State<NativePlate> {
               canNext: feed?.canStepOn ?? (i >= 0 && i < n - 1),
               onStep: feed?.stepDay ?? store.step,
               onOpen: (e) => _openCard(rows.firstWhere((r) => r.sci == e.sci)),
+              onOpenCalendar: _pickDay,
+              filterOpen: _indexSortOpen,
+              filterTapGroupId: _indexFilterTapGroup,
+              onToggleFilter: () => setState(() => _indexSortOpen = !_indexSortOpen),
+              sortBar: inline
+                  ? null
+                  : SpeciesSortBar(
+                      open: _indexSortOpen,
+                      sortKey: _homeSort,
+                      ascending: _homeSortAsc,
+                      showLabels: _homeLabels || app.settings.nativeAllNameTickets,
+                      onToggleLabels: () {
+                        if (app.settings.nativeAllNameTickets) {
+                          app.settings.update((x) => x.nativeAllNameTickets = false);
+                          setState(() => _homeLabels = false);
+                        } else {
+                          setState(() => _homeLabels = !_homeLabels);
+                        }
+                      },
+                      searchQuery: _homeSearch,
+                      onSearchChanged: (v) => setState(() => _homeSearch = v),
+                      onReset: _resetHomeFilters,
+                      centered: true,
+                      showTrigger: false,
+                      tapRegionGroupId: _indexFilterTapGroup,
+                      onToggleOpen: () => setState(() => _indexSortOpen = !_indexSortOpen),
+                      onClose: () => setState(() => _indexSortOpen = false),
+                      onSelect: _selectHomeSort,
+                      onFlipDirection: _flipHomeSort,
+                    ),
             );
         return Stack(
           children: [
@@ -749,14 +1484,17 @@ class _NativePlateState extends State<NativePlate> {
             RepaintBoundary(
               key: _shotKey,
               child: PaperBackground(
-                child: SafeArea(
-                  child: single
-                      ? _single(mode, rows, newest)
+                child: Padding(
+                  padding: platePad,
+                  child: spotlight
+                      ? _spotlight(displayRows, showSample ? null : newest,
+                          isSample: showSample, sampleMessage: sampleMessage)
                       // The heading stays put beside the buttons at the top; the
                       // rest scrolls between it and the buttons along the bottom,
                       // never under either, fading out at both edges.
                       : LayoutBuilder(builder: (context, outer) {
-                          final headSide = (outer.maxWidth * .04).clamp(16.0, 48.0);
+                          final headSide = (outer.maxWidth * .03).clamp(12.0, 48.0);
+                          final headTop = outer.maxWidth <= 720 ? 8.0 : _padTop;
                           return Padding(
                             padding: EdgeInsets.only(bottom: _bottomRoom),
                             child: Column(
@@ -766,11 +1504,25 @@ class _NativePlateState extends State<NativePlate> {
                                 // the heading: just room below the top buttons
                                 if (showHeading)
                                   Padding(
-                                    padding: EdgeInsets.fromLTRB(headSide, _padTop, headSide, 0),
-                                    child: _heading(ses, i, n, all.length, calls, outer.maxWidth - headSide,
-                                        totals: mode.key != 'index', feed: feed),
+                                    padding: EdgeInsets.fromLTRB(headSide, headTop, headSide, 0),
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => setState(() => _headingHidden = !_headingHidden),
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(minWidth: 160, minHeight: 56),
+                                        child: AnimatedOpacity(
+                                          opacity: _headingHidden ? 0.0 : 1.0,
+                                          duration: const Duration(milliseconds: 220),
+                                          child: IgnorePointer(
+                                            ignoring: _headingHidden,
+                                            child: _heading(ses, i, n, all.length, calls, outer.maxWidth - headSide,
+                                                totals: mode.key != 'index', feed: feed),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   )
-                                else
+                                else if (!equal)
                                   const SizedBox(height: _buttonsTop),
                                 Expanded(
                                   child: ShaderMask(
@@ -797,51 +1549,18 @@ class _NativePlateState extends State<NativePlate> {
                         ? const NeverScrollableScrollPhysics()
                         : null,
                     // room at both ends so the first and last lines sit clear of the fades
-                    padding: const EdgeInsets.symmetric(vertical: _fadeRoom),
+                    padding: EdgeInsets.symmetric(vertical: equal ? 0 : _fadeRoom),
                     child: Column(
                       key: _allKey,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // the index alone sits in the middle of the window
-                        if (!showPlate) SizedBox(height: _indexAloneTop(box.maxHeight)),
-                        // the map's extras: what the walk went by, above the map
-                        // (nothing at all when it passed nothing)
-                        if (showPlate && mapOn && app.settings.mapExtras)
-                          Center(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: fit ? double.infinity : 1248),
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(side, fit ? 4 : 12, side, 0),
-                                child: PassedView(
-                                  lookup: _landmarks,
-                                  fit: fit,
-                                  narrow: box.maxWidth <= 720,
-                                  about: app.settings.mapPassedAbout,
-                                  width: math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side,
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (!showPlate)
-                          const SizedBox.shrink()
-                        else if (rows.isEmpty && !mapOn)
+                        if (rows.isEmpty && !showSample)
                           Padding(
                             key: _plateKey,
                             padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
                             child: Center(
                               child: Text(
-                                feed != null
-                                    ? (feed.error ??
-                                        (feed.loading || feed.species == null
-                                            ? 'Asking the station…'
-                                            : 'Nothing heard ${switch (feed.light) {
-                                                Light.all => '',
-                                                Light.day => 'in the daytime ',
-                                                Light.night => 'at night ',
-                                              }}${feed.day != null ? 'that day' : 'in this period'}.'))
-                                    : engine.running
-                                        ? 'Listening. Birds appear here as they are heard.'
-                                        : 'Nothing heard yet. Press record to listen.',
+                                'Asking the station…',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                     fontFamily: serif,
@@ -851,80 +1570,88 @@ class _NativePlateState extends State<NativePlate> {
                               ),
                             ),
                           )
-                        else
-                          // #plate{margin:.2rem clamp(.5rem,2vw,2rem) .55rem}
-                          Stack(
+                        else if (onPlate.isEmpty && activeQuery.trim().isNotEmpty)
+                          Padding(
                             key: _plateKey,
-                            children: [
-                              Padding(
-                                padding: EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
-                                child: mapOn
-                                    ? WalkMap(
-                                        walk: feed != null
-                                            ? Walk.station(feed.station.name, feed.place)
-                                            : Walk.of(store, ses!, app.settings.plateModel),
-                                        allBirds: app.settings.mapBirds == 'all',
-                                        landmarks: app.settings.mapExtras ? _landmarks : null,
-                                        settings: app.settings,
-                                        species: [for (final r in rows) (sci: r.sci, common: r.common)],
-                                        onFullScreen: () => _mapFullScreen(
-                                            () => feed != null
-                                                ? Walk.station(feed.station.name, feed.place)
-                                                : (store.selected == null
-                                                    ? null
-                                                    : Walk.of(store, store.selected!, app.settings.plateModel)),
-                                            rows),
-                                        size: Size(box.maxWidth - 2 * plateSide,
-                                            _plateHeight(box.maxWidth, box.maxHeight) - 12),
-                                        onBird: (sci, common) => _openFromMap(sci, common, rows),
-                                        onHold: (held) {
-                                          final want = held ? 'map' : null;
-                                          if (want != _holdFor && mounted) setState(() => _holdFor = want);
-                                        },
-                                      )
-                                    : _collage(ses, onPlate, newest, box.maxWidth - 2 * plateSide,
-                                        _plateHeight(box.maxWidth, box.maxHeight) - 12),
+                            padding: EdgeInsets.symmetric(vertical: equal ? 140 : 72, horizontal: 24),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'No species match "${activeQuery.trim()}".',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontFamily: serif,
+                                      fontStyle: FontStyle.italic,
+                                      fontSize: 17,
+                                      color: sepia,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: () => setState(() {
+                                      if (equal) {
+                                        _equalSearch = '';
+                                      } else {
+                                        _homeSearch = '';
+                                      }
+                                    }),
+                                    child: const Text('Clear search'),
+                                  ),
+                                ],
                               ),
-                              // With no index there is no heading to carry the
-                              // session arrows: the web plate's app draws a
-                              // pair at the plate's edges instead.
-                              if (!showIndex && n > 1) ...[
-                                Positioned(
-                                  left: 0,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: Center(
-                                      child: _EdgeArrow(Icons.chevron_left, 'Earlier session',
-                                          i > 0 ? () => store.step(-1) : null)),
+                            ),
+                          )
+                        else
+                          // Full-canvas plate (shows the classic 5-bird sample
+                          // plate with status/error notice whenever there are
+                          // no recordings yet).
+                          Padding(
+                            key: _plateKey,
+                            padding: equal
+                                ? const EdgeInsets.fromLTRB(8, 8, 8, 8)
+                                : EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
+                            child: Stack(
+                              alignment: Alignment.bottomCenter,
+                              children: [
+                                _collage(
+                                  ses,
+                                  onPlate,
+                                  marked,
+                                  equal ? math.max(100.0, box.maxWidth - 16) : box.maxWidth - 2 * plateSide,
+                                  equal
+                                      ? math.max(140.0, box.maxHeight - 16)
+                                      : _plateHeight(box.maxWidth, box.maxHeight) - 12,
+                                  sizeBy: equal
+                                      ? 'equal'
+                                      : (feed != null ? 'calls' : 'time'),
+                                  isSample: showSample,
+                                  searchQuery: activeQuery,
                                 ),
-                                Positioned(
-                                  right: 0,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: Center(
-                                      child: _EdgeArrow(Icons.chevron_right, 'Later session',
-                                          i >= 0 && i < n - 1 ? () => store.step(1) : null)),
-                                ),
+                                if (sampleMessage != null)
+                                  Positioned(
+                                    left: 12,
+                                    right: 12,
+                                    bottom: equal ? 56 : 8,
+                                    child: Center(
+                                      child: _sampleBanner(sampleMessage),
+                                    ),
+                                  ),
                               ],
-                            ],
+                            ),
                           ),
                         // The page's caption, under the plate; not when it is
-                        // fitted on one screen (body.fit #caption)
-                        if (showPlate && !fit)
+                        // fitted on one screen (body.fit #caption) or on No pecking order.
+                        if (!fit && !equal)
                           Center(
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(maxWidth: 704),
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(16, 9.6, 16, 0),
                                 child: Text(
-                                  !mapOn
-                                      ? 'Each bird is drawn in proportion to how often it was heard. '
-                                          'Select one to see its plate and its hours.'
-                                      : app.settings.mapBirds == 'all'
-                                          ? 'The way you walked, with a cross wherever a bird was heard. '
-                                              'Select one to see its plate and its hours.'
-                                          : 'The way you walked, with a cross where each bird was first heard. '
-                                              'Select one to see its plate and its hours.',
+                                  'Each bird is drawn in proportion to how often it was heard. '
+                                  'Select one to see its plate and its hours.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                       fontFamily: serif,
@@ -944,7 +1671,7 @@ class _NativePlateState extends State<NativePlate> {
                           child: ConstrainedBox(
                             constraints: BoxConstraints(maxWidth: fit ? double.infinity : 1248),
                             child: Padding(
-                              padding: EdgeInsets.fromLTRB(side, !showPlate ? 12.8 : (fit ? 8 : 35.2), side, fit ? 12.8 : 40),
+                              padding: EdgeInsets.fromLTRB(side, fit ? 8 : 35.2, side, fit ? 12.8 : 40),
                               child: index(math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side, box.maxWidth),
                             ),
                           ),
@@ -962,61 +1689,114 @@ class _NativePlateState extends State<NativePlate> {
                 ),
               ),
             ),
-            SafeArea(
+            Positioned.fill(
               child: Stack(
                 children: [
-                // The same buttons as over the web plate: record, the
-                // source pill, the menu, and the plate's view under it.
+                // Tap anywhere outside the No pecking order filter panel to close it.
+                if (equal && _sortOpen)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(() => _sortOpen = false),
+                    ),
+                  ),
+                // Top-left frosted-paper filter bar on No pecking order (icon
+                // automatically inverts colour when drawn over dark bird art).
+                if (equal)
+                  Positioned(
+                    left: cornerLeft,
+                    top: cornerTop,
+                    right: cornerRight + 52,
+                    child: SpeciesSortBar(
+                      open: _sortOpen,
+                      sortKey: app.settings.equalSort,
+                      ascending: app.settings.equalSortAsc,
+                      showLabels: app.settings.equalLabels || app.settings.nativeAllNameTickets,
+                      onToggleLabels: () => app.settings.update((x) {
+                        if (x.nativeAllNameTickets) {
+                          x.nativeAllNameTickets = false;
+                          x.equalLabels = false;
+                        } else {
+                          x.equalLabels = !x.equalLabels;
+                        }
+                      }),
+                      searchQuery: _equalSearch,
+                      onSearchChanged: (v) => setState(() => _equalSearch = v),
+                      onReset: _resetEqualFilters,
+                      adaptiveTrigger: true,
+                      onToggleOpen: () => setState(() => _sortOpen = !_sortOpen),
+                      onClose: () => setState(() => _sortOpen = false),
+                      onSelect: (key) {
+                        _selectEqualSort(key);
+                        setState(() => _sortOpen = false);
+                      },
+                      onFlipDirection: _flipEqualSort,
+                    ),
+                  ),
+                // Top-right controls: horizontal row [Record/Stations] [Pill] [Menu]
+                // on the home view, and solo contrast-inverting Menu on No pecking order.
                 Positioned(
-                  right: 8,
-                  top: 8,
+                  right: cornerRight,
+                  top: topInset,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // record in Listen here, or while a session records
-                      if (feed == null || engine.running || engine.starting)
-                        RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
-                      // on a station: the list of stations, to choose or add one
-                      if (feed != null)
-                        Builder(
-                          builder: (bc) => IconButton(
-                            tooltip: 'Stations',
-                            constraints: const BoxConstraints.tightFor(
-                                width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                            icon: const Icon(Icons.add),
-                            color: red,
-                            onPressed: () => _stationsTap(bc),
+                      if (showTopRight) ...[
+                        // record in Listen here, or while a session records
+                        if (feed == null || engine.running || engine.starting)
+                          RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
+                        // on a station: the list of stations, to choose or add one
+                        if (feed != null)
+                          Builder(
+                            builder: (bc) => IconButton(
+                              tooltip: 'Stations',
+                              constraints: const BoxConstraints.tightFor(
+                                  width: SourcePill.rowHeight, height: SourcePill.rowHeight),
+                              icon: const Icon(Symbols.cell_tower, size: 20, color: ink),
+                              color: ink,
+                              onPressed: () {
+                                hapticTap();
+                                _stationsTap(bc);
+                              },
+                            ),
+                          ),
+                        SizedBox(
+                          height: SourcePill.rowHeight,
+                          child: Center(
+                            child: SourcePill(
+                              listen: feed == null,
+                              stationName: app.settings.station?.name,
+                              onListen: () {
+                                _resetHomeFilters();
+                                app.settings.update((x) {
+                                  x.mode = AppMode.listen;
+                                  x.plateMode = defaultPlateMode;
+                                  x.nativeSizeBy = 'time';
+                                });
+                              },
+                              onRemote: _toRemote,
+                            ),
                           ),
                         ),
-                      SizedBox(
-                      // level with the record and menu buttons
-                      height: SourcePill.rowHeight,
-                      child: Center(
-                        child: SourcePill(
-                          listen: feed == null,
-                          stationName: app.settings.station?.name,
-                          onListen: () => app.settings.update((x) => x.mode = AppMode.listen),
-                          onRemote: _toRemote,
-                        ),
-                      ),
-                      ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SettingsButton(app: app, color: red),
-                        ],
+                      ],
+                      SettingsButton(
+                        app: app,
+                        color: ink,
+                        adaptiveContrast: equal,
+                        onGoHome: _goHome,
+                        onOpenMap: () => _openMap(feed, rows),
+                        onOpenCalendar: _pickDay,
+                        onOpenBestSession: _openBestSession,
                       ),
                     ],
                   ),
                 ),
-                // The walk on a map in place of the collage, at the bottom
-                // left; not in the views of one bird (d and e).
                 // A station's four periods, centred at the top on a wide
                 // screen, as the web plate's header has them.
-                if (feed != null && showHeading && MediaQuery.sizeOf(context).width >= 900)
+                if (feed != null && showTopRight && MediaQuery.sizeOf(context).width >= 900)
                   Positioned(
-                    top: 8,
+                    top: rowTop,
                     left: 0,
                     right: 0,
                     height: SourcePill.rowHeight,
@@ -1035,136 +1815,119 @@ class _NativePlateState extends State<NativePlate> {
                   ),
                 // On a phone, the four in short words at the right, under
                 // the buttons, lined up with the menu icon's right edge.
-                if (feed != null && showHeading && MediaQuery.sizeOf(context).width < 900)
+                if (feed != null && showTopRight && MediaQuery.sizeOf(context).width < 900)
                   Positioned(
-                    top: _buttonsTop,
-                    // the menu's 48 square sits 8 in, its 24 icon 12 further:
-                    // All ends where the menu's lines end
-                    right: 8 + 12,
+                    top: rowTop + SourcePill.rowHeight,
+                    right: cornerRight + 12,
                     child: _spanRow(feed, short: true),
                   ),
                 // and the sun and moon under All, ending with it
-                if (feed != null && feed.canLight && showHeading && MediaQuery.sizeOf(context).width < 900)
+                if (feed != null && feed.canLight && showTopRight && MediaQuery.sizeOf(context).width < 900)
                   Positioned(
-                    top: _buttonsTop + 34,
-                    right: 8 + 12,
+                    top: rowTop + SourcePill.rowHeight + 34,
+                    right: cornerRight + 12,
                     child: _lightToggle(feed, app.settings.nativeHeadingInk ? ink : sepia, end: true),
                   ),
-                // Along the bottom at the left, quick things to do: the plate's
-                // view (a to g) in the corner, so it never moves while
-                // stepping through the views, then the map.
+                // Single bottom-left view cycle button (order: 1 -> 3 -> 4 -> 2 -> 1);
+                // auto-inverts over bird art on No pecking order.
                 Positioned(
-                  left: 8,
-                  bottom: 8,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                        padding: EdgeInsets.zero,
-                        iconSize: 22,
-                        tooltip: 'Plate: ${mode.name}',
-                        icon: const Icon(Icons.dashboard_outlined),
-                        color: red,
-                        onPressed: _nextMode,
-                      ),
-                      IconButton(
-                        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                        padding: EdgeInsets.zero,
-                        iconSize: 22,
-                        tooltip: app.settings.showMap ? 'Back to the plate' : 'The walk on a map',
-                        // the same picture on and off, so it is plain what it does
-                        icon: const Icon(Icons.map_outlined),
-                        isSelected: app.settings.showMap,
-                        color: red,
-                        onPressed: _toggleMap,
-                      ),
-                    ],
-                  ),
+                  left: cornerLeft,
+                  bottom: cornerBottom,
+                  child: () {
+                    final iconData = switch (mode.key) {
+                      'time' => Symbols.interests,
+                      'spotlight' => Symbols.grid_view,
+                      _ => Symbols.map,
+                    };
+                    final glyph = Icon(iconData, color: equal ? adaptiveInkSource : ink);
+                    return IconButton(
+                      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                      padding: EdgeInsets.zero,
+                      iconSize: 22,
+                      tooltip: switch (mode.key) {
+                        'time' => 'Latest & most heard',
+                        'spotlight' => 'No pecking order',
+                        _ => 'The walk on a map',
+                      },
+                      icon: equal ? AdaptiveContrast(child: glyph) : glyph,
+                      color: ink,
+                      onPressed: equal
+                          ? () {
+                              hapticTap();
+                              _openMap(feed, rows);
+                            }
+                          : _nextMode,
+                    );
+                  }(),
                 ),
                 // The folded index's heading, on a row of its own just above
                 // the buttons along the bottom.
                 if (foldedInline)
                   Positioned(
-                    left: 8,
-                    right: 8,
-                    bottom: 8 + 40 + 24,
-                    height: 40,
-                    child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
+                    left: cornerLeft,
+                    right: cornerRight,
+                    bottom: cornerBottom + 44 + 10,
+                    height: 42,
+                    child: index(
+                        MediaQuery.sizeOf(context).width - cornerLeft - cornerRight, MediaQuery.sizeOf(context).width,
                         inline: true),
                   ),
-                // The song scribble between the buttons along the bottom:
-                // listening here only, not on a station.
-                if (feed == null && app.settings.songScribble)
+                // Bottom song scribble + latest-detection ticket (live/today
+                // data only — hidden on historical sessions and sample plate).
+                if ((app.settings.songScribble || (!isHistorical && app.settings.nativeShowLatestDetection)) && !equal)
                   Positioned(
-                    left: 8 + 40 + 40 + 8,
-                    right: (PlateShare.supported ? 8 + 40 + 40 : 8 + 40) + 8,
-                    bottom: 8,
+                    left: cornerLeft + 40 + 8,
+                    right: (PlateShare.supported ? cornerRight + 40 : cornerRight) + 8,
+                    bottom: cornerBottom,
                     height: 40,
-                    child: SongScribble(engine: engine),
+                    child: SongScribble(
+                      engine: engine,
+                      showLine: app.settings.songScribble,
+                      simpleWave: app.settings.songScribbleMode == 'wave',
+                      remote: feed != null,
+                      latestName: isHistorical ? null : newestCommon,
+                      showLatest: !isHistorical && app.settings.nativeShowLatestDetection,
+                      useTicket: app.settings.nativeBottomTicket,
+                      onTapLatest: isHistorical || newest == null
+                          ? null
+                          : () {
+                              final row = rows.where((r) => r.sci == newest).firstOrNull;
+                              if (row != null) _openCard(row);
+                            },
+                    ),
                   ),
-                // The calendar, at the bottom right beside share (in the
-                // corner where there is no share).
-                Positioned(
-                  right: PlateShare.supported ? 8 + 40 : 8,
-                  bottom: 8,
-                  child: IconButton(
-                    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                    padding: EdgeInsets.zero,
-                    iconSize: 22,
-                    tooltip: 'Pick a day',
-                    icon: const Icon(Icons.calendar_today_outlined),
-                    color: red,
-                    onPressed: _pickDay,
-                  ),
-                ),
-                // Share or save, out of the way at the bottom right.
+                // Share or save, out of the way at the bottom right (auto-inverts on No pecking order).
                 if (PlateShare.supported)
                   Positioned(
-                    right: 8,
-                    bottom: 8,
-                    child: PopupMenuButton<String>(
+                    right: cornerRight,
+                    bottom: cornerBottom,
+                    child: _shareMenu(
                       key: _shareKey,
-                      padding: const EdgeInsets.all(9),
-                      iconSize: 22,
                       tooltip: 'Share or save the plate',
-                      icon: Icon(Icons.ios_share, color: red),
-                      color: paper,
-                      onSelected: (v) => v == 'save' ? _save() : _share(),
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(
-                          value: 'share',
-                          child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
-                        ),
-                        PopupMenuItem(
-                          value: 'save',
-                          child: ListTile(
-                              leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
-                        ),
-                      ],
+                      adaptiveContrast: equal,
+                      onShare: _share,
+                      onSave: _save,
                     ),
                   ),
                 if (_note != null)
                   Positioned(
-                    left: 16,
-                    right: 16,
-                    top: 112,
+                    left: cornerLeft,
+                    right: cornerRight,
+                    top: rowTop,
                     child: IgnorePointer(
                       ignoring: !_noteShown,
                       child: AnimatedOpacity(
                         opacity: _noteShown ? 1 : 0,
                         duration: const Duration(milliseconds: 250),
-                        child: Center(
-                          child: PlateNote(
-                            text: _note!,
-                            action: _noteAction,
-                            onAction: _noteDo == null
-                                ? null
-                                : () {
-                                    setState(() => _noteShown = false);
-                                    _noteDo!();
-                                  },
-                          ),
+                        child: PlateNote(
+                          text: _note!,
+                          action: _noteAction,
+                          onAction: _noteDo == null
+                              ? null
+                              : () {
+                                  setState(() => _noteShown = false);
+                                  _noteDo!();
+                                },
                         ),
                       ),
                     ),
@@ -1196,9 +1959,9 @@ class _NativePlateState extends State<NativePlate> {
     final sub = capsOn
         ? TextStyle(fontFamily: caps, fontSize: 14.4, letterSpacing: 14.4 * .06, color: lines, height: 1.5)
         : TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: lines, height: 1.5);
-    // record 44, pill 82, menu 48, and 8 from the edge, and a little air:
-    // the heading sits beside them, so every line stops short of them
-    const row1 = 194.0;
+    // record 44, pill 82, menu 48, and edge gap: the heading stops clear of them
+    const row1Title = 194.0;
+    const row2Meta = 194.0;
     final weather = feed != null ? feed.weather : ses?.weather;
     final temp = (weather?['temperatureC'] as num?)?.round();
     final sky = weather?['symbol'] as String?;
@@ -1208,10 +1971,10 @@ class _NativePlateState extends State<NativePlate> {
     final when = feed != null
         ? feed.dates
         : ses == null
-        ? 'Nothing recorded yet: tap the microphone to start.'
+        ? 'Nothing recorded yet — tap record to listen.'
         : ses.live
             ? 'Listening now, since ${clock(ses.start)}.'
-            : '${span(ses.start, ses.end ?? ses.start)}.';
+            : span(ses.start, ses.end ?? ses.start);
     // a station: where it is, when it says, as a session's place line
     final where = feed != null
         ? (feed.place == null ? '' : place(feed.place!.$1, feed.place!.$2))
@@ -1226,9 +1989,9 @@ class _NativePlateState extends State<NativePlate> {
       children: [
         if (app.settings.nativeShowTitle) ...[
         ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: math.max(120, width - row1)),
+          constraints: BoxConstraints(maxWidth: math.max(120, width - row1Title)),
           child: Text.rich(
-            TextSpan(text: 'Birdsongs', children: [
+            TextSpan(text: 'birdsongs.ai', children: [
               // the session's number, small, in the lines' own style
               if (feed == null && n > 0 && i >= 0)
                 TextSpan(text: '  #${i + 1}', style: sub.copyWith(height: 1)),
@@ -1254,7 +2017,7 @@ class _NativePlateState extends State<NativePlate> {
         const SizedBox(height: 3.2),
         ],
         ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: math.max(120, width - row1)),
+          constraints: BoxConstraints(maxWidth: math.max(120, width - row2Meta)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1278,6 +2041,21 @@ class _NativePlateState extends State<NativePlate> {
                     ],
                   ),
                 ),
+              // Heart outline + total species count; beats red for 2 s whenever
+              // a bird is detected (local or remote), then returns to black outline.
+              () {
+                final lifeCount = feed != null
+                    ? species
+                    : {
+                        for (final d in app.store.all)
+                          if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d.sci
+                      }.length;
+                return _HeartCounter(
+                  count: lifeCount,
+                  beatToken: _heartBeatToken,
+                  textStyle: sub,
+                );
+              }(),
               if (feed != null && feed.lightNote != null && feed.light != Light.all)
                 Text(feed.lightNote!, style: sub.copyWith(color: sepia)),
               ],
@@ -1297,13 +2075,61 @@ class _NativePlateState extends State<NativePlate> {
   /// something asks them to: the sizing button, the window changing size, or
   /// a new bird joining while listening (it appears once its plate is
   /// ready, and the rest make room).
-  Widget _collage(Session? ses, List<_Row> rows, String? newest, double width, double height) {
-    final showing = _showingFor(ses);
+  Widget _sampleBanner(String message) {
+    final openModels = message.contains('Models');
+    return PaperSurface(
+      borderRadius: 14,
+      opacity: 0.90,
+      padding: EdgeInsets.fromLTRB(14, 7, openModels ? 8 : 14, 7),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: serif,
+                fontStyle: FontStyle.italic,
+                fontSize: 14.5,
+                height: 1.3,
+                color: ink,
+              ),
+            ),
+          ),
+          if (openModels) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: madder,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(fontFamily: caps, fontSize: 13),
+              ),
+              onPressed: widget.openSettings,
+              child: const Text('Models'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _collage(Session? ses, List<_Row> rows, String? newest, double width, double height,
+      {required String sizeBy, bool isSample = false, String searchQuery = ''}) {
+    final baseShowing = isSample
+        ? 'sample|${_style.name}|${app.settings.nativeParts ? 'parts' : ''}'
+        : _showingFor(ses);
+    final qKey = searchQuery.trim().toLowerCase();
+    final showing = sizeBy == 'equal'
+        ? '$baseShowing|equal|${rows.length}|$qKey'
+        : (qKey.isEmpty ? baseShowing : '$baseShowing|q:$qKey|${rows.length}');
     final ready = [for (final r in rows) if (_art.containsKey(r.sci)) r];
     // Not before the height is known either (_measure), or they would be
     // placed once and then again.
     if (_revealed != showing) {
-      if (ready.length < rows.length || (app.settings.nativeFit && _others == null)) {
+      if (ready.length < rows.length || (sizeBy != 'equal' && app.settings.nativeFit && _others == null)) {
         return SizedBox(
           width: width,
           height: height,
@@ -1312,104 +2138,212 @@ class _NativePlateState extends State<NativePlate> {
       }
       _revealed = showing;
     }
+    final ordered = sizeBy == 'equal'
+        ? _sortRows(ready, sort: app.settings.equalSort, asc: app.settings.equalSortAsc, ses: ses, feed: _feed)
+        : ready;
+    final showTickets = sizeBy == 'equal'
+        ? (app.settings.equalLabels || app.settings.nativeAllNameTickets)
+        : (_homeLabels || app.settings.nativeAllNameTickets);
+    final deepMaxScale = math.max(14.0, math.sqrt(ordered.length) * 2.0);
     final collage = CollageView(
-      birds: [for (final r in ready) CollageBird(r.sci, r.common, r.count, r.last)],
+      birds: [for (final r in ordered) CollageBird(r.sci, r.common, r.count, r.last)],
       art: _art,
       size: Size(width, height),
-      sizeBy: app.settings.nativeSizeBy,
+      sizeBy: sizeBy,
       markAt: app.settings.nativeMarkAt,
       newest: newest,
-      live: app.engine.liveSpecies,
-      onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
+      live: isSample ? const <String>{} : app.engine.liveSpecies,
+      showHoverInfo: app.settings.nativeHoverInfo,
+      showAllNameTickets: showTickets,
+      allowDrag: false,
+      resolutionScale: _zoomTier,
+      zoomScale: _zoomScale,
+      onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci), isSample: isSample),
     );
     return ZoomableCollage(
       // A new session or style is a new collage: nothing glides across from
-      // the one before, and it starts unzoomed.
-      key: ValueKey(showing),
+      // the one before, and it starts unzoomed. High-res optical zoom + pan
+      // work identically on both the home collage and No pecking order.
+      key: ValueKey('$showing|$sizeBy'),
       size: Size(width, height),
+      allPlatforms: true,
+      maxScale: deepMaxScale,
+      onScaleTier: (t) {
+        if (mounted && t != _zoomTier) setState(() => _zoomTier = t);
+      },
+      onZoomChanged: (z) {
+        if (mounted && (z - _zoomScale).abs() > 0.01) setState(() => _zoomScale = z);
+      },
       onHold: (held) {
-        final want = held ? showing : null;
+        final want = held ? baseShowing : null;
         if (want != _holdFor && mounted) setState(() => _holdFor = want);
       },
       child: collage,
     );
   }
 
-  /// View c, the index alone, as the app places it on the web plate: in the
-  /// middle of the window rather than of the room under the heading, as far
-  /// as there is room (plate-extras.js, balance). The space above it.
-  double _indexAloneTop(double screen) {
-    // [screen] is the scrolling part, under the heading
-    final room = screen - 2 * _fadeRoom;
-    // balanced against the room the top buttons take, as it has no heading
-    final pad = math.max(0.0, math.min(_buttonsTop, room - _indexH));
-    return math.max(0.0, (room - pad - _indexH) / 2);
+  /// Modern translucent share / save popover matching [SpeciesSortBar].
+  Widget _shareMenu({
+    required Key key,
+    required String tooltip,
+    required VoidCallback onShare,
+    required VoidCallback onSave,
+    bool adaptiveContrast = false,
+  }) {
+    final glyph = Icon(Symbols.ios_share, color: adaptiveContrast ? adaptiveInkSource : ink);
+    return Builder(
+      builder: (bc) => IconButton(
+        key: key,
+        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+        padding: EdgeInsets.zero,
+        iconSize: 22,
+        tooltip: tooltip,
+        icon: adaptiveContrast ? AdaptiveContrast(child: glyph) : glyph,
+        color: ink,
+        onPressed: () async {
+          hapticTap();
+          final picked = await showModernMenu<String>(
+            anchorContext: bc,
+            minWidth: 176,
+            items: const [
+              ModernMenuItem(value: 'share', icon: Symbols.ios_share, label: 'Share'),
+              ModernMenuItem(value: 'save', icon: Symbols.photo_library, label: 'Save to Photos'),
+            ],
+          );
+          if (picked == 'share') onShare();
+          if (picked == 'save') onSave();
+        },
+      ),
+    );
   }
 
-  /// Views d and e: one bird, as large as the screen allows, with its name,
-  /// scientific name, and when it was last heard (d) or how often (e). A
-  /// tap on it opens its card. The page's #latest.
-  Widget _single(PlateMode mode, List<_Row> rows, String? newest) {
-    final _Row? r = rows.isEmpty
-        ? null
-        : mode.key == 'top'
-            ? rows.first
-            : rows.firstWhere((x) => x.sci == newest, orElse: () => rows.first);
-    if (r != null) _ensure([r]);
-    final art = r == null ? null : _art[r.sci];
-    final width = MediaQuery.sizeOf(context).width;
-    final last = r?.last;
-    final line = r == null
-        ? ''
-        : mode.key == 'latest'
-            ? (last == null ? '' : (sameDay(last, DateTime.now()) ? clock(last) : '${dayMonth(last)}, ${clock(last)}'))
-            // "since records began" is this session, in Listen here
-            : '${calls(r.count)} this session';
-    return Padding(
-      // clear of the buttons at the top
-      padding: EdgeInsets.fromLTRB(16, 64, 16, 16 + _bottomRoom),
-      child: Column(
-        children: [
-          Expanded(
-            child: r == null || art == null
-                ? const SizedBox.expand()
-                : GestureDetector(
-                    onTap: () => _openCard(r),
-                    child: Semantics(
-                      button: true,
-                      label: '${r.common}: open its card',
-                      child: SizedBox.expand(child: PlateImage(art: art, width: width)),
+  /// Combined Latest & Most heard view: stacked one above the other on mobile
+  /// (width <= 720), side by side on larger screens.
+  Widget _spotlight(List<_Row> rows, String? newest, {bool isSample = false, String? sampleMessage}) {
+    if (rows.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(24, 64, 24, 16 + _bottomRoom),
+          child: const Text(
+            'Asking the station…',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 18, color: sepia),
+          ),
+        ),
+      );
+    }
+    final mostHeard = rows.first;
+    final latestRow = rows.firstWhere((x) => x.sci == newest, orElse: () => rows.first);
+    _ensure([latestRow, mostHeard]);
+
+    final last = latestRow.last;
+    final latestDetail = isSample
+        ? 'Sample plate'
+        : last == null
+            ? ''
+            : (sameDay(last, DateTime.now()) ? clock(last) : '${dayMonth(last)}, ${clock(last)}');
+    final mostDetail = isSample ? '${calls(mostHeard.count)} (sample)' : '${calls(mostHeard.count)} this session';
+
+    return LayoutBuilder(
+      builder: (context, box) {
+        final narrow = box.maxWidth <= 720;
+        final panelWidth = narrow ? box.maxWidth - 32 : (box.maxWidth - 65) / 2;
+        final latestPanel = _spotlightPanel('Most recent', latestRow, latestDetail, panelWidth, narrow, isSample: isSample);
+        final mostPanel = _spotlightPanel('Most heard', mostHeard, mostDetail, panelWidth, narrow, isSample: isSample);
+        return Stack(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + _bottomRoom),
+              child: narrow
+                  ? Column(
+                      children: [
+                        Expanded(child: latestPanel),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 10),
+                          child: Divider(height: 1, color: rule),
+                        ),
+                        Expanded(child: mostPanel),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: latestPanel),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: VerticalDivider(width: 1, color: rule),
+                        ),
+                        Expanded(child: mostPanel),
+                      ],
                     ),
-                  ),
-          ),
-          const SizedBox(height: 6.4),
-          GestureDetector(
-            onTap: r == null ? null : () => _openCard(r),
-            child: Column(
-              children: [
-                Text(r?.common ?? 'Nothing heard yet.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontFamily: serif, fontSize: (width * .034).clamp(20.8, 33.6), height: 1.25, color: ink)),
-                if (r != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 1.6),
-                    child: Text(r.sci,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 18, color: sepia)),
-                  ),
-                if (line.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2.4),
-                    child: Text(line,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontFamily: serif, fontSize: 18, color: madder)),
-                  ),
-              ],
             ),
-          ),
-        ],
+            if (sampleMessage != null)
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 12 + _bottomRoom,
+                child: Center(child: _sampleBanner(sampleMessage)),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _spotlightPanel(String heading, _Row r, String detail, double width, bool narrow, {bool isSample = false}) {
+    final art = _art[r.sci];
+    final titleSize = narrow ? (width * .052).clamp(18.0, 24.0) : (width * .048).clamp(20.0, 30.0);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openCard(r, isSample: isSample),
+      child: Semantics(
+        button: true,
+        label: '$heading: ${r.common}, open its card',
+        child: Column(
+          children: [
+            Text(
+              heading,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: caps, fontSize: 13, letterSpacing: 1.1, color: sepia),
+            ),
+            const SizedBox(height: 6),
+            Expanded(
+              child: art == null
+                  ? const SizedBox.expand()
+                  : SizedBox.expand(child: PlateImage(art: art, width: width)),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              r.common,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontFamily: serif, fontSize: titleSize, height: 1.18, color: ink),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 1.5),
+              child: Text(
+                r.sci,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontFamily: serif,
+                    fontStyle: FontStyle.italic,
+                    fontSize: narrow ? 14.5 : 17,
+                    color: sepia),
+              ),
+            ),
+            if (detail.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  detail,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: serif, fontSize: narrow ? 14.5 : 17, color: madder),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1446,93 +2380,105 @@ class _NativePlateState extends State<NativePlate> {
   }
 }
 
-/// "Passed on the way" over the full-screen map: small caps between sepia
-/// rules, no box, a paper halo so it reads on the map (Ed, 23 Nov).
-class _PassedOnMap extends StatelessWidget {
-  const _PassedOnMap({required this.onTap});
+/// Total-species heart indicator beneath the weather. Whenever [beatToken]
+/// increments (a bird detection arrives), the heart turns red, fills in,
+/// performs a 2-second lub-dub heartbeat animation, and returns cleanly to
+/// the black Material outline.
+class _HeartCounter extends StatefulWidget {
+  const _HeartCounter({
+    required this.count,
+    required this.beatToken,
+    required this.textStyle,
+  });
 
-  final VoidCallback onTap;
+  final int count;
+  final int beatToken;
+  final TextStyle textStyle;
 
   @override
-  Widget build(BuildContext context) {
-    const size = 15.0;
-    final style = TextStyle(fontFamily: caps, fontSize: size, letterSpacing: size * .06, height: 1.2);
-    final words = Stack(children: [
-      Text('Passed on the way',
-          style: style.copyWith(
-            foreground: Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 3.2
-              ..strokeJoin = StrokeJoin.round
-              ..color = paper,
-          )),
-      Text('Passed on the way', style: style.copyWith(color: ink)),
-    ]);
-    const rule = SizedBox(
-      width: 36,
-      height: 3,
-      child: Stack(alignment: Alignment.center, children: [
-        Positioned(left: 0, right: 0, height: 3, child: ColoredBox(color: paper)),
-        Positioned(left: 0, right: 0, height: 1, child: ColoredBox(color: sepia)),
-      ]),
-    );
-    return Semantics(
-      button: true,
-      label: 'Passed on the way',
-      hint: 'Show everything passed',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            rule,
-            const SizedBox(width: 10),
-            words,
-            const SizedBox(width: 10),
-            rule,
-          ]),
-        ),
-      ),
-    );
-  }
+  State<_HeartCounter> createState() => _HeartCounterState();
 }
 
-/// A small arrow at the plate's edge for the next or previous session; not
-/// drawn at the first or last. The web plate's _Arrow (plate_view.dart).
-class _EdgeArrow extends StatelessWidget {
-  const _EdgeArrow(this.icon, this.tooltip, this.onPressed);
+class _HeartCounterState extends State<_HeartCounter> with SingleTickerProviderStateMixin {
+  static const _heartRed = Color(0xFFC82820);
 
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2000),
+  )..addStatusListener((status) {
+      if ((status == AnimationStatus.completed || status == AnimationStatus.dismissed) && mounted) {
+        setState(() {});
+      }
+    });
+
+  late final Animation<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.32).chain(CurveTween(curve: Curves.easeOut)), weight: 7),
+    TweenSequenceItem(tween: Tween(begin: 1.32, end: 1.0).chain(CurveTween(curve: Curves.easeIn)), weight: 8),
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.24).chain(CurveTween(curve: Curves.easeOut)), weight: 6),
+    TweenSequenceItem(tween: Tween(begin: 1.24, end: 1.0).chain(CurveTween(curve: Curves.easeIn)), weight: 9),
+    TweenSequenceItem(tween: ConstantTween(1.0), weight: 15),
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.28).chain(CurveTween(curve: Curves.easeOut)), weight: 7),
+    TweenSequenceItem(tween: Tween(begin: 1.28, end: 1.0).chain(CurveTween(curve: Curves.easeIn)), weight: 8),
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.20).chain(CurveTween(curve: Curves.easeOut)), weight: 6),
+    TweenSequenceItem(tween: Tween(begin: 1.20, end: 1.0).chain(CurveTween(curve: Curves.easeIn)), weight: 10),
+    TweenSequenceItem(tween: ConstantTween(1.0), weight: 24),
+  ]).animate(_anim);
+
+  @override
+  void didUpdateWidget(_HeartCounter old) {
+    super.didUpdateWidget(old);
+    if (widget.beatToken != old.beatToken && widget.beatToken > 0) {
+      _anim.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (onPressed == null) return const SizedBox.shrink();
-    return IconButton(
-      tooltip: tooltip,
-      iconSize: 20,
-      visualDensity: VisualDensity.compact,
-      color: sepia.withValues(alpha: 0.75),
-      icon: Icon(icon),
-      onPressed: onPressed,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 5),
+          child: AnimatedBuilder(
+            animation: _anim,
+            builder: (context, _) {
+              final beating = _anim.isAnimating;
+              return Transform.scale(
+                scale: beating ? _scale.value : 1.0,
+                child: Icon(
+                  Symbols.favorite,
+                  fill: beating ? 1.0 : 0.0,
+                  size: 16,
+                  color: beating ? _heartRed : ink,
+                ),
+              );
+            },
+          ),
+        ),
+        Text(thousands(widget.count), style: widget.textStyle),
+      ],
     );
   }
 }
 
 /// A picture for MET Norway's weather symbol ("partlycloudy_day",
-/// "lightrainshowers_night", ...), from Material's icons.
+/// "lightrainshowers_night", ...), from Google's Material Symbols pack.
 IconData weatherIcon(String symbol) {
   final s = symbol.toLowerCase(), night = s.endsWith('_night');
-  if (s.contains('thunder')) return Icons.thunderstorm_outlined;
-  if (s.contains('snow') || s.contains('sleet')) return Icons.ac_unit;
-  if (s.contains('rain')) return Icons.water_drop_outlined;
-  if (s.startsWith('fog')) return Icons.foggy;
-  if (s.startsWith('cloudy')) return Icons.cloud_outlined;
-  if (s.startsWith('partlycloudy')) return Icons.wb_cloudy_outlined;
+  if (s.contains('thunder')) return Symbols.thunderstorm;
+  if (s.contains('snow') || s.contains('sleet')) return Symbols.ac_unit;
+  if (s.contains('rain')) return Symbols.water_drop;
+  if (s.startsWith('fog')) return Symbols.foggy;
+  if (s.startsWith('cloudy')) return Symbols.cloud;
+  if (s.startsWith('partlycloudy')) return Symbols.partly_cloudy_day;
   // clear sky, fair
-  return night ? Icons.nights_stay_outlined : Icons.wb_sunny_outlined;
+  return night ? Symbols.nights_stay : Symbols.wb_sunny;
 }
 
 /// A bird's card from a remote station: the particulars its list gave,
@@ -1578,4 +2524,28 @@ class _StationCard implements CardSource {
             spectrogramUrl: r.spectrogramUrl,
           )
       ];
+}
+
+/// Synthetic particulars for a bird tapped on the default sample plate.
+class _SampleCard implements CardSource {
+  _SampleCard(this.r);
+
+  final _Row r;
+
+  @override
+  String get sci => r.sci;
+  @override
+  String get common => r.common;
+  @override
+  List<(String, String)> get rows => [
+        ('Sample plate', calls(r.count)),
+      ];
+  @override
+  Future<List<(String, String)>> moreRows() async => const [];
+  @override
+  Future<({List<int> hours, String label})?> hours() async => null;
+  @override
+  Future<List<({DateTime day, int count})>?> trend() async => null;
+  @override
+  Future<List<CardRecording>> recordings() async => const [];
 }

@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:plate_share/plate_share.dart';
 import 'package:record/record.dart';
 
 import '../settings.dart';
@@ -318,6 +320,7 @@ class ListenEngine extends ChangeNotifier {
   bool _keep(LoadedModel m, int i) {
     final l = m.labels[i];
     if (settings.animalsOnly && !l.animal) return false;
+    if (settings.isIgnoredSpecies(l.common, l.sci)) return false;
     final geo = _geoScores;
     if (geo != null) {
       final g = geo[l.sci];
@@ -382,7 +385,10 @@ class ListenEngine extends ChangeNotifier {
   bool _sessionFull(String sci) {
     final ses = session;
     if (ses == null) return false;
-    final heard = {for (final d in store.forPlate(settings.plateModel, session: ses)) d.sci};
+    final heard = {
+      for (final d in store.forPlate(settings.plateModel, session: ses))
+        if (!settings.isIgnoredSpecies(d.common, d.sci)) d.sci
+    };
     return !heard.contains(sci) && heard.length >= maxSessionSpecies;
   }
 
@@ -410,7 +416,8 @@ class ListenEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The window that was heard, a second either side, as WAV and spectrogram.
+  /// 2 seconds of pre-record plus the detection window, saved as AAC 128 kbps
+  /// (.m4a, default on Apple platforms) or WAV, alongside its spectrogram.
   Future<void> _saveClip(Detection d, LoadedModel m) async {
     try {
       final seconds = m.spec.windowSeconds + 2;
@@ -418,7 +425,21 @@ class ListenEngine extends ChangeNotifier {
           _raw.latest(_raw.available);
       if (clip == null) return;
       final wav = encodeWav(clip, captureRate);
-      await store.clipFile(d.id).writeAsBytes(wav, flush: true);
+      final wavFile = store.clipFile(d.id); // audio/<id>.wav while clipExt == 'wav'
+      await wavFile.writeAsBytes(wav, flush: true);
+      if (settings.clipFormat == 'aac' && PlateShare.supported) {
+        final m4aPath = wavFile.path.replaceFirst(RegExp(r'\.wav$'), '.m4a');
+        final ok = await PlateShare.encodeAac(wavFile.path, m4aPath, bitrate: 128000);
+        final m4aFile = File(m4aPath);
+        if (ok && await m4aFile.exists() && await m4aFile.length() > 0) {
+          d.clipExt = 'm4a';
+          try {
+            await wavFile.delete();
+          } catch (e) {
+            debugPrint('clip ${d.id} cleanup wav: $e');
+          }
+        }
+      }
       final bmp = await compute(_spectrogram, clip);
       await store.spectrogramFile(d.id).writeAsBytes(bmp, flush: true);
       d.hasClip = true;

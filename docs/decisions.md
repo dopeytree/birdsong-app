@@ -9,6 +9,37 @@ Vintage natural history: paper, sepia ink, serif (IM Fell English),
 engraved plates. "Vintage illustrations, not modern cartoon." Show an idea
 or a small test before building it.
 
+## 25 Nov 2026
+
+- **Ancient woods:** 60% (`#3F5A2A`) looked too dark against the rest of
+  the map; lightened to 32% (`#3F5A2A`).
+- **Map controls:** remove the extra inner paper hairline on the search bar
+  and full-screen button so they match the clean zoom buttons on the left.
+- **Song scribble backup mode & remote stations:** keep the sepia pencil
+  scribble as default, add a lighter single-pass black waveform mode
+  (`Simple wave`) and `Off` in Settings → Display (`songScribbleMode`). On
+  remote stations, show the same resting line with the station's latest
+  detected species kept in the gap until the next bird arrives.
+- **Remote stations button:** `±` instead of `+` (opens the stations list to
+  switch or add a station); strip `#` from BirdWeather station numbers/URLs.
+- **Settings close button:** `✕` top right instead of `<` top left.
+- **Tooltips:** hidden app-wide (`TooltipVisibility(visible: false)` in
+  `main.dart`; accessibility labels stay).
+- **Notifications:** default style and placement unified to the slim paper
+  top strip used by model updates (`PlateNote` at top centre). Kept:
+  share/save-to-Photos results, recording errors, model updates, and
+  station log copied. Hidden: station switch, view mode switch, map/plate
+  toggle, session start/split/end, and Listen-here switch. "Nothing
+  recorded yet." moved inside the calendar dialog itself.
+- **Bird hover info:** off by default (`nativeHoverInfo`, Settings →
+  Display → *Show bird info on hover*) to encourage clicking to open the
+  bird card as on touch devices.
+- **Ignored species list:** ignore `Human`, `Humans`, `Dog`, `Engine`,
+  `Domestic sounds`, `Home sounds`, `Harbor Seal` by default, editable in
+  Settings → Listening (`ignoredSpecies`). Applied everywhere — live
+  listening, plates, index of species, maps, calendar counts, and remote
+  stations.
+
 ## 23 Nov 2026
 
 - **Song scribble (on trial):** Ed asked for "a sort of almost pencil

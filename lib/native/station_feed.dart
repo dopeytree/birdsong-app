@@ -801,8 +801,19 @@ class StationFeed extends ChangeNotifier {
     }
     final d = await _gql(
         r'query($ids:[ID!],$p:InputDuration){topSpecies(stationIds:$ids,period:$p,limit:500)'
-        r'{count speciesId species{commonName scientificName}}}',
+        r'{count speciesId species{commonName scientificName}}'
+        r' detections(stationIds:$ids,period:$p,first:20){nodes{timestamp species{scientificName}}}}',
         {'ids': [_bwId], 'p': _bwPeriod()});
+    final lastBySci = <String, DateTime>{};
+    final today = _dayOf(DateTime.now());
+    for (final n in (((d['detections'] as Map?)?['nodes'] as List?) ?? const [])) {
+      if (n is! Map) continue;
+      final at = stationTime(n['timestamp'], day ?? today);
+      final sci = '${((n['species'] as Map?)?['scientificName']) ?? ''}';
+      if (at == null || sci.isEmpty) continue;
+      final prev = lastBySci[sci];
+      if (prev == null || at.isAfter(prev)) lastBySci[sci] = at;
+    }
     final out = <StationSpecies>[];
     for (final o in (d['topSpecies'] as List? ?? const [])) {
       if (o is! Map) continue;
@@ -811,7 +822,11 @@ class StationFeed extends ChangeNotifier {
       final count = ((o['count'] ?? 0) as num).toInt();
       if (sci.isEmpty || count <= 0) continue;
       out.add(StationSpecies(
-          sci: sci, common: (s['commonName'] ?? sci) as String, count: count, bwId: '${o['speciesId']}'));
+          sci: sci,
+          common: (s['commonName'] ?? sci) as String,
+          count: count,
+          last: lastBySci[sci],
+          bwId: '${o['speciesId']}'));
     }
     out.sort((a, b) => b.count.compareTo(a.count));
     return out;

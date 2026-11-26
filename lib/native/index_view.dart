@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../main.dart' show caps, ink, madder, rule, sepia, serif;
+import '../ui/paper_surface.dart' show hapticTap;
 
 /// One line of the index.
 class IndexEntry {
@@ -72,6 +74,11 @@ class IndexView extends StatelessWidget {
     required this.canNext,
     required this.onStep,
     required this.onOpen,
+    this.sortBar,
+    this.filterOpen = false,
+    this.onToggleFilter,
+    this.filterTapGroupId,
+    this.onOpenCalendar,
   });
 
   final List<IndexEntry> entries;
@@ -109,23 +116,25 @@ class IndexView extends StatelessWidget {
   final ValueChanged<int> onStep;
   final ValueChanged<IndexEntry> onOpen;
 
+  /// Optional sort panel displayed below the expanded heading when open.
+  final Widget? sortBar;
+
+  /// When expanded ([folded] == false), places the filter trigger icon inline
+  /// beside the "Index of Species" heading.
+  final bool filterOpen;
+  final VoidCallback? onToggleFilter;
+  final Object? filterTapGroupId;
+
+  /// Calendar trigger placed to the left of the "Index of Species" heading,
+  /// always visible whether the index is folded or expanded.
+  final VoidCallback? onOpenCalendar;
+
   @override
   Widget build(BuildContext context) {
     if (inline) {
-      // Always some rule either side, so it reads as something to press:
-      // shorter as the room narrows, and the words a little smaller on a
-      // phone.
-      return LayoutBuilder(builder: (context, box) {
-        final w = box.maxWidth;
-        return Center(
-          child: _heading(
-            rules: w >= 360 ? 28 : (w >= 280 ? 16 : 10),
-            gap: w >= 280 ? 10 : 6,
-            pad: w >= 280 ? 8 : 5,
-            titleSize: w >= 300 ? null : 13.5,
-          ),
-        );
-      });
+      return Center(
+        child: _heading(inlineMode: true),
+      );
     }
     // rem is 16 throughout the page
     final colWidth = fit ? 176.0 : 256.0, gap = fit ? 25.6 : 41.6;
@@ -137,8 +146,13 @@ class IndexView extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _heading(),
-        SizedBox(height: fit ? 13.6 : 25.6),
+        _heading(inlineMode: false),
+        if (!folded && sortBar != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: sortBar!,
+          ),
+        SizedBox(height: fit ? 10.0 : 20.0),
         if (!folded) ...[
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -171,66 +185,225 @@ class IndexView extends StatelessWidget {
   }
 
   /// ‹ —— Index of species —— ›
-  Widget _heading({double rules = 56, double pad = 12, double gap = 14.4, double? titleSize}) {
-    Widget step(int by, String glyph, String label, bool on) => Visibility(
-          visible: on,
-          maintainSize: true,
-          maintainAnimation: true,
-          maintainState: true,
-          child: Semantics(
-            button: true,
-            label: label,
-            child: InkResponse(
-              radius: 22,
-              onTap: () => onStep(by),
-              child: Padding(
-                // a finger's worth of room about a small glyph
-                padding: EdgeInsets.symmetric(horizontal: pad, vertical: 8),
-                child: ExcludeSemantics(
-                  child: Text(glyph,
+  /// Adapts rule length, spacing and font size to the actual available width
+  /// so the heading always fits cleanly on one line on every phone screen.
+  Widget _heading({required bool inlineMode}) {
+    return LayoutBuilder(builder: (context, box) {
+      final avail = box.maxWidth.isFinite ? box.maxWidth : width;
+      final compact = inlineMode || avail < 440;
+      final rules = avail >= 560 && !inlineMode
+          ? 56.0
+          : avail >= 400
+              ? 22.0
+              : avail >= 320
+                  ? 14.0
+                  : 8.0;
+      final gap = compact ? 6.0 : 12.0;
+      final stepSize = compact ? 32.0 : 36.0;
+      final size = inlineMode
+          ? (avail >= 360 ? 15.5 : 14.0)
+          : (fit ? (avail < 380 ? 15.0 : 16.0) : (avail < 400 ? 17.0 : 20.0));
+      Widget step(int by, IconData icon, String label, bool on) => Visibility(
+            visible: on,
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            child: IconButton(
+              constraints: BoxConstraints.tightFor(width: stepSize, height: stepSize),
+              padding: EdgeInsets.zero,
+              iconSize: compact ? 19 : 22,
+              tooltip: label,
+              color: ink,
+              icon: Icon(icon),
+              onPressed: on
+                  ? () {
+                      hapticTap();
+                      onStep(by);
+                    }
+                  : null,
+            ),
+          );
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (steps) step(-1, Symbols.chevron_left, 'Earlier session', canPrev),
+          Flexible(
+            child: _IndexHeading(
+              title: species > 0 ? 'Index of Species - ${thousands(species)}' : 'Index of Species',
+              rules: rules,
+              gap: gap,
+              size: size,
+              compact: compact,
+              folded: folded,
+              foldable: foldable,
+              onFold: () {
+                hapticTap();
+                onFold();
+              },
+              onOpenCalendar: onOpenCalendar,
+              filterOpen: filterOpen,
+              onToggleFilter: (!inlineMode && !folded) ? onToggleFilter : null,
+              filterTapGroupId: filterTapGroupId,
+            ),
+          ),
+          if (steps) step(1, Symbols.chevron_right, 'Later session', canNext),
+        ],
+      );
+    });
+  }
+}
+
+/// Interactive "Index of Species" heading with hover pill highlight and rule
+/// emphasis. When expanded in full, displays the Material Symbols filter
+/// button inline beside the heading.
+class _IndexHeading extends StatefulWidget {
+  const _IndexHeading({
+    required this.title,
+    required this.rules,
+    required this.gap,
+    required this.size,
+    required this.compact,
+    required this.folded,
+    required this.foldable,
+    required this.onFold,
+    this.onOpenCalendar,
+    this.filterOpen = false,
+    this.onToggleFilter,
+    this.filterTapGroupId,
+  });
+
+  final String title;
+  final double rules;
+  final double gap;
+  final double size;
+  final bool compact;
+  final bool folded;
+  final bool foldable;
+  final VoidCallback onFold;
+  final VoidCallback? onOpenCalendar;
+  final bool filterOpen;
+  final VoidCallback? onToggleFilter;
+  final Object? filterTapGroupId;
+
+  @override
+  State<_IndexHeading> createState() => _IndexHeadingState();
+}
+
+class _IndexHeadingState extends State<_IndexHeading> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.foldable && (_hovered || _pressed);
+    final ruleColor = active ? ink.withValues(alpha: 0.65) : rule;
+    final ruleWidth = active ? widget.rules + (widget.compact ? 3 : 6) : widget.rules;
+    Widget line() => AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          width: ruleWidth,
+          height: 1,
+          color: ruleColor,
+        );
+    final headingButton = Semantics(
+      button: widget.foldable,
+      expanded: widget.foldable ? !widget.folded : null,
+      child: MouseRegion(
+        cursor: widget.foldable ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            hoverColor: Colors.transparent,
+            highlightColor: ink.withValues(alpha: 0.12),
+            onHighlightChanged: (v) {
+              if (_pressed != v) setState(() => _pressed = v);
+            },
+            onTap: widget.foldable ? widget.onFold : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.symmetric(horizontal: widget.compact ? 6 : 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _pressed
+                    ? ink.withValues(alpha: 0.12)
+                    : _hovered && widget.foldable
+                        ? ink.withValues(alpha: 0.08)
+                        : Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    line(),
+                    SizedBox(width: widget.gap),
+                    Text(
+                      widget.title,
+                      maxLines: 1,
+                      softWrap: false,
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontFamily: serif, fontSize: (fit ? 16 : 20) * 1.25, height: 1, color: sepia)),
+                        fontFamily: caps,
+                        fontSize: widget.size,
+                        letterSpacing: widget.size * .05,
+                        height: 1.3,
+                        color: ink,
+                      ),
+                    ),
+                    SizedBox(width: widget.gap),
+                    line(),
+                  ],
                 ),
               ),
             ),
           ),
-        );
-    final line = SizedBox(width: rules, height: 1, child: const ColoredBox(color: rule));
-    final space = SizedBox(width: gap);
-    final size = titleSize ?? (fit ? 16.0 : 20.0);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (steps) step(-1, '‹', 'Earlier session', canPrev),
-        Flexible(
-          child: Semantics(
-            button: foldable,
-            expanded: foldable ? !folded : null,
-            child: InkWell(
-              onTap: foldable ? onFold : null,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  line,
-                  space,
-                  Flexible(
-                    child: Text(species > 0 ? 'Index of Species | ${thousands(species)}' : 'Index of Species',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontFamily: caps,
-                            fontSize: size,
-                            letterSpacing: size * .06,
-                            height: 1.5,
-                            color: ink)),
-                  ),
-                  space,
-                  line,
-                ],
-              ),
-            ),
-          ),
         ),
-        if (steps) step(1, '›', 'Later session', canNext),
+      ),
+    );
+    if (widget.onOpenCalendar == null && widget.onToggleFilter == null) return headingButton;
+    final btnSize = widget.compact ? 32.0 : 34.0;
+    final filterBtn = widget.onToggleFilter == null
+        ? null
+        : IconButton(
+            constraints: BoxConstraints.tightFor(width: btnSize, height: btnSize),
+            padding: EdgeInsets.zero,
+            iconSize: 19,
+            tooltip: widget.filterOpen ? 'Hide filters' : 'Filter & sort',
+            icon: Icon(widget.filterOpen ? Symbols.close : Symbols.filter_alt, color: ink),
+            onPressed: () {
+              hapticTap();
+              widget.onToggleFilter!();
+            },
+          );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (widget.onOpenCalendar != null) ...[
+          IconButton(
+            constraints: BoxConstraints.tightFor(width: btnSize, height: btnSize),
+            padding: EdgeInsets.zero,
+            iconSize: widget.compact ? 18 : 19,
+            tooltip: 'Calendar',
+            icon: const Icon(Symbols.calendar_today, color: ink),
+            onPressed: () {
+              hapticTap();
+              widget.onOpenCalendar!();
+            },
+          ),
+          const SizedBox(width: 2),
+        ],
+        Flexible(child: headingButton),
+        if (filterBtn != null) ...[
+          const SizedBox(width: 2),
+          if (widget.filterTapGroupId != null)
+            TapRegion(groupId: widget.filterTapGroupId!, child: filterBtn)
+          else
+            filterBtn,
+        ],
       ],
     );
   }

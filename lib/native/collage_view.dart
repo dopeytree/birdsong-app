@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -49,6 +50,13 @@ class CollageView extends StatefulWidget {
     required this.newest,
     required this.live,
     required this.onOpen,
+    this.showHoverInfo = false,
+    this.showAllNameTickets = false,
+    this.allowDrag = false,
+    this.resolutionScale = 1.0,
+    this.zoomScale = 1.0,
+    this.onDragHold,
+    this.resetAfter = const Duration(seconds: 10),
   });
 
   /// The creatures to draw, most heard first. Only those in [art].
@@ -72,6 +80,33 @@ class CollageView extends StatefulWidget {
   final Set<String> live;
   final ValueChanged<CollageBird> onOpen;
 
+  /// Whether hovering over a bird shows the info ticket (off by default to
+  /// encourage clicking to open the bird card, matching touch devices).
+  final bool showHoverInfo;
+
+  /// Whether all birds in the collage show a name ticket (off by default; only
+  /// the centred bird shows the madder ticket with a + symbol).
+  final bool showAllNameTickets;
+
+  /// Whether dragging across birds promotes the touched bird to hero size
+  /// (off by default so zoom & pan work cleanly without fighting drags).
+  final bool allowDrag;
+
+  /// Multiplier applied to [PlateImage] decode resolution when zoomed in, so
+  /// zooming into a dense plate smoothly upgrades to full high-res artwork.
+  final double resolutionScale;
+
+  /// Current interactive zoom level (1.0 .. maxScale), used to keep name
+  /// tickets & no-plate ovals crisp and readable as the user zooms in.
+  final double zoomScale;
+
+  /// Called when the user begins/ends dragging the collage so the outer scroll
+  /// view can pause while dragging.
+  final ValueChanged<bool>? onDragHold;
+
+  /// How long after the last drag before the collage glides back to default.
+  final Duration resetAfter;
+
   @override
   State<CollageView> createState() => _CollageViewState();
 }
@@ -79,6 +114,15 @@ class CollageView extends StatefulWidget {
 class _CollageViewState extends State<CollageView> {
   String? _hover;
   Offset _pointer = Offset.zero;
+
+  /// Purely visual virtual focus: while the user drags across the collage, the
+  /// bird under their finger/pointer is given the top weight so [layoutCollage]
+  /// glides it into the centre as the largest bird (nothing saved to disk).
+  /// Resets to null after [widget.resetAfter] with no drag.
+  String? _focusedSci;
+  List<CollagePlace> _lastPlaces = const [];
+  DateTime _lastSwitch = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _resetTimer;
 
   // The first plateful comes in one after another; later arrivals at once.
   bool _first = true;
@@ -90,21 +134,98 @@ class _CollageViewState extends State<CollageView> {
   }
 
   @override
+  void didUpdateWidget(CollageView old) {
+    super.didUpdateWidget(old);
+    if (old.sizeBy != widget.sizeBy || old.size != widget.size) {
+      _resetTimer?.cancel();
+      _focusedSci = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _resetTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleReset() {
+    _resetTimer?.cancel();
+    if (_focusedSci == null) return;
+    _resetTimer = Timer(widget.resetAfter, () {
+      if (!mounted) return;
+      setState(() => _focusedSci = null);
+    });
+  }
+
+  void _focusAt(Offset local, {bool force = false}) {
+    CollagePlace? hit;
+    // Prefer a direct hit on a bird's current box (checking top-most first).
+    for (var i = _lastPlaces.length - 1; i >= 0; i--) {
+      if (_lastPlaces[i].rect.contains(local)) {
+        hit = _lastPlaces[i];
+        break;
+      }
+    }
+    if (hit == null || hit.id == _focusedSci) return;
+    final now = DateTime.now();
+    if (!force && now.difference(_lastSwitch) < const Duration(milliseconds: 280)) return;
+    _lastSwitch = now;
+    setState(() => _focusedSci = hit!.id);
+    _scheduleReset();
+  }
+
+  void _onPanStart(DragStartDetails d) {
+    _resetTimer?.cancel();
+    widget.onDragHold?.call(true);
+    _focusAt(d.localPosition, force: true);
+  }
+
+  void _onPanUpdate(DragUpdateDetails d) {
+    _focusAt(d.localPosition);
+  }
+
+  void _onPanEnd() {
+    widget.onDragHold?.call(false);
+    _scheduleReset();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final birds = widget.birds, art = widget.art;
     if (birds.isEmpty) return SizedBox.fromSize(size: widget.size);
     // Sized by time it is the order that counts, not the gap: a morning's
     // birds would otherwise come out all of a size.
     final byTime = [...birds]..sort((a, b) => (a.last ?? DateTime(0)).compareTo(b.last ?? DateTime(0)));
-    double weight(CollageBird b) => switch (widget.sizeBy) {
+    double baseWeight(CollageBird b) => switch (widget.sizeBy) {
           'equal' => 1,
           'time' => (byTime.indexOf(b) + 1).toDouble(),
           _ => b.count.toDouble(),
         };
-    final places = layoutCollage([
+    final maxWeight = birds.map(baseWeight).reduce(math.max);
+    // Purely visual virtual boost for the dragged/focused bird so layoutCollage
+    // promotes it to the centre at hero size using the exact standard layout.
+    double weight(CollageBird b) {
+      if (_focusedSci != null && b.sci == _focusedSci) {
+        return widget.sizeBy == 'equal' ? 3.0 : maxWeight * 1.15;
+      }
+      return baseWeight(b);
+    }
+
+    final items = [
       for (final b in birds)
-        CollageItem(b.sci, weight: weight(b), aspect: art[b.sci]?.aspect ?? 1.7, blank: art[b.sci] == null)
-    ], widget.size);
+        CollageItem(
+          b.sci,
+          weight: weight(b),
+          aspect: art[b.sci]?.aspect ?? 1.7,
+          blank: art[b.sci] == null && b.sci != _focusedSci,
+        )
+    ];
+    final useEvenGrid = widget.sizeBy == 'equal' && _focusedSci == null;
+    final places = useEvenGrid ? layoutEvenGrid(items, widget.size) : layoutCollage(items, widget.size);
+    _lastPlaces = places;
+    // layoutCollage puts the largest / hero bird first, dead centre;
+    // in No pecking order (even grid), no bird is singled out as hero.
+    final centerSci = useEvenGrid || places.isEmpty ? null : places.first.id;
     final bird = {for (final b in birds) b.sci: b};
     final newest = widget.markAt == 'none' ? null : widget.newest;
     // has-newest: the rest only stand back when the latest is on the plate
@@ -115,56 +236,69 @@ class _CollageViewState extends State<CollageView> {
     int z(CollagePlace p) => p.id == _hover ? 1000 : (art[p.id] == null ? 900 : p.order);
     final order = [...places]..sort((a, b) => z(a).compareTo(z(b)));
     final at = {for (var i = 0; i < places.length; i++) places[i].id: i};
-    final tipFor = _hover == null ? null : bird[_hover];
+    final tipFor = widget.showHoverInfo && _hover != null ? bird[_hover] : null;
 
-    return SizedBox.fromSize(
-      size: widget.size,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          for (final p in order)
-            AnimatedPositioned(
-              key: ValueKey(p.id),
-              duration: const Duration(milliseconds: 700),
-              curve: const Cubic(.2, .7, .2, 1),
-              left: p.rect.left,
-              top: p.rect.top,
-              width: p.rect.width,
-              height: p.rect.height,
-              child: _Bird(
-                bird: bird[p.id]!,
-                art: art[p.id],
+    final allowDrag = widget.allowDrag && widget.sizeBy != 'equal';
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: allowDrag ? _onPanStart : null,
+      onPanUpdate: allowDrag ? _onPanUpdate : null,
+      onPanEnd: allowDrag ? (_) => _onPanEnd() : null,
+      onPanCancel: allowDrag ? _onPanEnd : null,
+      child: SizedBox.fromSize(
+        size: widget.size,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (final p in order)
+              AnimatedPositioned(
+                key: ValueKey(p.id),
+                duration: const Duration(milliseconds: 700),
+                curve: const Cubic(.2, .7, .2, 1),
+                left: p.rect.left,
+                top: p.rect.top,
                 width: p.rect.width,
-                delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
-                hovered: _hover == p.id,
-                newest: p.id == newest,
-                markBelow: widget.markAt == 'below',
-                showDot: widget.markAt == 'centre' || widget.markAt == 'below',
-                faded: fadeRest && p.id != newest,
-                live: widget.live.contains(p.id),
-                onHover: (where) => setState(() {
-                  _hover = where == null ? (_hover == p.id ? null : _hover) : p.id;
-                  if (where != null) _pointer = p.rect.topLeft + where;
-                }),
-                onTap: () => widget.onOpen(bird[p.id]!),
+                height: p.rect.height,
+                child: _Bird(
+                  bird: bird[p.id]!,
+                  art: art[p.id],
+                  layoutWidth: p.rect.width,
+                  decodeWidth: widget.resolutionScale <= 0 ? 0 : p.rect.width * widget.resolutionScale,
+                  zoomScale: widget.zoomScale,
+                  delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
+                  hovered: _hover == p.id,
+                  isCenter: p.id == centerSci,
+                  showNameTicket: widget.showAllNameTickets,
+                  newest: p.id == newest,
+                  markBelow: widget.markAt == 'below',
+                  showDot: widget.markAt == 'centre' || widget.markAt == 'below',
+                  faded: fadeRest && p.id != newest,
+                  live: widget.live.contains(p.id),
+                  onHover: (where) => setState(() {
+                    _hover = where == null ? (_hover == p.id ? null : _hover) : p.id;
+                    if (where != null) _pointer = p.rect.topLeft + where;
+                  }),
+                  onTap: () => widget.onOpen(bird[p.id]!),
+                  onLongPress: () => widget.onOpen(bird[p.id]!),
+                ),
               ),
-            ),
-          // The label that follows the pointer.
-          Positioned(
-            left: _pointer.dx,
-            top: _pointer.dy - 18,
-            child: IgnorePointer(
-              child: FractionalTranslation(
-                translation: const Offset(-.5, -1),
-                child: AnimatedOpacity(
-                  opacity: tipFor == null ? 0 : 1,
-                  duration: const Duration(milliseconds: 120),
-                  child: tipFor == null ? const SizedBox() : _Tip(tipFor),
+            // The label that follows the pointer.
+            Positioned(
+              left: _pointer.dx,
+              top: _pointer.dy - 18,
+              child: IgnorePointer(
+                child: FractionalTranslation(
+                  translation: const Offset(-.5, -1),
+                  child: AnimatedOpacity(
+                    opacity: tipFor == null ? 0 : 1,
+                    duration: const Duration(milliseconds: 120),
+                    child: tipFor == null ? const SizedBox() : _Tip(tipFor),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -176,9 +310,13 @@ class _Bird extends StatefulWidget {
   const _Bird({
     required this.bird,
     required this.art,
-    required this.width,
+    required this.layoutWidth,
+    required this.decodeWidth,
+    required this.zoomScale,
     required this.delay,
     required this.hovered,
+    required this.isCenter,
+    required this.showNameTicket,
     required this.newest,
     required this.markBelow,
     required this.showDot,
@@ -186,13 +324,18 @@ class _Bird extends StatefulWidget {
     required this.live,
     required this.onHover,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final CollageBird bird;
   final PlateArt? art;
-  final double width;
+  final double layoutWidth;
+  final double decodeWidth;
+  final double zoomScale;
   final Duration delay;
   final bool hovered;
+  final bool isCenter;
+  final bool showNameTicket;
   final bool newest;
   final bool markBelow;
   final bool showDot;
@@ -202,6 +345,7 @@ class _Bird extends StatefulWidget {
   /// Where the pointer is inside the figure, or null when it has left.
   final ValueChanged<Offset?> onHover;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   State<_Bird> createState() => _BirdState();
@@ -261,9 +405,10 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final art = widget.art, b = widget.bird;
     final still = MediaQuery.disableAnimationsOf(context);
+    final z = widget.zoomScale.clamp(1.0, 30.0);
     Widget figure = art == null
-        ? _NameOval(b.common)
-        : PlateImage(art: art, width: widget.width);
+        ? _NameOval(b.common, zoomScale: z, layoutWidth: widget.layoutWidth)
+        : PlateImage(art: art, width: widget.decodeWidth);
     if (widget.live && art != null) {
       // filter: drop-shadow(0 0 .8rem rgba(140,59,42,.7)) at the middle of
       // the breath: a blurred madder copy of the figure behind it.
@@ -276,12 +421,23 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
           ),
           child: ImageFiltered(
             imageFilter: ui.ImageFilter.blur(sigmaX: 7, sigmaY: 7, tileMode: TileMode.decal),
-            child: PlateImage(art: art, width: widget.width, silhouette: madder),
+            child: PlateImage(art: art, width: widget.decodeWidth, silhouette: madder),
           ),
         ),
         figure,
       ]);
     }
+    // Scale ticket typography, padding and border inversely with zoom so
+    // labels stay proportional at overview scale and expand cleanly to full
+    // readable species names without giant pixelated boxes when zoomed in.
+    final screenCellW = widget.layoutWidth * z;
+    final targetScreenFont = (screenCellW * 0.115).clamp(6.5, 13.5);
+    final ticketFontSize = targetScreenFont / z;
+    final padH = (screenCellW * 0.045).clamp(2.2, 7.0) / z;
+    final padV = (screenCellW * 0.014).clamp(0.9, 2.4) / z;
+    final borderW = (0.85 / z).clamp(0.05, 0.85);
+    final ticketMaxW = math.max(12.0, widget.layoutWidth * 0.95);
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onHover: (e) => widget.onHover(e.localPosition),
@@ -292,6 +448,7 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: widget.onTap,
+          onLongPress: widget.onLongPress,
           child: FadeTransition(
             opacity: _fade,
             child: AnimatedOpacity(
@@ -309,17 +466,47 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                     curve: Curves.easeOut,
                     child: figure,
                   ),
+                  if (widget.showNameTicket && art != null)
+                    Align(
+                      alignment: const Alignment(0, 0.86),
+                      child: IgnorePointer(
+                        child: Container(
+                          constraints: BoxConstraints(maxWidth: ticketMaxW),
+                          padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
+                          decoration: BoxDecoration(
+                            color: paper.withValues(alpha: 0.88),
+                            border: Border.all(color: rule, width: borderW),
+                            boxShadow: [BoxShadow(color: const Color(0x243C280A), blurRadius: 3.5 / z)],
+                          ),
+                          child: Text(
+                            b.common,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: serif,
+                              fontStyle: FontStyle.italic,
+                              fontSize: ticketFontSize,
+                              height: 1.15,
+                              color: ink,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (widget.newest && widget.showDot)
                     Align(
                       // over its centre, or on its lower edge (top:100%, -70%)
                       alignment: widget.markBelow ? Alignment.bottomCenter : Alignment.center,
                       child: Transform.translate(
-                        offset: widget.markBelow ? const Offset(0, 8 * .3) : Offset.zero,
-                        child: AnimatedScale(
-                          scale: widget.hovered ? 1.5 : 1,
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeOut,
-                          child: _Dot(breath: widget.live && !still ? _breath : null),
+                        offset: widget.markBelow ? Offset(0, 8 * .3 / z) : Offset.zero,
+                        child: Transform.scale(
+                          scale: 1 / math.sqrt(z),
+                          child: AnimatedScale(
+                            scale: widget.hovered ? 1.5 : 1,
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeOut,
+                            child: _Dot(breath: widget.live && !still ? _breath : null),
+                          ),
                         ),
                       ),
                     ),
@@ -373,34 +560,44 @@ class _Dot extends StatelessWidget {
   }
 }
 
-/// A creature with no plate: its name in an oval, in italics.
+/// A creature with no plate: its name in an oval, in italics, scaling cleanly
+/// with zoom so its text expands instead of magnifying into giant letters.
 class _NameOval extends StatelessWidget {
-  const _NameOval(this.name);
+  const _NameOval(this.name, {this.zoomScale = 1.0, this.layoutWidth = 80.0});
 
   final String name;
+  final double zoomScale;
+  final double layoutWidth;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, box) => Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            border: Border.all(color: rule),
-            borderRadius: BorderRadius.all(Radius.elliptical(box.maxWidth / 2, box.maxHeight / 2)),
-          ),
-          child: Text(name,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontFamily: serif,
-                  fontStyle: FontStyle.italic,
-                  // font-size: clamp(.6rem, 1.1vw, .9rem)
-                  fontSize: (MediaQuery.sizeOf(context).width * .011).clamp(9.6, 14.4),
-                  height: 1.15,
-                  color: sepia)),
+  Widget build(BuildContext context) {
+    final z = zoomScale.clamp(1.0, 30.0);
+    final screenW = layoutWidth * z;
+    final fontSize = (screenW * 0.12).clamp(7.0, 14.0) / z;
+    return LayoutBuilder(
+      builder: (context, box) => Container(
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: 6 / z, vertical: 2.5 / z),
+        decoration: BoxDecoration(
+          border: Border.all(color: rule, width: (1.0 / z).clamp(0.08, 1.0)),
+          borderRadius: BorderRadius.all(Radius.elliptical(box.maxWidth / 2, box.maxHeight / 2)),
         ),
-      );
+        child: Text(
+          name,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: serif,
+            fontStyle: FontStyle.italic,
+            fontSize: fontSize,
+            height: 1.15,
+            color: sepia,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// The label under the pointer: a ruled ticket with the name, the
@@ -456,8 +653,8 @@ class PlateImage extends StatelessWidget {
     return Image.file(
       art.file,
       fit: BoxFit.contain,
-      // decode no larger than it is drawn
-      cacheWidth: math.max(1, (width * MediaQuery.devicePixelRatioOf(context)).round()),
+      // decode at screen width unless width <= 0 (deep zoom: full raw PNG resolution)
+      cacheWidth: width <= 0 ? null : math.max(1, (width * MediaQuery.devicePixelRatioOf(context)).round()),
       // modulate multiplies colour and alpha alike, so a cut-out stays cut out
       color: shape ?? (tint ? paper : null),
       colorBlendMode: shape != null ? BlendMode.srcIn : (tint ? BlendMode.modulate : null),
@@ -621,11 +818,32 @@ class _PaperPainter extends CustomPainter {
 /// fingers are on the collage, and while it is zoomed in, so one finger
 /// pans the birds rather than the page.
 class ZoomableCollage extends StatefulWidget {
-  const ZoomableCollage({super.key, required this.size, required this.onHold, required this.child});
+  const ZoomableCollage({
+    super.key,
+    required this.size,
+    required this.onHold,
+    required this.child,
+    this.allPlatforms = false,
+    this.maxScale = 4.0,
+    this.onScaleTier,
+    this.onZoomChanged,
+  });
 
   final Size size;
   final ValueChanged<bool> onHold;
   final Widget child;
+
+  /// When true, enables zoom & pan on desktop/macOS as well as touch devices
+  /// (used for the museum-plate "No pecking order" view).
+  final bool allPlatforms;
+  final double maxScale;
+
+  /// Called when the zoom crosses a resolution tier (1, 2, 4, 8) so artwork
+  /// re-decodes at higher resolution as the user zooms in.
+  final ValueChanged<double>? onScaleTier;
+
+  /// Called smoothly as zoom scale changes so name tickets scale cleanly.
+  final ValueChanged<double>? onZoomChanged;
 
   /// Only where fingers are the pointer, as on the web plate.
   static bool get touch =>
@@ -639,8 +857,18 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
   final _view = TransformationController();
   final Set<int> _fingers = {};
   bool _zoomed = false, _held = false;
+  double _tier = 1.0;
+  double _reportedZoom = 1.0;
 
   double get _scale => _view.value.getMaxScaleOnAxis();
+
+  double _tierFor(double s) {
+    // 0 signals PlateImage to decode at 100% raw native PNG resolution (feathers/eyes).
+    if (s >= 4.0) return 0.0;
+    if (s >= 2.2) return 4.0;
+    if (s >= 1.35) return 2.0;
+    return 1.0;
+  }
 
   @override
   void initState() {
@@ -666,8 +894,18 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
   }
 
   void _changed() {
-    final zoomed = _scale > 1.001;
+    final s = _scale;
+    final zoomed = s > 1.001;
     if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
+    final nextTier = _tierFor(s);
+    if (nextTier != _tier) {
+      _tier = nextTier;
+      widget.onScaleTier?.call(nextTier);
+    }
+    if ((s - _reportedZoom).abs() / _reportedZoom >= 0.04 || (!zoomed && _reportedZoom != 1.0)) {
+      _reportedZoom = zoomed ? s : 1.0;
+      widget.onZoomChanged?.call(_reportedZoom);
+    }
     _tell();
   }
 
@@ -682,7 +920,7 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
 
   @override
   Widget build(BuildContext context) {
-    if (!ZoomableCollage.touch) return widget.child;
+    if (!widget.allPlatforms && !ZoomableCollage.touch) return widget.child;
     return Listener(
       onPointerDown: (e) {
         _fingers.add(e.pointer);
@@ -703,7 +941,7 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
         child: InteractiveViewer(
           transformationController: _view,
           minScale: 1,
-          maxScale: 4,
+          maxScale: widget.maxScale,
           panEnabled: _zoomed,
           clipBehavior: Clip.hardEdge,
           onInteractionEnd: (_) {

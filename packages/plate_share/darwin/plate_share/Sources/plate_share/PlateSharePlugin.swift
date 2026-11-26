@@ -10,6 +10,7 @@ import UIKit
 import FlutterMacOS
 import AppKit
 #endif
+import AVFoundation
 import Photos
 import WebKit
 
@@ -36,6 +37,59 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       DispatchQueue.main.async { self.fullBleed(result: result) }
       return
     }
+    if call.method == "encodeAac" {
+      guard let inputPath = args["inputPath"] as? String,
+            let outputPath = args["outputPath"] as? String else {
+        result(false)
+        return
+      }
+      let bitrate = (args["bitrate"] as? Int) ?? 128000
+      DispatchQueue.global(qos: .utility).async {
+        self.encodeAac(inputPath: inputPath, outputPath: outputPath, bitrate: bitrate) { ok in
+          DispatchQueue.main.async { result(ok) }
+        }
+      }
+      return
+    }
+    if call.method == "icloudContainerPath" {
+      let containerId = args["containerId"] as? String
+      DispatchQueue.global(qos: .utility).async {
+        let url = FileManager.default.url(forUbiquityContainerIdentifier: containerId)
+        guard let docs = url?.appendingPathComponent("Documents") else {
+          DispatchQueue.main.async { result(nil) }
+          return
+        }
+        try? FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
+        DispatchQueue.main.async { result(docs.path) }
+      }
+      return
+    }
+    if call.method == "icloudStartDownload" {
+      guard let path = args["path"] as? String else {
+        result(false)
+        return
+      }
+      DispatchQueue.global(qos: .utility).async {
+        do {
+          try FileManager.default.startDownloadingUbiquitousItem(at: URL(fileURLWithPath: path))
+          DispatchQueue.main.async { result(true) }
+        } catch {
+          DispatchQueue.main.async { result(false) }
+        }
+      }
+      return
+    }
+    if call.method == "shareText" {
+      guard let text = args["text"] as? String else {
+        result(false)
+        return
+      }
+      let anchor = CGRect(
+        x: (args["x"] as? Double) ?? 0, y: (args["y"] as? Double) ?? 0,
+        width: (args["w"] as? Double) ?? 1, height: (args["h"] as? Double) ?? 1)
+      DispatchQueue.main.async { self.shareText(text: text, anchor: anchor, result: result) }
+      return
+    }
     guard call.method == "share" else {
       result(FlutterMethodNotImplemented)
       return
@@ -45,6 +99,136 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       x: (args["x"] as? Double) ?? 0, y: (args["y"] as? Double) ?? 0,
       width: (args["w"] as? Double) ?? 1, height: (args["h"] as? Double) ?? 1)
     DispatchQueue.main.async { self.share(text: text, anchor: anchor, png: png, result: result) }
+  }
+
+  /// Encodes a WAV file into an AAC (.m4a) file using AVAssetReader + AVAssetWriter.
+  private func encodeAac(inputPath: String, outputPath: String, bitrate: Int, done: @escaping (Bool) -> Void) {
+    let inputUrl = URL(fileURLWithPath: inputPath)
+    let outputUrl = URL(fileURLWithPath: outputPath)
+    let tmpUrl = outputUrl.deletingLastPathComponent()
+      .appendingPathComponent(".\(outputUrl.lastPathComponent).tmp.m4a")
+    try? FileManager.default.removeItem(at: tmpUrl)
+    let asset = AVURLAsset(url: inputUrl)
+    guard let track = asset.tracks(withMediaType: .audio).first else {
+      done(false)
+      return
+    }
+    var sampleRate: Double = 48000
+    var channels: Int = 1
+    if let desc = track.formatDescriptions.first {
+      let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(desc as! CMAudioFormatDescription)?.pointee
+      if let asbd = asbd {
+        if asbd.mSampleRate > 0 { sampleRate = asbd.mSampleRate }
+        if asbd.mChannelsPerFrame > 0 { channels = Int(asbd.mChannelsPerFrame) }
+      }
+    }
+    do {
+      let reader = try AVAssetReader(asset: asset)
+      let readerSettings: [String: Any] = [
+        AVFormatIDKey: kAudioFormatLinearPCM,
+        AVLinearPCMBitDepthKey: 16,
+        AVLinearPCMIsFloatKey: false,
+        AVLinearPCMIsBigEndianKey: false,
+        AVLinearPCMIsNonInterleaved: false,
+      ]
+      let readerOut = AVAssetReaderTrackOutput(track: track, outputSettings: readerSettings)
+      readerOut.alwaysCopiesSampleData = false
+      guard reader.canAdd(readerOut) else { done(false); return }
+      reader.add(readerOut)
+
+      let writer = try AVAssetWriter(outputURL: tmpUrl, fileType: .m4a)
+      let writerSettings: [String: Any] = [
+        AVFormatIDKey: kAudioFormatMPEG4AAC,
+        AVEncoderBitRateKey: bitrate,
+        AVSampleRateKey: sampleRate,
+        AVNumberOfChannelsKey: channels,
+      ]
+      let writerIn = AVAssetWriterInput(mediaType: .audio, outputSettings: writerSettings)
+      writerIn.expectsMediaDataInRealTime = false
+      guard writer.canAdd(writerIn) else { done(false); return }
+      writer.add(writerIn)
+
+      guard reader.startReading() else {
+        try? FileManager.default.removeItem(at: tmpUrl)
+        done(false)
+        return
+      }
+      guard writer.startWriting() else {
+        reader.cancelReading()
+        try? FileManager.default.removeItem(at: tmpUrl)
+        done(false)
+        return
+      }
+      writer.startSession(atSourceTime: .zero)
+
+      let queue = DispatchQueue(label: "uk.co.edstone.birdsong.aac")
+      var finished = false
+      let complete: (Bool) -> Void = { ok in
+        if !ok {
+          try? FileManager.default.removeItem(at: tmpUrl)
+        }
+        done(ok)
+      }
+      // Explicitly retain `asset` and `reader` across the async pull loop:
+      // AVAssetReaderTrackOutput does not retain its AVAssetReader, so letting
+      // `reader` deallocate when encodeAac returns makes copyNextSampleBuffer()
+      // throw an NSInternalInconsistencyException (SIGABRT).
+      writerIn.requestMediaDataWhenReady(on: queue) { [asset, reader, readerOut, writer, writerIn] in
+        _ = asset
+        if finished { return }
+        while writerIn.isReadyForMoreMediaData {
+          if reader.status != .reading || writer.status != .writing {
+            finished = true
+            if reader.status == .reading { reader.cancelReading() }
+            writerIn.markAsFinished()
+            writer.finishWriting {
+              if writer.status == .completed && reader.status == .completed {
+                do {
+                  try? FileManager.default.removeItem(at: outputUrl)
+                  try FileManager.default.moveItem(at: tmpUrl, to: outputUrl)
+                  complete(true)
+                } catch {
+                  complete(false)
+                }
+              } else {
+                complete(false)
+              }
+            }
+            return
+          }
+          if let buf = readerOut.copyNextSampleBuffer() {
+            if !writerIn.append(buf) {
+              finished = true
+              reader.cancelReading()
+              writerIn.markAsFinished()
+              writer.cancelWriting()
+              complete(false)
+              return
+            }
+          } else {
+            finished = true
+            writerIn.markAsFinished()
+            writer.finishWriting {
+              if writer.status == .completed && reader.status == .completed {
+                do {
+                  try? FileManager.default.removeItem(at: outputUrl)
+                  try FileManager.default.moveItem(at: tmpUrl, to: outputUrl)
+                  complete(true)
+                } catch {
+                  complete(false)
+                }
+              } else {
+                complete(false)
+              }
+            }
+            return
+          }
+        }
+      }
+    } catch {
+      try? FileManager.default.removeItem(at: tmpUrl)
+      done(false)
+    }
   }
 
   /// The picture to share or save: the one Flutter sent, else the web view's.
@@ -157,6 +341,22 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
     }
   }
 
+  private func shareText(text: String, anchor: CGRect, result: @escaping FlutterResult) {
+    guard let window = keyWindow() else {
+      result(false)
+      return
+    }
+    let sheet = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+    if let pop = sheet.popoverPresentationController {
+      pop.sourceView = window
+      pop.sourceRect = anchor
+    }
+    var top = window.rootViewController
+    while let next = top?.presentedViewController { top = next }
+    top?.present(sheet, animated: true)
+    result(true)
+  }
+
   #elseif os(macOS)
 
   private func fullBleed(result: @escaping FlutterResult) { result(true) }
@@ -205,6 +405,20 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       picker.show(relativeTo: rect, of: view, preferredEdge: .minY)
       result(true)
     }
+  }
+
+  private func shareText(text: String, anchor: CGRect, result: @escaping FlutterResult) {
+    guard let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first,
+      let view = window.contentView
+    else {
+      result(false)
+      return
+    }
+    let picker = NSSharingServicePicker(items: [text])
+    var rect = anchor
+    if !view.isFlipped { rect.origin.y = view.bounds.height - anchor.maxY }
+    picker.show(relativeTo: rect, of: view, preferredEdge: .minY)
+    result(true)
   }
 
   #endif

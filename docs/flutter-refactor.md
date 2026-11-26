@@ -1,7 +1,7 @@
 # The Flutter refactor: where it stands
 
 Read this first in any new session. Then open only the doc the task needs
-(`docs/README.md` says which). Updated 22 Nov 2026.
+(`docs/README.md` says which). Updated 25 Nov 2026.
 
 Branch: `flutter-plate-default` (from `flutter-plate-lab`, which holds the
 map work). The full plan and its Progress table:
@@ -35,39 +35,27 @@ and look of the old plate carries over, then is improved on with Ed's say-so.
   asking on a phone; Settings → Station history shows the log.
 - **Wildlife pictures on the map are switched off** (see `map.md`).
 
-## Built but not yet seen by Ed (all 22 Nov)
+## Built, awaiting Ed's next check (25 Nov)
 
-Ed needs to run `Build on Mac.command` and look at:
-1. The app opening on the Flutter plate; Settings → Display.
-2. Calendar sessions named by where the walk went ("Ashcott – RSPB Ham
-   Wall", "Shapwick – Loxley Wood"). Ed saw "Street – King's Sedge Moor";
-   now an OS wood or moor must be within 0.5 km, and all walks are named
-   again once.
-3. Ancient woods a shade deeper on the map (layers panel → Ancient woods).
-   The shade is a first guess.
-4. Standing stones' slight mark; Stonehenge and Calanais drawn (search
-   "Stonehenge", Heritage on).
-5. The map's timing readout off by default (Settings → Map, debug builds);
-   no "Passed on the way" under the full-screen map.
+Ed checked the 22–23 Nov items (Flutter plate, walk names, model updates,
+song scribble all good) and asked for these refinements, now built:
+1. Ancient woods lightened (`#3F5A2A` at 32%, down from 60%).
+2. Map search bar and full-screen button match the clean zoom buttons on
+   the left (no extra inner hairline).
+3. Song scribble mode setting (`Settings → Display → Song scribble`):
+   `Pencil scribble (default)`, `Simple wave (black, lighter)` (single-pass
+   black waveform at 30 fps for slower devices), or `Off`. Also shown on
+   remote stations as the matching resting line with the station's latest
+   detected bird held in the gap until the next update.
+4. Remote mode stations button uses `±` instead of `+`; BirdWeather station
+   parser ignores `#` in numbers or URLs.
+5. Settings screen uses `✕` top right instead of `<` top left.
+6. Customisable ignored species list (`Settings → Listening → Ignored
+   species`), defaulting to Human, Humans, Dog, Engine, Domestic sounds,
+   Home sounds, Harbor Seal — filtered everywhere (listening, plates, index
+   of species, maps, calendar counts, both local and remote).
 
-6. (23 Nov) Ancient woods much darker; map search and buttons grey
-   engraved labels, full screen beside the search; search clears on a
-   click and favours places and nature; overlapping bird names show one,
-   a tap on a name opens the card; "Passed on the way" on the bottom of
-   the full-screen map.
-
-7. (23 Nov) The song scribble: a sepia pencil line along the bottom
-   between the map and calendar buttons, drawn live from the mic while
-   listening here, with the bird being heard named in a gap; a faint
-   resting line otherwise. Settings → Display → Song scribble while
-   listening (on by default). `native/song_scribble.dart`,
-   `engine/scribble_trace.dart`. Not on stations yet.
-
-Details of 2 to 6 are in `map.md`; Ed's words in `decisions.md`.
-
-Also built 23 Nov: the model update strip along the top of the screen
-(Settings → Models → Check now to see it at once). Notes in `data-sources.md`
-("Model updates") and `decisions.md`.
+Details in `map.md` and `decisions.md`.
 
 ## Next steps
 

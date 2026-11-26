@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
@@ -177,49 +178,70 @@ class PassedColumns extends StatelessWidget {
   }
 }
 
-/// The whole list, in a box over the plate; choosing a line closes it and
+/// The whole list, in a modern sheet over the plate (full-screen on mobile,
+/// rounded translucent dialog on desktop); choosing a line closes it and
 /// takes the map there.
 Future<void> showPassed(BuildContext context, LandmarkLookup lookup, {bool about = true}) => showDialog<void>(
       context: context,
-      barrierColor: const Color(0x55000000),
-      builder: (context) => Dialog(
-        backgroundColor: paper,
-        surfaceTintColor: paper,
-        shape: const RoundedRectangleBorder(),
-        insetPadding: const EdgeInsets.all(16),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
-          child: LayoutBuilder(builder: (context, box) {
-            final w = box.maxWidth - 48;
-            return Stack(children: [
-              SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const PassedHeading(),
-                  const SizedBox(height: 18),
-                  PassedColumns(
-                    passed: lookup.walk?.passed ?? const [],
-                    lookup: lookup,
-                    width: w,
-                    narrow: w < 400,
-                    about: about,
-                    onChosen: () => Navigator.of(context).pop(),
-                  ),
-                ]),
-              ),
-              Positioned(
-                right: 4,
-                top: 4,
-                child: IconButton(
-                  tooltip: 'Close',
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close, size: 20, color: sepia),
+      useSafeArea: false,
+      barrierColor: const Color(0x662A241C),
+      builder: (context) {
+        final screen = MediaQuery.sizeOf(context);
+        final pad = MediaQuery.paddingOf(context);
+        final narrow = screen.width <= 720;
+        final topPad = narrow ? (pad.top > 24 ? math.max(16.0, pad.top - 16.0) : math.max(10.0, pad.top)) : 0.0;
+        final bottomPad = narrow ? math.max(16.0, pad.bottom) : 0.0;
+        final content = LayoutBuilder(builder: (context, box) {
+          final w = box.maxWidth - 44;
+          return Stack(children: [
+            SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(22, narrow ? topPad + 44 : 26, 22, narrow ? bottomPad + 24 : 26),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const PassedHeading(),
+                const SizedBox(height: 18),
+                PassedColumns(
+                  passed: lookup.walk?.passed ?? const [],
+                  lookup: lookup,
+                  width: w,
+                  narrow: w < 400,
+                  about: about,
+                  onChosen: () => Navigator.of(context).pop(),
                 ),
+              ]),
+            ),
+            Positioned(
+              right: narrow ? 6 : 8,
+              top: narrow ? topPad : 8,
+              child: IconButton(
+                tooltip: 'Close',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Symbols.close, size: 22, color: ink),
               ),
-            ]);
-          }),
-        ),
-      ),
+            ),
+          ]);
+        });
+        if (narrow) {
+          return Dialog.fullscreen(
+            backgroundColor: paper,
+            child: content,
+          );
+        }
+        return Dialog(
+          backgroundColor: paper.withValues(alpha: 0.96),
+          surfaceTintColor: Colors.transparent,
+          elevation: 8,
+          shadowColor: const Color(0x382A241C),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: rule.withValues(alpha: 0.65)),
+          ),
+          insetPadding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 860, maxHeight: screen.height * 0.86),
+            child: content,
+          ),
+        );
+      },
     );
 
 class _Line extends StatefulWidget {
