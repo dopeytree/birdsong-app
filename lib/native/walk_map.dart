@@ -1446,10 +1446,10 @@ class _WalkMapState extends State<WalkMap> {
                 () {
                   final pad = MediaQuery.paddingOf(context);
                   final topEdge = widget.fullScreen
-                      ? (pad.top > 24 ? math.max(12.0, pad.top - 16.0) : 6.0)
+                      ? (pad.top > 24 ? math.max(16.0, pad.top - 14.0) : 10.0)
                       : 10.0;
                   final rightEdge = widget.fullScreen
-                      ? (pad.right > 16 ? math.max(8.0, pad.right - 16.0) : 6.0)
+                      ? (pad.right > 16 ? math.max(14.0, pad.right - 10.0) : 12.0)
                       : 10.0;
                   return Positioned(
                     right: rightEdge,
@@ -1467,10 +1467,10 @@ class _WalkMapState extends State<WalkMap> {
                 () {
                   final pad = MediaQuery.paddingOf(context);
                   final topEdge = widget.fullScreen
-                      ? (pad.top > 24 ? math.max(12.0, pad.top - 16.0) : 6.0)
+                      ? (pad.top > 24 ? math.max(16.0, pad.top - 14.0) : 10.0)
                       : 10.0;
                   final leftEdge = widget.fullScreen
-                      ? (pad.left > 16 ? math.max(8.0, pad.left - 16.0) : 8.0)
+                      ? (pad.left > 16 ? math.max(14.0, pad.left - 10.0) : 12.0)
                       : 10.0;
                   return Positioned(
                     left: leftEdge,
@@ -1482,7 +1482,7 @@ class _WalkMapState extends State<WalkMap> {
                         PlaceSearch(
                           width: math.min(
                             220.0,
-                            math.max(100.0, widget.size.width - 20 - 48 - (widget.onPoi != null ? 44 : 0)),
+                            math.max(100.0, widget.size.width - 28 - 48 - (widget.onPoi != null ? 44 : 0)),
                           ),
                           style: widget.settings?.mapButtonStyle ?? 'ink',
                           near: () => _ready ? _map.camera.center : center,
@@ -1525,12 +1525,12 @@ class _WalkMapState extends State<WalkMap> {
                 Positioned(
                     left: widget.fullScreen
                         ? ((MediaQuery.paddingOf(context).left > 16
-                                ? math.max(8.0, MediaQuery.paddingOf(context).left - 16.0)
-                                : 6.0) +
+                                ? math.max(14.0, MediaQuery.paddingOf(context).left - 10.0)
+                                : 12.0) +
                             46)
                         : 6,
                     bottom: widget.fullScreen
-                        ? (MediaQuery.paddingOf(context).bottom > 0 ? 18.0 : 12.0)
+                        ? (MediaQuery.paddingOf(context).bottom > 0 ? 24.0 : 18.0)
                         : 10,
                     child: _Credit(_credit +
                         (widget.landmarks != null ? _extrasCredit() : '') +

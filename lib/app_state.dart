@@ -43,8 +43,8 @@ class AppState {
     // Session folders under <app data>/sessions; older data in detections/
     // is moved across on first launch.
     final store = await DetectionStore.open(dir);
-    final icloud = ICloudSync(settings, store);
-    if (settings.icloudSync) unawaited(icloud.syncNow());
+    final icloud = ICloudSync(dir, settings, store);
+    if (settings.icloudSync) unawaited(icloud.syncNow(manual: false));
     final engine = ListenEngine(settings, models, store);
     final server = LocalServer(settings, store, plateModel: () => settings.plateModel);
     await server.start();

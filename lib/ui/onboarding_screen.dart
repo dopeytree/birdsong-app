@@ -51,11 +51,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _url = TextEditingController(text: s.birdnetUrl);
     _station = TextEditingController(text: s.birdweatherStation);
     app.models.addListener(_modelsChanged);
-    for (final id in _starterIds) {
-      final spec = _byId(id);
-      if (app.models.isInstalled(spec)) {
-        _model = id;
-        break;
+    // Keep the user's current model if they revisit the welcome screens.
+    if (_starterIds.contains(s.plateModel) && app.models.isInstalled(_byId(s.plateModel))) {
+      _model = s.plateModel;
+    } else {
+      for (final id in _starterIds) {
+        final spec = _byId(id);
+        if (app.models.isInstalled(spec)) {
+          _model = id;
+          break;
+        }
       }
     }
   }
@@ -125,12 +130,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _finishListen() {
+    // Never lose or hide existing sessions when re-running the welcome screens:
+    // if prior detections exist from another model (or 'all' was already set),
+    // keep plateModel as 'all' so every recorded walk stays visible.
+    final hasOtherModelSessions = app.store.all.any((d) => d.model != _model);
     s.update((x) {
       x.mode = AppMode.listen;
       x.plateMode = defaultPlateMode;
       x.nativeSizeBy = 'time';
-      x.activeModels = {_model};
-      x.plateModel = _model;
+      if (x.activeModels.isEmpty) {
+        x.activeModels = {_model};
+      } else {
+        x.activeModels = {...x.activeModels, _model};
+      }
+      x.plateModel = (hasOtherModelSessions || x.plateModel == 'all') ? 'all' : _model;
       x.useCoreMl = _coreMl;
       if (_locAllowed == true) x.useGeomodel = true;
       x.onboarded = true;
@@ -324,14 +337,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-            color: selected ? paperDeep.withValues(alpha: 0.55) : paper,
+            color: selected ? paperDeep.withValues(alpha: 0.82) : paperDeep.withValues(alpha: 0.34),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected ? ink : rule.withValues(alpha: 0.7),
-              width: selected ? 1.5 : 1.0,
-            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,9 +419,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           decoration: BoxDecoration(
-            color: paperDeep.withValues(alpha: 0.35),
+            color: paperDeep.withValues(alpha: 0.38),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: rule.withValues(alpha: 0.7)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,7 +507,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 decoration: BoxDecoration(
                   color: paperDeep.withValues(alpha: 0.55),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: rule.withValues(alpha: 0.7)),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
@@ -516,7 +523,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 decoration: BoxDecoration(
                   color: paperDeep.withValues(alpha: 0.45),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: rule.withValues(alpha: 0.7)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -572,9 +578,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 10, 10, 12),
             decoration: BoxDecoration(
-              color: paperDeep.withValues(alpha: 0.4),
+              color: paperDeep.withValues(alpha: 0.42),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: rule.withValues(alpha: 0.7)),
             ),
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -654,11 +659,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }) {
     final granted = allowed == true;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: granted ? paperDeep.withValues(alpha: 0.5) : paper,
+        color: granted ? paperDeep.withValues(alpha: 0.72) : paperDeep.withValues(alpha: 0.36),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: granted ? ink : rule.withValues(alpha: 0.7), width: granted ? 1.4 : 1.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

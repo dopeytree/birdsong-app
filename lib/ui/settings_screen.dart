@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, rootBundle;
 import 'package:plate_share/plate_share.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -165,12 +165,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _quickLaunchBar(context, side, best),
-                  Divider(height: 1, color: rule.withValues(alpha: 0.6)),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: side),
+                    child: Text(
+                      'Settings',
+                      style: TextStyle(fontFamily: caps, fontSize: 12, letterSpacing: 1.0, color: sepia),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   _iconBar(side),
-                  Divider(height: 1, color: rule.withValues(alpha: 0.6)),
+                  const SizedBox(height: 6),
+                  Divider(height: 1, color: rule.withValues(alpha: 0.45)),
                   Expanded(
                     child: ListView(
-                      padding: EdgeInsets.fromLTRB(side, 12, side, 32),
+                      padding: EdgeInsets.fromLTRB(side, 14, side, 32),
                       children: _tabBody(context, listen),
                     ),
                   ),
@@ -192,23 +201,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }) {
       return Expanded(
         child: Material(
-          color: paperDeep.withValues(alpha: 0.42),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: rule.withValues(alpha: 0.55)),
-          ),
+          color: paperDeep.withValues(alpha: 0.38),
+          borderRadius: BorderRadius.circular(14),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
+            borderRadius: BorderRadius.circular(14),
             hoverColor: ink.withValues(alpha: 0.08),
             highlightColor: ink.withValues(alpha: 0.12),
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 20, color: ink),
-                  const SizedBox(height: 4),
+                  Icon(icon, size: 21, color: ink),
+                  const SizedBox(height: 5),
                   Text(
                     label,
                     maxLines: 1,
@@ -917,11 +924,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(height: 24, color: rule),
           _switch('iCloud sync', s.icloudSync, (v) {
             s.update((x) => x.icloudSync = v);
-            if (v) icloud.syncNow();
+            if (v) icloud.syncNow(manual: true);
           }),
           Text(
-            'Syncs listening sessions and recordings via iCloud Drive so walks '
-            'recorded on iPhone appear on Mac and iPad.',
+            'Syncs sessions, recordings, chosen bird plates, settings, remote stations and logs '
+            'via iCloud Drive across your iPhone, iPad and Mac.',
             style: theme.textTheme.bodySmall,
           ),
           if (s.icloudSync) ...[
@@ -929,7 +936,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Row(
               children: [
                 OutlinedButton.icon(
-                  onPressed: icloud.syncing ? null : () => icloud.syncNow(),
+                  onPressed: icloud.syncing ? null : () => icloud.syncNow(manual: true),
                   icon: icloud.syncing
                       ? const SizedBox.square(
                           dimension: 14, child: CircularProgressIndicator(strokeWidth: 2))
@@ -940,7 +947,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             if (icloud.status != null)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(top: 6),
                 child: Text(icloud.status!, style: theme.textTheme.bodySmall),
               ),
             if (icloud.error != null)
@@ -948,6 +955,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(icloud.error!, style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),
               ),
+            const SizedBox(height: 6),
+            _section(
+              context,
+              'iCloud sync log',
+              summary: 'Recent uploads and downloads',
+              [
+                FutureBuilder<List<String>>(
+                  future: icloud.readLogLines(),
+                  builder: (context, snap) {
+                    final lines = snap.data ?? const <String>[];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 160),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: paperDeep.withValues(alpha: 0.42),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: lines.isEmpty
+                              ? Text('No sync activity yet.', style: theme.textTheme.bodySmall)
+                              : ListView.builder(
+                                  shrinkWrap: true,
+                                  itemCount: lines.length,
+                                  itemBuilder: (_, idx) => Text(
+                                    lines[idx],
+                                    style: const TextStyle(fontFamily: 'Menlo', fontSize: 11, height: 1.35, color: ink),
+                                  ),
+                                ),
+                        ),
+                        if (lines.isNotEmpty)
+                          Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: TextButton.icon(
+                              onPressed: () async {
+                                await Clipboard.setData(ClipboardData(text: lines.join('\n')));
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(const SnackBar(content: Text('Sync log copied.')));
+                                }
+                              },
+                              icon: const Icon(Icons.copy, size: 16),
+                              label: const Text('Copy log'),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ],
         ],
         const Divider(height: 24, color: rule),

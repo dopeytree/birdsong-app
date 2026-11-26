@@ -10,7 +10,7 @@ void main() {
     CollageBird('Cyanistes caeruleus', 'Eurasian Blue Tit', 1, DateTime(2026, 11, 25, 9, 15)),
   ];
 
-  Widget buildCollage(ValueChanged<CollageBird> onOpen) => MaterialApp(
+  Widget buildCollage(ValueChanged<CollageBird> onOpen, {bool allowDrag = false}) => MaterialApp(
         home: Scaffold(
           body: Center(
             child: CollageView(
@@ -21,6 +21,7 @@ void main() {
               markAt: 'below',
               newest: 'Cyanistes caeruleus',
               live: const {},
+              allowDrag: allowDrag,
               onOpen: onOpen,
             ),
           ),
@@ -44,10 +45,24 @@ void main() {
     expect(opened?.sci, 'Erithacus rubecula');
   });
 
+  testWidgets('dragging does not shuffle birds when allowDrag is off (default)', (tester) async {
+    CollageBird? opened;
+    await tester.pumpWidget(buildCollage((b) => opened = b));
+    await tester.pumpAndSettle();
+
+    final blueTit = find.byKey(const ValueKey('Cyanistes caeruleus'));
+    final startBlueWidth = tester.getSize(blueTit).width;
+
+    await tester.timedDrag(blueTit, const Offset(30, 10), const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    expect(opened, isNull);
+    expect(tester.getSize(blueTit).width, closeTo(startBlueWidth, 1.0));
+  });
+
   testWidgets('dragging promotes the bird under pointer to the centre without opening card, then resets after 10s',
       (tester) async {
     CollageBird? opened;
-    await tester.pumpWidget(buildCollage((b) => opened = b));
+    await tester.pumpWidget(buildCollage((b) => opened = b, allowDrag: true));
     await tester.pumpAndSettle();
 
     final robin = find.byKey(const ValueKey('Erithacus rubecula'));

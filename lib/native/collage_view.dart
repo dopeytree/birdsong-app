@@ -52,6 +52,7 @@ class CollageView extends StatefulWidget {
     required this.onOpen,
     this.showHoverInfo = false,
     this.showAllNameTickets = false,
+    this.allowDrag = false,
     this.resolutionScale = 1.0,
     this.onDragHold,
     this.resetAfter = const Duration(seconds: 10),
@@ -85,6 +86,10 @@ class CollageView extends StatefulWidget {
   /// Whether all birds in the collage show a name ticket (off by default; only
   /// the centred bird shows the madder ticket with a + symbol).
   final bool showAllNameTickets;
+
+  /// Whether dragging across birds promotes the touched bird to hero size
+  /// (off by default so zoom & pan work cleanly without fighting drags).
+  final bool allowDrag;
 
   /// Multiplier applied to [PlateImage] decode resolution when zoomed in, so
   /// zooming into a dense plate smoothly upgrades to full high-res artwork.
@@ -228,7 +233,7 @@ class _CollageViewState extends State<CollageView> {
     final at = {for (var i = 0; i < places.length; i++) places[i].id: i};
     final tipFor = widget.showHoverInfo && _hover != null ? bird[_hover] : null;
 
-    final allowDrag = widget.sizeBy != 'equal';
+    final allowDrag = widget.allowDrag && widget.sizeBy != 'equal';
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: allowDrag ? _onPanStart : null,

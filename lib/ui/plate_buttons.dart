@@ -344,8 +344,8 @@ class _RecordButtonState extends State<RecordButton> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 44,
-      height: SourcePill.rowHeight,
+      width: 38,
+      height: 38,
       child: Center(
         child: widget.busy
             ? const SizedBox(
@@ -354,7 +354,7 @@ class _RecordButtonState extends State<RecordButton> with SingleTickerProviderSt
                 child: CircularProgressIndicator(strokeWidth: 2, color: ink),
               )
             : IconButton(
-                constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
                 padding: EdgeInsets.zero,
                 tooltip: widget.recording ? 'Stop recording' : 'Record a new session',
                 onPressed: widget.onTap,

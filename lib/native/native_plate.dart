@@ -319,10 +319,14 @@ class _NativePlateState extends State<NativePlate> {
 
   AppState get app => widget.app;
 
+  int _seenPlateChoicesRev = 0;
+
   @override
   void initState() {
     super.initState();
-    PlateLibrary.open().then((lib) {
+    _seenPlateChoicesRev = app.icloud.plateChoicesRevision;
+    app.icloud.addListener(_onIcloudChanged);
+    PlateLibrary.open(dataDir: app.dataDir).then((lib) {
       if (mounted) {
         setState(() => _lib = lib);
       } else {
@@ -339,8 +343,26 @@ class _NativePlateState extends State<NativePlate> {
     WidgetsBinding.instance.addPostFrameCallback((_) => widget.onLoaded?.call());
   }
 
+  void _onIcloudChanged() {
+    final rev = app.icloud.plateChoicesRevision;
+    if (rev == _seenPlateChoicesRev) return;
+    _seenPlateChoicesRev = rev;
+    final lib = _lib;
+    if (lib == null) return;
+    lib.reloadChoices().then((changed) {
+      if (!mounted || changed.isEmpty) return;
+      setState(() {
+        for (final sci in changed) {
+          _art.remove(sci);
+          _asking.remove(sci);
+        }
+      });
+    });
+  }
+
   @override
   void dispose() {
+    app.icloud.removeListener(_onIcloudChanged);
     _landmarks.dispose();
     _noteTimer?.cancel();
     _feed?.dispose();
@@ -868,10 +890,10 @@ class _NativePlateState extends State<NativePlate> {
                   ),
                   () {
                     final pad = MediaQuery.paddingOf(context);
-                    final topEdge = pad.top > 24 ? math.max(12.0, pad.top - 16.0) : 6.0;
-                    final bottomEdge = pad.bottom > 0 ? 10.0 : 6.0;
-                    final leftEdge = pad.left > 16 ? math.max(8.0, pad.left - 16.0) : 6.0;
-                    final rightEdge = pad.right > 16 ? math.max(8.0, pad.right - 16.0) : 6.0;
+                    final topEdge = pad.top > 24 ? math.max(16.0, pad.top - 14.0) : 10.0;
+                    final bottomEdge = pad.bottom > 0 ? 18.0 : 12.0;
+                    final leftEdge = pad.left > 16 ? math.max(14.0, pad.left - 10.0) : 12.0;
+                    final rightEdge = pad.right > 16 ? math.max(14.0, pad.right - 10.0) : 12.0;
                     return Positioned.fill(
                       child: Stack(
                         children: [
@@ -1159,11 +1181,31 @@ class _NativePlateState extends State<NativePlate> {
         final showIndex = !equal;
         final showHeading = !equal;
         final showTopRight = !spotlight && !equal;
+        // Smart edge-to-edge corner insets: gives bottom/side controls clean
+        // breathing room from curved phone bezels while still using the full
+        // screen canvas without double SafeArea padding.
+        final mediaPad = MediaQuery.paddingOf(context);
+        final cornerTop = mediaPad.top > 24 ? 18.0 : 10.0;
+        final rowTop = mediaPad.top > 24 ? math.max(16.0, mediaPad.top - 14.0) : 10.0;
+        final cornerBottom = mediaPad.bottom > 0 ? 18.0 : 12.0;
+        final cornerLeft = mediaPad.left > 16 ? math.max(14.0, mediaPad.left - 10.0) : 12.0;
+        final cornerRight = mediaPad.right > 16 ? math.max(14.0, mediaPad.right - 10.0) : 12.0;
+        final topInset = showTopRight ? rowTop : cornerTop;
         final fit = app.settings.nativeFit;
-        _bottomRoom = equal ? 0.0 : (40 + 8 + 6.0);
-        // the folded index's heading has a row above the buttons
+        // Reserve accurate room at the bottom for the bottom icon row (+ folded
+        // Index of Species heading above it) so everything fits on one screen.
         final foldedInline = showIndex && !spotlight && app.settings.nativeIndexFolded;
-        if (foldedInline) _bottomRoom += 40 + 24;
+        _bottomRoom = equal
+            ? 0.0
+            : (foldedInline ? (42.0 + 10.0 + 44.0 + 6.0) : (44.0 + 8.0));
+        final platePad = equal
+            ? EdgeInsets.zero
+            : EdgeInsets.fromLTRB(
+                mediaPad.left > 16 ? math.max(10.0, mediaPad.left - 12.0) : 0.0,
+                rowTop,
+                mediaPad.right > 16 ? math.max(10.0, mediaPad.right - 12.0) : 0.0,
+                cornerBottom,
+              );
         final sortedIndex = _sortRows(rows, ses: ses, feed: feed);
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
               entries: [
@@ -1200,24 +1242,6 @@ class _NativePlateState extends State<NativePlate> {
                       onFlipDirection: _flipSort,
                     ),
             );
-        // Smart edge-to-edge corner insets: pulls controls tightly into the
-        // screen corners on iPhone (Dynamic Island / home indicator) without
-        // double-padding SafeArea + margins.
-        final mediaPad = MediaQuery.paddingOf(context);
-        final cornerTop = mediaPad.top > 24 ? 14.0 : 6.0;
-        final rowTop = mediaPad.top > 24 ? math.max(12.0, mediaPad.top - 16.0) : 6.0;
-        final cornerBottom = mediaPad.bottom > 0 ? 10.0 : 6.0;
-        final cornerLeft = mediaPad.left > 16 ? math.max(8.0, mediaPad.left - 16.0) : 4.0;
-        final cornerRight = mediaPad.right > 16 ? math.max(8.0, mediaPad.right - 16.0) : 4.0;
-        final topInset = showTopRight ? rowTop : cornerTop;
-        final platePad = equal
-            ? EdgeInsets.zero
-            : EdgeInsets.fromLTRB(
-                mediaPad.left > 16 ? math.max(8.0, mediaPad.left - 16.0) : 0.0,
-                rowTop,
-                mediaPad.right > 16 ? math.max(8.0, mediaPad.right - 16.0) : 0.0,
-                cornerBottom,
-              );
         return Stack(
           children: [
             // The plate itself, without the buttons over it: what share takes.
@@ -1412,61 +1436,61 @@ class _NativePlateState extends State<NativePlate> {
                       onFlipDirection: _flipSort,
                     ),
                   ),
-                // Top-right controls: the Settings menu icon is always visible
-                // in every view; record / stations / pill show on the default view.
+                // Top-right controls: Menu icon anchored cleanly in the top-right
+                // corner across every view, with Record/Stations + SourcePill tucked
+                // right underneath it on the home view so the title fits freely.
                 Positioned(
                   right: cornerRight,
                   top: topInset,
-                  child: Row(
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      SettingsButton(
+                        app: app,
+                        color: ink,
+                        onGoHome: _goHome,
+                        onOpenMap: () => _openMap(feed, rows),
+                        onOpenCalendar: _pickDay,
+                        onOpenBestSession: _openBestSession,
+                      ),
                       if (showTopRight) ...[
-                        // record in Listen here, or while a session records
-                        if (feed == null || engine.running || engine.starting)
-                          RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
-                        // on a station: the list of stations, to choose or add one
-                        if (feed != null)
-                          Builder(
-                            builder: (bc) => IconButton(
-                              tooltip: 'Stations',
-                              constraints: const BoxConstraints.tightFor(
-                                  width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                              icon: const Icon(Icons.cell_tower, size: 20, color: ink),
-                              color: ink,
-                              onPressed: () => _stationsTap(bc),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // record in Listen here, or while a session records
+                            if (feed == null || engine.running || engine.starting)
+                              RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
+                            // on a station: the list of stations, to choose or add one
+                            if (feed != null)
+                              Builder(
+                                builder: (bc) => IconButton(
+                                  tooltip: 'Stations',
+                                  constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+                                  padding: EdgeInsets.zero,
+                                  icon: const Icon(Icons.cell_tower, size: 20, color: ink),
+                                  color: ink,
+                                  onPressed: () => _stationsTap(bc),
+                                ),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: SourcePill(
+                                listen: feed == null,
+                                stationName: app.settings.station?.name,
+                                onListen: () => app.settings.update((x) {
+                                  x.mode = AppMode.listen;
+                                  x.plateMode = defaultPlateMode;
+                                  x.nativeSizeBy = 'time';
+                                }),
+                                onRemote: _toRemote,
+                              ),
                             ),
-                          ),
-                        SizedBox(
-                          // level with the record and menu buttons
-                          height: SourcePill.rowHeight,
-                          child: Center(
-                            child: SourcePill(
-                              listen: feed == null,
-                              stationName: app.settings.station?.name,
-                              onListen: () => app.settings.update((x) {
-                                x.mode = AppMode.listen;
-                                x.plateMode = defaultPlateMode;
-                                x.nativeSizeBy = 'time';
-                              }),
-                              onRemote: _toRemote,
-                            ),
-                          ),
+                          ],
                         ),
                       ],
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SettingsButton(
-                            app: app,
-                            color: ink,
-                            onGoHome: _goHome,
-                            onOpenMap: () => _openMap(feed, rows),
-                            onOpenCalendar: _pickDay,
-                            onOpenBestSession: _openBestSession,
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
@@ -1491,19 +1515,19 @@ class _NativePlateState extends State<NativePlate> {
                       ),
                     ),
                   ),
-                // On a phone, the four in short words at the right, under
-                // the buttons, lined up with the menu icon's right edge.
+                // On a phone, the four in short words at the right, neatly under
+                // the stacked menu + pill, aligned to the right edge.
                 if (feed != null && showTopRight && MediaQuery.sizeOf(context).width < 900)
                   Positioned(
-                    top: rowTop + SourcePill.rowHeight,
-                    right: cornerRight + 12,
+                    top: rowTop + SourcePill.rowHeight + 40,
+                    right: cornerRight + 6,
                     child: _spanRow(feed, short: true),
                   ),
                 // and the sun and moon under All, ending with it
                 if (feed != null && feed.canLight && showTopRight && MediaQuery.sizeOf(context).width < 900)
                   Positioned(
-                    top: rowTop + SourcePill.rowHeight + 34,
-                    right: cornerRight + 12,
+                    top: rowTop + SourcePill.rowHeight + 74,
+                    right: cornerRight + 6,
                     child: _lightToggle(feed, app.settings.nativeHeadingInk ? ink : sepia, end: true),
                   ),
                 // Single bottom-left view cycle button (order: 1 -> 3 -> 4 -> 2 -> 1):
@@ -1536,11 +1560,12 @@ class _NativePlateState extends State<NativePlate> {
                 // the buttons along the bottom.
                 if (foldedInline)
                   Positioned(
-                    left: cornerLeft + 4,
-                    right: cornerRight + 4,
-                    bottom: cornerBottom + 40 + 18,
-                    height: 40,
-                    child: index(MediaQuery.sizeOf(context).width - 112, MediaQuery.sizeOf(context).width,
+                    left: cornerLeft,
+                    right: cornerRight,
+                    bottom: cornerBottom + 44 + 10,
+                    height: 42,
+                    child: index(
+                        MediaQuery.sizeOf(context).width - cornerLeft - cornerRight, MediaQuery.sizeOf(context).width,
                         inline: true),
                   ),
                 // The song scribble between the buttons along the bottom: live
@@ -1622,9 +1647,10 @@ class _NativePlateState extends State<NativePlate> {
     final sub = capsOn
         ? TextStyle(fontFamily: caps, fontSize: 14.4, letterSpacing: 14.4 * .06, color: lines, height: 1.5)
         : TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: lines, height: 1.5);
-    // record 44, pill 82, menu 48, and 8 from the edge, and a little air:
-    // the heading sits beside them, so every line stops short of them
-    const row1 = 194.0;
+    // Top line only shares space with the 48 px menu button; lines below
+    // share space with the stacked record dot + source pill (~136 px).
+    const row1Title = 64.0;
+    const row2Meta = 144.0;
     final weather = feed != null ? feed.weather : ses?.weather;
     final temp = (weather?['temperatureC'] as num?)?.round();
     final sky = weather?['symbol'] as String?;
@@ -1652,7 +1678,7 @@ class _NativePlateState extends State<NativePlate> {
       children: [
         if (app.settings.nativeShowTitle) ...[
         ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: math.max(120, width - row1)),
+          constraints: BoxConstraints(maxWidth: math.max(120, width - row1Title)),
           child: Text.rich(
             TextSpan(text: 'birdsongs.ai', children: [
               // the session's number, small, in the lines' own style
@@ -1680,7 +1706,7 @@ class _NativePlateState extends State<NativePlate> {
         const SizedBox(height: 3.2),
         ],
         ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: math.max(120, width - row1)),
+          constraints: BoxConstraints(maxWidth: math.max(120, width - row2Meta)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1767,25 +1793,21 @@ class _NativePlateState extends State<NativePlate> {
       live: app.engine.liveSpecies,
       showHoverInfo: app.settings.nativeHoverInfo,
       showAllNameTickets: app.settings.nativeAllNameTickets,
-      resolutionScale: sizeBy == 'equal' ? _zoomTier : 1.0,
-      onDragHold: (held) {
-        final want = held ? baseShowing : null;
-        if (want != _holdFor && mounted) setState(() => _holdFor = want);
-      },
+      allowDrag: false,
+      resolutionScale: _zoomTier,
       onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
     );
     return ZoomableCollage(
       // A new session or style is a new collage: nothing glides across from
-      // the one before, and it starts unzoomed.
+      // the one before, and it starts unzoomed. High-res optical zoom + pan
+      // work identically on both the home collage and No pecking order.
       key: ValueKey('$showing|$sizeBy'),
       size: Size(width, height),
-      allPlatforms: sizeBy == 'equal',
-      maxScale: sizeBy == 'equal' ? deepMaxScale : 4.0,
-      onScaleTier: sizeBy == 'equal'
-          ? (t) {
-              if (mounted && t != _zoomTier) setState(() => _zoomTier = t);
-            }
-          : null,
+      allPlatforms: true,
+      maxScale: deepMaxScale,
+      onScaleTier: (t) {
+        if (mounted && t != _zoomTier) setState(() => _zoomTier = t);
+      },
       onHold: (held) {
         final want = held ? baseShowing : null;
         if (want != _holdFor && mounted) setState(() => _holdFor = want);

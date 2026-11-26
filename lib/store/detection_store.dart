@@ -360,6 +360,11 @@ class DetectionStore extends ChangeNotifier {
   /// The app's data folder; sessions live in [sessionsDir] inside it.
   final Directory root;
   Directory get sessionsDir => Directory('${root.path}/sessions');
+  File get _tombstonesFile => File('${sessionsDir.path}/deleted.json');
+
+  /// Deleted session folder names -> UTC ISO deletion timestamp, so deletes
+  /// propagate cleanly across devices synced via iCloud Drive.
+  final Map<String, String> deletedFolders = {};
 
   /// Before session folders: detections/detections.jsonl and sessions.jsonl.
   Directory get _legacyDir => Directory('${root.path}/detections');
@@ -388,7 +393,68 @@ class DetectionStore extends ChangeNotifier {
 
   Directory dirOf(Session x) => Directory('${sessionsDir.path}/${x.folder ??= x.folderName}');
 
+  Future<void> _loadTombstones() async {
+    deletedFolders.clear();
+    try {
+      if (await _tombstonesFile.exists()) {
+        final raw = jsonDecode(await _tombstonesFile.readAsString());
+        if (raw is Map) {
+          for (final e in raw.entries) {
+            if (e.key is String && e.value is String) {
+              deletedFolders[e.key as String] = e.value as String;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('tombstones read: $e');
+    }
+  }
+
+  Future<void> _saveTombstones() async {
+    try {
+      await sessionsDir.create(recursive: true);
+      await _writeAtomic(_tombstonesFile, const JsonEncoder.withIndent('  ').convert(deletedFolders));
+    } catch (e) {
+      debugPrint('tombstones write: $e');
+    }
+  }
+
+  /// Apply session deletions received from another device via iCloud sync.
+  /// Returns the number of local session folders removed.
+  Future<int> applyRemoteTombstones(Map<String, String> remote) async {
+    var added = false;
+    var removed = 0;
+    for (final e in remote.entries) {
+      final prev = deletedFolders[e.key];
+      if (prev == null || e.value.compareTo(prev) > 0) {
+        deletedFolders[e.key] = e.value;
+        added = true;
+      }
+    }
+    final liveFolders = {
+      for (final s in sessions)
+        if (s.live && s.folder != null) s.folder!,
+    };
+    for (final folder in deletedFolders.keys) {
+      if (liveFolders.contains(folder)) continue;
+      final dir = Directory('${sessionsDir.path}/$folder');
+      if (await dir.exists()) {
+        try {
+          await dir.delete(recursive: true);
+          removed++;
+        } catch (e) {
+          debugPrint('applyRemoteTombstones $folder: $e');
+        }
+      }
+    }
+    if (added) await _saveTombstones();
+    if (removed > 0) await reload();
+    return removed;
+  }
+
   Future<void> _load() async {
+    await _loadTombstones();
     await for (final e in sessionsDir.list()) {
       if (e is! Directory) continue;
       final file = File('${e.path}/session.json');
@@ -660,6 +726,11 @@ class DetectionStore extends ChangeNotifier {
     if (_selectedId == x.id) {
       _selectedId = sessions.isEmpty ? null : sessions.last.id;
     }
+    final folder = x.folder;
+    if (folder != null && folder.isNotEmpty) {
+      deletedFolders[folder] = _utc(DateTime.now());
+      await _saveTombstones();
+    }
     final dir = dirOf(x);
     if (await dir.exists()) await dir.delete(recursive: true);
     notifyListeners();
@@ -911,10 +982,15 @@ class DetectionStore extends ChangeNotifier {
   Future<void> clear() async {
     await flush();
     for (final x in sessions.where((x) => !x.live).toList()) {
+      final folder = x.folder;
+      if (folder != null && folder.isNotEmpty) {
+        deletedFolders[folder] = _utc(DateTime.now());
+      }
       final dir = dirOf(x);
       if (await dir.exists()) await dir.delete(recursive: true);
       sessions.remove(x);
     }
+    if (deletedFolders.isNotEmpty) await _saveTombstones();
     all.clear();
     _selectedId = null;
     for (final x in sessions) {

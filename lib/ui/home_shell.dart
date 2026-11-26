@@ -44,7 +44,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _check();
+    if (state == AppLifecycleState.resumed) {
+      _check();
+      if (app.settings.icloudSync) unawaited(app.icloud.syncNow(manual: false));
+    }
   }
 
   /// Once the welcome is done, and again whenever the app comes forward or

@@ -113,8 +113,17 @@ class Settings extends ChangeNotifier {
   /// or 'wav' (uncompressed PCM .wav).
   String clipFormat = 'aac';
 
-  /// Sync sessions and settings via iCloud Drive on Apple devices.
-  bool icloudSync = false;
+  /// Sync sessions, recordings, plate choices, preferences and logs via iCloud
+  /// Drive on Apple devices (enabled by default on iOS and macOS).
+  bool icloudSync = Platform.isIOS || Platform.isMacOS;
+
+  /// Timestamp (epoch ms) of the latest portable preference edit, used when
+  /// merging settings across devices via iCloud Drive.
+  int syncUpdatedAt = 0;
+
+  /// True while [mergeFromSyncJson] is notifying listeners so [ICloudSync]
+  /// does not trigger a redundant upload loop.
+  bool applyingRemoteSync = false;
 
   /// Listen here: the same species from the same model within this many
   /// seconds counts as the same call.
@@ -362,6 +371,8 @@ class Settings extends ChangeNotifier {
     micSource = j['micSource'] == 'headset' ? 'headset' : 'phone';
     clipFormat = j['clipFormat'] == 'wav' ? 'wav' : 'aac';
     icloudSync = (j['icloudSync'] as bool?) ?? icloudSync;
+    final syncedAt = j['syncUpdatedAt'];
+    if (syncedAt is num && syncedAt.isFinite) syncUpdatedAt = math.max(0, syncedAt.toInt());
     repeatSeconds = (j['repeatSeconds'] as num?)?.toDouble() ?? repeatSeconds;
     animalsOnly = (j['animalsOnly'] as bool?) ?? animalsOnly;
     final ignored = j['ignoredSpecies'];
@@ -517,6 +528,7 @@ class Settings extends ChangeNotifier {
         'micSource': micSource,
         'clipFormat': clipFormat,
         'icloudSync': icloudSync,
+        'syncUpdatedAt': syncUpdatedAt,
         'repeatSeconds': repeatSeconds,
         'animalsOnly': animalsOnly,
         'ignoredSpecies': List<String>.of(ignoredSpecies),
@@ -568,14 +580,178 @@ class Settings extends ChangeNotifier {
         'mapButtonStyle': mapButtonStyle,
       };
 
-  void update(void Function(Settings s) change) {
-    change(this);
-    notifyListeners();
-    // one save after another, so a quick run of changes lands in order
+  /// Portable user preferences synced across devices via iCloud Drive
+  /// (excludes device-specific hardware/transient state such as Core ML,
+  /// microphone source, local GPS, installed models, or active view).
+  Map<String, dynamic> toSyncJson() => {
+        'updatedAt': syncUpdatedAt,
+        'stations': [for (final st in stations) st.toJson()],
+        if (stationKeepPast.isNotEmpty) 'stationKeepPast': stationKeepPast,
+        'threshold': threshold,
+        'hopSeconds': hopSeconds,
+        'clipFormat': clipFormat,
+        'repeatSeconds': repeatSeconds,
+        'animalsOnly': animalsOnly,
+        'ignoredSpecies': List<String>.of(ignoredSpecies),
+        'recordWeather': recordWeather,
+        'equalSort': equalSort,
+        'equalSortAsc': equalSortAsc,
+        'nativeShowTitle': nativeShowTitle,
+        'nativeShowDate': nativeShowDate,
+        'songScribbleMode': songScribbleMode,
+        'nativePlateStyle': nativePlateStyle,
+        'nativeMarkAt': nativeMarkAt,
+        'nativeFit': nativeFit,
+        'nativeParts': nativeParts,
+        'nativeLimit': nativeLimit,
+        'nativeTotals': nativeTotals,
+        'nativeTitleCaps': nativeTitleCaps,
+        'nativeHeadingInk': nativeHeadingInk,
+        'nativeHoverInfo': nativeHoverInfo,
+        'nativeAllNameTickets': nativeAllNameTickets,
+        'mapBirds': mapBirds,
+        'mapExtras': mapExtras,
+        'mapPassedAbout': mapPassedAbout,
+        'mapShowHeritage': mapShowHeritage,
+        'mapShowNature': mapShowNature,
+        'mapShowAncient': mapShowAncient,
+        'mapShowWiki': mapShowWiki,
+        'mapShowReserves': mapShowReserves,
+        'mapShowHides': mapShowHides,
+        'mapWildlife': mapWildlife,
+        'mapButtonStyle': mapButtonStyle,
+      };
+
+  /// Merges portable preferences synced from iCloud Drive. Stations are unioned
+  /// by id so adding one on iPhone never erases one added on Mac; scalar
+  /// preferences update whenever [remote] carries a newer `updatedAt`.
+  /// Returns true when local settings changed.
+  bool mergeFromSyncJson(Map<String, dynamic> remote) {
+    final before = jsonEncode(toSyncJson());
+    final remoteUpdated = (remote['updatedAt'] as num?)?.toInt() ?? 0;
+    final newer = remoteUpdated > syncUpdatedAt;
+
+    final rStations = remote['stations'];
+    if (rStations is List) {
+      final byId = {for (final st in stations) st.id: st};
+      for (final raw in rStations.whereType<Map>()) {
+        final st = Station.fromJson(Map<String, dynamic>.from(raw));
+        if (!byId.containsKey(st.id) || newer) {
+          byId[st.id] = st;
+        }
+      }
+      stations = byId.values.toList();
+    }
+
+    final keep = remote['stationKeepPast'];
+    if (keep is Map) {
+      for (final e in keep.entries) {
+        if (e.value is bool && (!stationKeepPast.containsKey('${e.key}') || newer)) {
+          stationKeepPast['${e.key}'] = e.value as bool;
+        }
+      }
+    }
+
+    if (newer) {
+      syncUpdatedAt = remoteUpdated;
+      threshold = (remote['threshold'] as num?)?.toDouble() ?? threshold;
+      hopSeconds = (remote['hopSeconds'] as num?)?.toDouble() ?? hopSeconds;
+      if (remote['clipFormat'] == 'wav' || remote['clipFormat'] == 'aac') {
+        clipFormat = remote['clipFormat'] as String;
+      }
+      repeatSeconds = (remote['repeatSeconds'] as num?)?.toDouble() ?? repeatSeconds;
+      animalsOnly = (remote['animalsOnly'] as bool?) ?? animalsOnly;
+      final ignored = remote['ignoredSpecies'];
+      if (ignored is List) {
+        ignoredSpecies = [
+          for (final x in ignored.whereType<String>())
+            if (x.trim().isNotEmpty) x.trim(),
+        ];
+      }
+      recordWeather = (remote['recordWeather'] as bool?) ?? recordWeather;
+      final rawSort = remote['equalSort'] as String?;
+      if (const [
+        'calls',
+        'recent',
+        'active',
+        'name',
+        'family',
+        'rare',
+        'weight',
+        'wingspan',
+        'region',
+        'colour',
+        'artist',
+      ].contains(rawSort)) {
+        equalSort = rawSort!;
+      }
+      equalSortAsc = (remote['equalSortAsc'] as bool?) ?? equalSortAsc;
+      nativeShowTitle = (remote['nativeShowTitle'] as bool?) ?? nativeShowTitle;
+      nativeShowDate = (remote['nativeShowDate'] as bool?) ?? nativeShowDate;
+      final scribble = remote['songScribbleMode'];
+      if (const ['scribble', 'wave', 'off'].contains(scribble)) {
+        songScribbleMode = scribble as String;
+      }
+      if (const ['cutout', 'tint', 'plain'].contains(remote['nativePlateStyle'])) {
+        nativePlateStyle = remote['nativePlateStyle'] as String;
+      }
+      if (const ['centre', 'below', 'fade', 'none'].contains(remote['nativeMarkAt'])) {
+        nativeMarkAt = remote['nativeMarkAt'] as String;
+      }
+      nativeFit = (remote['nativeFit'] as bool?) ?? nativeFit;
+      nativeParts = (remote['nativeParts'] as bool?) ?? nativeParts;
+      nativeLimit = math.max(0, (remote['nativeLimit'] as num?)?.toInt() ?? nativeLimit);
+      nativeTotals = (remote['nativeTotals'] as bool?) ?? nativeTotals;
+      nativeTitleCaps = (remote['nativeTitleCaps'] as bool?) ?? nativeTitleCaps;
+      nativeHeadingInk = (remote['nativeHeadingInk'] as bool?) ?? nativeHeadingInk;
+      nativeHoverInfo = (remote['nativeHoverInfo'] as bool?) ?? nativeHoverInfo;
+      nativeAllNameTickets = (remote['nativeAllNameTickets'] as bool?) ?? nativeAllNameTickets;
+      if (remote['mapBirds'] == 'all' || remote['mapBirds'] == 'first') {
+        mapBirds = remote['mapBirds'] as String;
+      }
+      mapExtras = (remote['mapExtras'] as bool?) ?? mapExtras;
+      mapPassedAbout = (remote['mapPassedAbout'] as bool?) ?? mapPassedAbout;
+      mapShowHeritage = (remote['mapShowHeritage'] as bool?) ?? mapShowHeritage;
+      mapShowNature = (remote['mapShowNature'] as bool?) ?? mapShowNature;
+      mapShowAncient = (remote['mapShowAncient'] as bool?) ?? mapShowAncient;
+      mapShowWiki = (remote['mapShowWiki'] as bool?) ?? mapShowWiki;
+      mapShowReserves = (remote['mapShowReserves'] as bool?) ?? mapShowReserves;
+      mapShowHides = (remote['mapShowHides'] as bool?) ?? mapShowHides;
+      mapWildlife = (remote['mapWildlife'] as bool?) ?? mapWildlife;
+      if (const ['paper', 'ink', 'madder'].contains(remote['mapButtonStyle'])) {
+        mapButtonStyle = remote['mapButtonStyle'] as String;
+      }
+    }
+
+    final after = jsonEncode(toSyncJson());
+    if (before == after) return false;
+    applyingRemoteSync = true;
+    try {
+      notifyListeners();
+    } finally {
+      applyingRemoteSync = false;
+    }
+    _writeDisk();
+    return true;
+  }
+
+  void _writeDisk() {
     final json = const JsonEncoder.withIndent('  ').convert(toJson());
     _saving = _saving.then((_) => _file.writeAsString(json)).then((_) {}, onError: (Object e) {
       debugPrint('settings: could not save ($e)');
     });
+  }
+
+  void update(void Function(Settings s) change) {
+    final beforeSync = jsonEncode(toSyncJson());
+    change(this);
+    final afterSync = jsonEncode(toSyncJson());
+    if (beforeSync != afterSync) {
+      syncUpdatedAt = DateTime.now().millisecondsSinceEpoch;
+    }
+    notifyListeners();
+    // one save after another, so a quick run of changes lands in order
+    _writeDisk();
   }
 
   Future<void> _saving = Future.value();

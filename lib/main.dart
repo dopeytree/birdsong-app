@@ -115,8 +115,9 @@ ThemeData birdsongTheme() {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
+        backgroundColor: paperDeep.withValues(alpha: 0.55),
         foregroundColor: ink,
-        side: BorderSide(color: rule.withValues(alpha: 0.85)),
+        side: BorderSide.none,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: const TextStyle(fontFamily: caps, fontSize: 13.5, letterSpacing: 0.5, fontWeight: FontWeight.w400),
@@ -190,20 +191,19 @@ ThemeData birdsongTheme() {
       contentTextStyle: const TextStyle(fontFamily: serif, fontSize: 15.5, height: 1.45, color: ink),
     ),
     cardTheme: CardThemeData(
-      color: paper,
+      color: paperDeep.withValues(alpha: 0.42),
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: rule.withValues(alpha: 0.7)),
+        borderRadius: BorderRadius.circular(16),
       ),
     ),
-    dividerTheme: DividerThemeData(color: rule.withValues(alpha: 0.65), thickness: 1),
+    dividerTheme: DividerThemeData(color: rule.withValues(alpha: 0.55), thickness: 1),
     chipTheme: ChipThemeData(
       backgroundColor: paperDeep.withValues(alpha: 0.65),
       selectedColor: ink,
       deleteIconColor: ink,
-      side: BorderSide(color: rule.withValues(alpha: 0.7)),
+      side: BorderSide.none,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       labelStyle: const TextStyle(fontFamily: serif, fontSize: 14, color: ink),
     ),

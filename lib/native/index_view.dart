@@ -116,20 +116,9 @@ class IndexView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (inline) {
-      // Always some rule either side, so it reads as something to press:
-      // shorter as the room narrows, and the words a little smaller on a
-      // phone.
-      return LayoutBuilder(builder: (context, box) {
-        final w = box.maxWidth;
-        return Center(
-          child: _heading(
-            rules: w >= 360 ? 28 : (w >= 280 ? 16 : 10),
-            gap: w >= 280 ? 10 : 6,
-            pad: w >= 280 ? 8 : 5,
-            titleSize: w >= 300 ? null : 13.5,
-          ),
-        );
-      });
+      return Center(
+        child: _heading(inlineMode: true),
+      );
     }
     // rem is 16 throughout the page
     final colWidth = fit ? 176.0 : 256.0, gap = fit ? 25.6 : 41.6;
@@ -141,7 +130,7 @@ class IndexView extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _heading(),
+        _heading(inlineMode: false),
         if (!folded && sortBar != null)
           Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -180,41 +169,59 @@ class IndexView extends StatelessWidget {
   }
 
   /// ‹ —— Index of species —— ›
-  Widget _heading({double rules = 56, double pad = 12, double gap = 14.4, double? titleSize}) {
-    Widget step(int by, IconData icon, String label, bool on) => Visibility(
-          visible: on,
-          maintainSize: true,
-          maintainAnimation: true,
-          maintainState: true,
-          child: IconButton(
-            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-            padding: EdgeInsets.zero,
-            iconSize: fit ? 20 : 22,
-            tooltip: label,
-            color: ink,
-            icon: Icon(icon),
-            onPressed: on ? () => onStep(by) : null,
+  /// Adapts rule length, spacing and font size to the actual available width
+  /// so the heading always fits cleanly on one line on every phone screen.
+  Widget _heading({required bool inlineMode}) {
+    return LayoutBuilder(builder: (context, box) {
+      final avail = box.maxWidth.isFinite ? box.maxWidth : width;
+      final compact = inlineMode || avail < 440;
+      final rules = avail >= 560 && !inlineMode
+          ? 56.0
+          : avail >= 400
+              ? 22.0
+              : avail >= 320
+                  ? 14.0
+                  : 8.0;
+      final gap = compact ? 6.0 : 12.0;
+      final stepSize = compact ? 32.0 : 36.0;
+      final size = inlineMode
+          ? (avail >= 360 ? 15.5 : 14.0)
+          : (fit ? (avail < 380 ? 15.0 : 16.0) : (avail < 400 ? 17.0 : 20.0));
+      Widget step(int by, IconData icon, String label, bool on) => Visibility(
+            visible: on,
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            child: IconButton(
+              constraints: BoxConstraints.tightFor(width: stepSize, height: stepSize),
+              padding: EdgeInsets.zero,
+              iconSize: compact ? 19 : 22,
+              tooltip: label,
+              color: ink,
+              icon: Icon(icon),
+              onPressed: on ? () => onStep(by) : null,
+            ),
+          );
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (steps) step(-1, Icons.chevron_left, 'Earlier session', canPrev),
+          Flexible(
+            child: _IndexHeading(
+              title: species > 0 ? 'Index of Species | ${thousands(species)}' : 'Index of Species',
+              rules: rules,
+              gap: gap,
+              size: size,
+              compact: compact,
+              folded: folded,
+              foldable: foldable,
+              onFold: onFold,
+            ),
           ),
-        );
-    final size = titleSize ?? (fit ? 16.0 : 20.0);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (steps) step(-1, Icons.chevron_left, 'Earlier session', canPrev),
-        Flexible(
-          child: _IndexHeading(
-            title: species > 0 ? 'Index of Species | ${thousands(species)}' : 'Index of Species',
-            rules: rules,
-            gap: gap,
-            size: size,
-            folded: folded,
-            foldable: foldable,
-            onFold: onFold,
-          ),
-        ),
-        if (steps) step(1, Icons.chevron_right, 'Later session', canNext),
-      ],
-    );
+          if (steps) step(1, Icons.chevron_right, 'Later session', canNext),
+        ],
+      );
+    });
   }
 }
 
@@ -227,6 +234,7 @@ class _IndexHeading extends StatefulWidget {
     required this.rules,
     required this.gap,
     required this.size,
+    required this.compact,
     required this.folded,
     required this.foldable,
     required this.onFold,
@@ -236,6 +244,7 @@ class _IndexHeading extends StatefulWidget {
   final double rules;
   final double gap;
   final double size;
+  final bool compact;
   final bool folded;
   final bool foldable;
   final VoidCallback onFold;
@@ -252,7 +261,7 @@ class _IndexHeadingState extends State<_IndexHeading> {
   Widget build(BuildContext context) {
     final active = widget.foldable && (_hovered || _pressed);
     final ruleColor = active ? ink.withValues(alpha: 0.65) : rule;
-    final ruleWidth = active ? widget.rules + 6 : widget.rules;
+    final ruleWidth = active ? widget.rules + (widget.compact ? 3 : 6) : widget.rules;
     Widget line() => AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
@@ -280,7 +289,7 @@ class _IndexHeadingState extends State<_IndexHeading> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: EdgeInsets.symmetric(horizontal: widget.compact ? 6 : 10, vertical: 4),
               decoration: BoxDecoration(
                 color: _pressed
                     ? ink.withValues(alpha: 0.12)
@@ -289,45 +298,48 @@ class _IndexHeadingState extends State<_IndexHeading> {
                         : Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  line(),
-                  SizedBox(width: widget.gap),
-                  Flexible(
-                    child: Text(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    line(),
+                    SizedBox(width: widget.gap),
+                    Text(
                       widget.title,
+                      maxLines: 1,
+                      softWrap: false,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontFamily: caps,
                         fontSize: widget.size,
-                        letterSpacing: widget.size * .06,
-                        height: 1.4,
+                        letterSpacing: widget.size * .05,
+                        height: 1.3,
                         color: ink,
                       ),
                     ),
-                  ),
-                  if (widget.foldable) ...[
-                    const SizedBox(width: 4),
-                    AnimatedScale(
-                      scale: active ? 1.15 : 1.0,
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOutCubic,
-                      child: AnimatedRotation(
-                        turns: widget.folded ? 0.0 : 0.5,
-                        duration: const Duration(milliseconds: 220),
+                    if (widget.foldable) ...[
+                      const SizedBox(width: 3),
+                      AnimatedScale(
+                        scale: active ? 1.15 : 1.0,
+                        duration: const Duration(milliseconds: 180),
                         curve: Curves.easeOutCubic,
-                        child: Icon(
-                          Icons.expand_more,
-                          size: widget.size >= 18 ? 20 : 17,
-                          color: active ? ink : ink.withValues(alpha: 0.72),
+                        child: AnimatedRotation(
+                          turns: widget.folded ? 0.0 : 0.5,
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOutCubic,
+                          child: Icon(
+                            Icons.expand_more,
+                            size: widget.size >= 18 ? 19 : 16,
+                            color: active ? ink : ink.withValues(alpha: 0.72),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
+                    SizedBox(width: widget.gap),
+                    line(),
                   ],
-                  SizedBox(width: widget.gap),
-                  line(),
-                ],
+                ),
               ),
             ),
           ),

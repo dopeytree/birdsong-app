@@ -88,8 +88,8 @@ class SpeciesSortBar extends StatelessWidget {
       constraints: const BoxConstraints.tightFor(width: 40, height: 40),
       padding: EdgeInsets.zero,
       iconSize: 22,
-      tooltip: open ? 'Hide sort' : 'Sort by ${active.label}',
-      icon: Icon(open ? Icons.close : Icons.swap_vert, color: ink),
+      tooltip: open ? 'Hide filters' : 'Filter & sort (${active.label})',
+      icon: Icon(open ? Icons.close : Icons.filter_alt_outlined, color: ink),
       onPressed: onToggleOpen,
     );
     final panel = AnimatedSize(
