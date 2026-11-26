@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../app_state.dart';
 import '../main.dart' show paper, rule;
+import 'paper_surface.dart';
 import 'plate_buttons.dart';
 import 'settings_screen.dart';
 
 /// The plate's menu button. Slides Settings in cleanly from the right:
-/// a 390 px sidebar on desktop / iPad (so the plate stays visible and updates
+/// a 420 px sidebar on desktop / iPad (so the plate stays visible and updates
 /// live beside it), or full screen on phones.
 class SettingsButton extends StatelessWidget {
   const SettingsButton({
     super.key,
     required this.app,
     required this.color,
+    this.adaptiveContrast = false,
     this.onGoHome,
     this.onOpenMap,
     this.onOpenCalendar,
@@ -22,6 +25,7 @@ class SettingsButton extends StatelessWidget {
 
   final AppState app;
   final Color color;
+  final bool adaptiveContrast;
   final VoidCallback? onGoHome;
   final VoidCallback? onOpenMap;
   final VoidCallback? onOpenCalendar;
@@ -74,13 +78,17 @@ class SettingsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final glyph = Icon(Symbols.menu, color: adaptiveContrast ? adaptiveInkSource : color);
     return IconButton(
       tooltip: 'Settings',
       constraints: const BoxConstraints.tightFor(
           width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-      icon: const Icon(Icons.menu),
+      icon: adaptiveContrast ? AdaptiveContrast(child: glyph) : glyph,
       color: color,
-      onPressed: () => _open(context),
+      onPressed: () {
+        hapticTap();
+        _open(context);
+      },
     );
   }
 }

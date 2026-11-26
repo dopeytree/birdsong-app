@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
@@ -214,7 +215,7 @@ Future<void> showPassed(BuildContext context, LandmarkLookup lookup, {bool about
               child: IconButton(
                 tooltip: 'Close',
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close, size: 22, color: ink),
+                icon: const Icon(Symbols.close, size: 22, color: ink),
               ),
             ),
           ]);

@@ -43,6 +43,7 @@ dependencies:
   # Where each listening session happened.
   geolocator: ^14.1.1
   animations: ^3.0.0
+  material_symbols_icons: ^4.2960.0
 
 dev_dependencies:
   flutter_test:

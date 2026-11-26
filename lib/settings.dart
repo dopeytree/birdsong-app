@@ -214,11 +214,11 @@ class Settings extends ChangeNotifier {
   bool get nativePlate => !webPlate;
 
   /// Sort order shared by "No pecking order" and "Index of Species":
-  /// 'calls', 'recent', 'name', 'rare', 'size', 'colour', 'artist', or 'sci'.
-  String equalSort = 'calls';
+  /// defaults to 'family' (Species), ascending.
+  String equalSort = 'family';
 
   /// Sort direction for [equalSort]: true = ascending, false = descending.
-  bool equalSortAsc = false;
+  bool equalSortAsc = true;
 
   /// The Flutter plate's heading: the title line ("Birdsong #3/12") and the
   /// lines under it (when, where, the weather), as the web plate's Title
@@ -281,8 +281,15 @@ class Settings extends ChangeNotifier {
   bool nativeHoverInfo = false;
 
   /// The Flutter plate: show name tickets on all birds in the collage (off by
-  /// default, so only the centred hero bird carries its name + badge).
+  /// default; toggled from the Filters bar or Display settings).
   bool nativeAllNameTickets = false;
+
+  /// Show the latest detected species along the bottom of the screen (both
+  /// local and remote).
+  bool nativeShowLatestDetection = true;
+
+  /// Render the bottom latest-detection readout inside a paper ticket box.
+  bool nativeBottomTicket = true;
 
   /// Listen here: show the walk on a map in place of the collage.
   bool showMap = false;
@@ -471,6 +478,8 @@ class Settings extends ChangeNotifier {
     nativeHeadingInk = (j['nativeHeadingInk'] as bool?) ?? nativeHeadingInk;
     nativeHoverInfo = (j['nativeHoverInfo'] as bool?) ?? nativeHoverInfo;
     nativeAllNameTickets = (j['nativeAllNameTickets'] as bool?) ?? nativeAllNameTickets;
+    nativeShowLatestDetection = (j['nativeShowLatestDetection'] as bool?) ?? nativeShowLatestDetection;
+    nativeBottomTicket = (j['nativeBottomTicket'] as bool?) ?? nativeBottomTicket;
     nativeSizeBy = const ['calls', 'time', 'equal'].contains(j['nativeSizeBy'])
         ? j['nativeSizeBy'] as String
         : nativeSizeBy;
@@ -564,6 +573,8 @@ class Settings extends ChangeNotifier {
         'nativeHeadingInk': nativeHeadingInk,
         'nativeHoverInfo': nativeHoverInfo,
         'nativeAllNameTickets': nativeAllNameTickets,
+        'nativeShowLatestDetection': nativeShowLatestDetection,
+        'nativeBottomTicket': nativeBottomTicket,
         'showMap': showMap,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,
@@ -609,6 +620,8 @@ class Settings extends ChangeNotifier {
         'nativeHeadingInk': nativeHeadingInk,
         'nativeHoverInfo': nativeHoverInfo,
         'nativeAllNameTickets': nativeAllNameTickets,
+        'nativeShowLatestDetection': nativeShowLatestDetection,
+        'nativeBottomTicket': nativeBottomTicket,
         'mapBirds': mapBirds,
         'mapExtras': mapExtras,
         'mapPassedAbout': mapPassedAbout,
@@ -706,6 +719,8 @@ class Settings extends ChangeNotifier {
       nativeHeadingInk = (remote['nativeHeadingInk'] as bool?) ?? nativeHeadingInk;
       nativeHoverInfo = (remote['nativeHoverInfo'] as bool?) ?? nativeHoverInfo;
       nativeAllNameTickets = (remote['nativeAllNameTickets'] as bool?) ?? nativeAllNameTickets;
+      nativeShowLatestDetection = (remote['nativeShowLatestDetection'] as bool?) ?? nativeShowLatestDetection;
+      nativeBottomTicket = (remote['nativeBottomTicket'] as bool?) ?? nativeBottomTicket;
       if (remote['mapBirds'] == 'all' || remote['mapBirds'] == 'first') {
         mapBirds = remote['mapBirds'] as String;
       }

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:record/record.dart';
 
 import '../app_state.dart';
@@ -9,6 +10,7 @@ import '../engine/model_catalog.dart';
 import '../main.dart' show caps, ink, madder, paper, paperDeep, rule, sepia, serif;
 import '../settings.dart';
 import 'format.dart' show megabytes;
+import 'paper_surface.dart';
 import 'splash.dart' show Cardinal;
 import 'station_editor.dart' show openBirdWeatherMap;
 
@@ -202,8 +204,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     children: [
                       if (_step > 0)
                         TextButton.icon(
-                          onPressed: () => setState(() => _step--),
-                          icon: const Icon(Icons.chevron_left, size: 18),
+                          onPressed: () {
+                            hapticTap();
+                            setState(() => _step--);
+                          },
+                          icon: const Icon(Symbols.chevron_left, size: 18),
                           label: const Text('Back'),
                         ),
                       const Spacer(),
@@ -242,22 +247,33 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _nextButton(bool listen) {
     if (!listen && _step == 1) {
       return FilledButton.icon(
-        onPressed: _finishStation,
-        icon: const Icon(Icons.arrow_forward, size: 18),
+        onPressed: () {
+          hapticTap();
+          _finishStation();
+        },
+        icon: const Icon(Symbols.arrow_forward, size: 18),
         label: const Text('Open birdsongs.ai'),
       );
     }
     if (listen && _step == 3) {
       return FilledButton.icon(
-        onPressed: _finishListen,
-        icon: const Icon(Icons.arrow_forward, size: 18),
+        onPressed: () {
+          hapticTap();
+          _finishListen();
+        },
+        icon: const Icon(Symbols.arrow_forward, size: 18),
         label: const Text('Open birdsongs.ai'),
       );
     }
     final waitingForModel = listen && _step == 1 && !app.models.isInstalled(_spec);
     return FilledButton.icon(
-      onPressed: waitingForModel ? null : () => setState(() => _step++),
-      icon: const Icon(Icons.arrow_forward, size: 18),
+      onPressed: waitingForModel
+          ? null
+          : () {
+              hapticTap();
+              setState(() => _step++);
+            },
+      icon: const Icon(Symbols.arrow_forward, size: 18),
       label: const Text('Continue'),
     );
   }
@@ -297,7 +313,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         const SizedBox(height: 22),
         _optionCard(
           selected: _mode == AppMode.listen,
-          icon: Icons.mic_none_outlined,
+          icon: Symbols.mic,
           title: 'Listen here & now',
           body: 'Identifies birds on this device using the microphone. Works offline and no audio leaves your device.',
           onTap: () => setState(() => _mode = AppMode.listen),
@@ -305,7 +321,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         const SizedBox(height: 10),
         _optionCard(
           selected: _mode == AppMode.station,
-          icon: Icons.sensors,
+          icon: Symbols.sensors,
           title: 'Connect a remote station',
           body: 'Follow what your BirdNET-Go station or a public BirdWeather station has heard.',
           onTap: () => setState(() => _mode = AppMode.station),
@@ -333,7 +349,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         borderRadius: BorderRadius.circular(16),
         hoverColor: ink.withValues(alpha: 0.06),
         highlightColor: ink.withValues(alpha: 0.10),
-        onTap: onTap,
+        onTap: onTap == null
+            ? null
+            : () {
+                hapticTap();
+                onTap();
+              },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
@@ -393,7 +414,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Icon(
-                  selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                  selected ? Symbols.check_circle : Symbols.radio_button_unchecked,
+                  fill: selected ? 1.0 : 0.0,
                   size: 20,
                   color: selected ? ink : rule,
                 ),
@@ -447,7 +469,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               TextButton.icon(
                 style: TextButton.styleFrom(padding: EdgeInsets.zero),
                 onPressed: openBirdWeatherMap,
-                icon: const Icon(Icons.map_outlined, size: 18),
+                icon: const Icon(Symbols.map, size: 18),
                 label: const Text('Browse public stations on BirdWeather'),
               ),
             ],
@@ -483,7 +505,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 final spec = _byId(id);
                 return _optionCard(
                   selected: _model == spec.id,
-                  icon: Icons.psychology_outlined,
+                  icon: Symbols.psychology,
                   title: spec.name,
                   badge: id == _starterIds.first ? 'Recommended' : null,
                   body: '${megabytes(spec.totalBytes)} · ${spec.note}',
@@ -511,7 +533,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle, size: 18, color: ink),
+                    Icon(Symbols.check_circle, fill: 1.0, size: 18, color: ink),
                     SizedBox(width: 8),
                     Text('Downloaded and ready.', style: TextStyle(fontFamily: serif, fontSize: 15, color: ink)),
                   ],
@@ -547,7 +569,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         m.install(_spec);
                         if (!m.isInstalled(geomodel)) m.install(geomodel);
                       },
-                icon: const Icon(Icons.download_outlined, size: 18),
+                icon: const Icon(Symbols.download, size: 18),
                 label: Text('Download ${megabytes(_spec.totalBytes)}'),
               ),
             const SizedBox(height: 12),
@@ -590,7 +612,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   color: _coreMl ? ink : paperDeep,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.bolt_outlined, size: 20, color: _coreMl ? paper : ink),
+                child: Icon(Symbols.bolt, size: 20, color: _coreMl ? paper : ink),
               ),
               title: const Text(
                 'Core ML acceleration',
@@ -626,7 +648,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
         const SizedBox(height: 20),
         _permissionCard(
-          icon: Icons.mic_none_outlined,
+          icon: Symbols.mic,
           title: 'Microphone',
           body: 'Required to identify birds around you. All analysis stays on your device.',
           allowed: _micAllowed,
@@ -636,7 +658,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
         const SizedBox(height: 12),
         _permissionCard(
-          icon: Icons.location_on_outlined,
+          icon: Symbols.location_on,
           title: 'Location (optional)',
           body: 'Maps your walk, notes the weather, and filters out species unlikely in your region.',
           allowed: _locAllowed,
@@ -689,7 +711,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle, size: 18, color: ink),
+                    Icon(Symbols.check_circle, fill: 1.0, size: 18, color: ink),
                     SizedBox(width: 4),
                     Text('Allowed', style: TextStyle(fontFamily: caps, fontSize: 12, color: ink)),
                   ],

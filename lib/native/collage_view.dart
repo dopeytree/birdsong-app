@@ -54,6 +54,7 @@ class CollageView extends StatefulWidget {
     this.showAllNameTickets = false,
     this.allowDrag = false,
     this.resolutionScale = 1.0,
+    this.zoomScale = 1.0,
     this.onDragHold,
     this.resetAfter = const Duration(seconds: 10),
   });
@@ -94,6 +95,10 @@ class CollageView extends StatefulWidget {
   /// Multiplier applied to [PlateImage] decode resolution when zoomed in, so
   /// zooming into a dense plate smoothly upgrades to full high-res artwork.
   final double resolutionScale;
+
+  /// Current interactive zoom level (1.0 .. maxScale), used to keep name
+  /// tickets & no-plate ovals crisp and readable as the user zooms in.
+  final double zoomScale;
 
   /// Called when the user begins/ends dragging the collage so the outer scroll
   /// view can pause while dragging.
@@ -257,11 +262,13 @@ class _CollageViewState extends State<CollageView> {
                 child: _Bird(
                   bird: bird[p.id]!,
                   art: art[p.id],
-                  width: widget.resolutionScale <= 0 ? 0 : p.rect.width * widget.resolutionScale,
+                  layoutWidth: p.rect.width,
+                  decodeWidth: widget.resolutionScale <= 0 ? 0 : p.rect.width * widget.resolutionScale,
+                  zoomScale: widget.zoomScale,
                   delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
                   hovered: _hover == p.id,
                   isCenter: p.id == centerSci,
-                  showNameTicket: p.id == centerSci || widget.showAllNameTickets,
+                  showNameTicket: widget.showAllNameTickets,
                   newest: p.id == newest,
                   markBelow: widget.markAt == 'below',
                   showDot: widget.markAt == 'centre' || widget.markAt == 'below',
@@ -303,7 +310,9 @@ class _Bird extends StatefulWidget {
   const _Bird({
     required this.bird,
     required this.art,
-    required this.width,
+    required this.layoutWidth,
+    required this.decodeWidth,
+    required this.zoomScale,
     required this.delay,
     required this.hovered,
     required this.isCenter,
@@ -320,7 +329,9 @@ class _Bird extends StatefulWidget {
 
   final CollageBird bird;
   final PlateArt? art;
-  final double width;
+  final double layoutWidth;
+  final double decodeWidth;
+  final double zoomScale;
   final Duration delay;
   final bool hovered;
   final bool isCenter;
@@ -394,9 +405,10 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final art = widget.art, b = widget.bird;
     final still = MediaQuery.disableAnimationsOf(context);
+    final z = widget.zoomScale.clamp(1.0, 30.0);
     Widget figure = art == null
-        ? _NameOval(b.common)
-        : PlateImage(art: art, width: widget.width);
+        ? _NameOval(b.common, zoomScale: z, layoutWidth: widget.layoutWidth)
+        : PlateImage(art: art, width: widget.decodeWidth);
     if (widget.live && art != null) {
       // filter: drop-shadow(0 0 .8rem rgba(140,59,42,.7)) at the middle of
       // the breath: a blurred madder copy of the figure behind it.
@@ -409,12 +421,23 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
           ),
           child: ImageFiltered(
             imageFilter: ui.ImageFilter.blur(sigmaX: 7, sigmaY: 7, tileMode: TileMode.decal),
-            child: PlateImage(art: art, width: widget.width, silhouette: madder),
+            child: PlateImage(art: art, width: widget.decodeWidth, silhouette: madder),
           ),
         ),
         figure,
       ]);
     }
+    // Scale ticket typography, padding and border inversely with zoom so
+    // labels stay proportional at overview scale and expand cleanly to full
+    // readable species names without giant pixelated boxes when zoomed in.
+    final screenCellW = widget.layoutWidth * z;
+    final targetScreenFont = (screenCellW * 0.115).clamp(6.5, 13.5);
+    final ticketFontSize = targetScreenFont / z;
+    final padH = (screenCellW * 0.045).clamp(2.2, 7.0) / z;
+    final padV = (screenCellW * 0.014).clamp(0.9, 2.4) / z;
+    final borderW = (0.85 / z).clamp(0.05, 0.85);
+    final ticketMaxW = math.max(12.0, widget.layoutWidth * 0.95);
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onHover: (e) => widget.onHover(e.localPosition),
@@ -445,18 +468,15 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                   ),
                   if (widget.showNameTicket && art != null)
                     Align(
-                      alignment: const Alignment(0, 0.82),
+                      alignment: const Alignment(0, 0.86),
                       child: IgnorePointer(
                         child: Container(
-                          constraints: BoxConstraints(maxWidth: math.max(54, widget.width - 10)),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: widget.isCenter ? 8 : 6,
-                            vertical: widget.isCenter ? 2.5 : 1.5,
-                          ),
+                          constraints: BoxConstraints(maxWidth: ticketMaxW),
+                          padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
                           decoration: BoxDecoration(
-                            color: paper.withValues(alpha: 0.86),
-                            border: Border.all(color: rule, width: 0.85),
-                            boxShadow: const [BoxShadow(color: Color(0x283C280A), blurRadius: 4)],
+                            color: paper.withValues(alpha: 0.88),
+                            border: Border.all(color: rule, width: borderW),
+                            boxShadow: [BoxShadow(color: const Color(0x243C280A), blurRadius: 3.5 / z)],
                           ),
                           child: Text(
                             b.common,
@@ -465,7 +485,7 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                             style: TextStyle(
                               fontFamily: serif,
                               fontStyle: FontStyle.italic,
-                              fontSize: widget.isCenter ? 13.5 : (widget.width < 90 ? 10.5 : 12),
+                              fontSize: ticketFontSize,
                               height: 1.15,
                               color: ink,
                             ),
@@ -478,12 +498,15 @@ class _BirdState extends State<_Bird> with TickerProviderStateMixin {
                       // over its centre, or on its lower edge (top:100%, -70%)
                       alignment: widget.markBelow ? Alignment.bottomCenter : Alignment.center,
                       child: Transform.translate(
-                        offset: widget.markBelow ? const Offset(0, 8 * .3) : Offset.zero,
-                        child: AnimatedScale(
-                          scale: widget.hovered ? 1.5 : 1,
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeOut,
-                          child: _Dot(breath: widget.live && !still ? _breath : null),
+                        offset: widget.markBelow ? Offset(0, 8 * .3 / z) : Offset.zero,
+                        child: Transform.scale(
+                          scale: 1 / math.sqrt(z),
+                          child: AnimatedScale(
+                            scale: widget.hovered ? 1.5 : 1,
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeOut,
+                            child: _Dot(breath: widget.live && !still ? _breath : null),
+                          ),
                         ),
                       ),
                     ),
@@ -537,34 +560,44 @@ class _Dot extends StatelessWidget {
   }
 }
 
-/// A creature with no plate: its name in an oval, in italics.
+/// A creature with no plate: its name in an oval, in italics, scaling cleanly
+/// with zoom so its text expands instead of magnifying into giant letters.
 class _NameOval extends StatelessWidget {
-  const _NameOval(this.name);
+  const _NameOval(this.name, {this.zoomScale = 1.0, this.layoutWidth = 80.0});
 
   final String name;
+  final double zoomScale;
+  final double layoutWidth;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, box) => Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            border: Border.all(color: rule),
-            borderRadius: BorderRadius.all(Radius.elliptical(box.maxWidth / 2, box.maxHeight / 2)),
-          ),
-          child: Text(name,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontFamily: serif,
-                  fontStyle: FontStyle.italic,
-                  // font-size: clamp(.6rem, 1.1vw, .9rem)
-                  fontSize: (MediaQuery.sizeOf(context).width * .011).clamp(9.6, 14.4),
-                  height: 1.15,
-                  color: sepia)),
+  Widget build(BuildContext context) {
+    final z = zoomScale.clamp(1.0, 30.0);
+    final screenW = layoutWidth * z;
+    final fontSize = (screenW * 0.12).clamp(7.0, 14.0) / z;
+    return LayoutBuilder(
+      builder: (context, box) => Container(
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: 6 / z, vertical: 2.5 / z),
+        decoration: BoxDecoration(
+          border: Border.all(color: rule, width: (1.0 / z).clamp(0.08, 1.0)),
+          borderRadius: BorderRadius.all(Radius.elliptical(box.maxWidth / 2, box.maxHeight / 2)),
         ),
-      );
+        child: Text(
+          name,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: serif,
+            fontStyle: FontStyle.italic,
+            fontSize: fontSize,
+            height: 1.15,
+            color: sepia,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// The label under the pointer: a ruled ticket with the name, the
@@ -793,6 +826,7 @@ class ZoomableCollage extends StatefulWidget {
     this.allPlatforms = false,
     this.maxScale = 4.0,
     this.onScaleTier,
+    this.onZoomChanged,
   });
 
   final Size size;
@@ -808,6 +842,9 @@ class ZoomableCollage extends StatefulWidget {
   /// re-decodes at higher resolution as the user zooms in.
   final ValueChanged<double>? onScaleTier;
 
+  /// Called smoothly as zoom scale changes so name tickets scale cleanly.
+  final ValueChanged<double>? onZoomChanged;
+
   /// Only where fingers are the pointer, as on the web plate.
   static bool get touch =>
       defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android;
@@ -821,6 +858,7 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
   final Set<int> _fingers = {};
   bool _zoomed = false, _held = false;
   double _tier = 1.0;
+  double _reportedZoom = 1.0;
 
   double get _scale => _view.value.getMaxScaleOnAxis();
 
@@ -863,6 +901,10 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
     if (nextTier != _tier) {
       _tier = nextTier;
       widget.onScaleTier?.call(nextTier);
+    }
+    if ((s - _reportedZoom).abs() / _reportedZoom >= 0.04 || (!zoomed && _reportedZoom != 1.0)) {
+      _reportedZoom = zoomed ? s : 1.0;
+      widget.onZoomChanged?.call(_reportedZoom);
     }
     _tell();
   }

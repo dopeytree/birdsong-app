@@ -1,11 +1,13 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../engine/place_names.dart';
 import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../store/detection_store.dart';
 import '../ui/format.dart';
+import '../ui/paper_surface.dart';
 import 'index_view.dart' show thousands;
 import 'station_archive.dart';
 import 'station_feed.dart';
@@ -65,8 +67,13 @@ class _CompactMonthGrid extends StatelessWidget {
               padding: EdgeInsets.zero,
               iconSize: 20,
               color: ink,
-              icon: const Icon(Icons.chevron_left),
-              onPressed: canPrev ? onPrev : null,
+              icon: const Icon(Symbols.chevron_left),
+              onPressed: canPrev
+                  ? () {
+                      hapticTap();
+                      onPrev();
+                    }
+                  : null,
             ),
             Expanded(
               child: Text(
@@ -80,8 +87,13 @@ class _CompactMonthGrid extends StatelessWidget {
               padding: EdgeInsets.zero,
               iconSize: 20,
               color: ink,
-              icon: const Icon(Icons.chevron_right),
-              onPressed: canNext ? onNext : null,
+              icon: const Icon(Symbols.chevron_right),
+              onPressed: canNext
+                  ? () {
+                      hapticTap();
+                      onNext();
+                    }
+                  : null,
             ),
           ],
         ),
@@ -117,7 +129,12 @@ class _CompactMonthGrid extends StatelessWidget {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(16),
                         hoverColor: ink.withValues(alpha: 0.08),
-                        onTap: ok ? () => onSelect(d) : null,
+                        onTap: ok
+                            ? () {
+                                hapticTap();
+                                onSelect(d);
+                              }
+                            : null,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -197,7 +214,7 @@ Widget _calendarFrame({
         padding: EdgeInsets.zero,
         iconSize: 22,
         color: ink,
-        icon: const Icon(Icons.close),
+        icon: const Icon(Symbols.close),
         onPressed: () => Navigator.of(context).pop(),
       ),
     ],
@@ -487,7 +504,10 @@ class _DayPickerState extends State<DayPicker> {
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       hoverColor: ink.withValues(alpha: 0.08),
-      onTap: () => Navigator.of(context).pop(x),
+      onTap: () {
+        hapticTap();
+        Navigator.of(context).pop(x);
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: rule.withValues(alpha: 0.55)))),
@@ -510,7 +530,7 @@ class _DayPickerState extends State<DayPicker> {
                 padding: EdgeInsets.zero,
                 iconSize: 17,
                 color: ink.withValues(alpha: 0.7),
-                icon: const Icon(Icons.delete_outline),
+                icon: const Icon(Symbols.delete),
                 onPressed: () => _confirmDelete(x, i + 1),
               ),
           ],
@@ -670,7 +690,7 @@ class _StationDayPickerState extends State<StationDayPicker> {
             if (k != null && k.saved)
               const Padding(
                 padding: EdgeInsets.only(right: 6),
-                child: Icon(Icons.download_done, size: 15, color: ink),
+                child: Icon(Symbols.download_done, size: 15, color: ink),
               ),
             Text(what, style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14.5, color: sepia)),
           ],

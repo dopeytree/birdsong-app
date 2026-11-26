@@ -79,6 +79,17 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       }
       return
     }
+    if call.method == "shareText" {
+      guard let text = args["text"] as? String else {
+        result(false)
+        return
+      }
+      let anchor = CGRect(
+        x: (args["x"] as? Double) ?? 0, y: (args["y"] as? Double) ?? 0,
+        width: (args["w"] as? Double) ?? 1, height: (args["h"] as? Double) ?? 1)
+      DispatchQueue.main.async { self.shareText(text: text, anchor: anchor, result: result) }
+      return
+    }
     guard call.method == "share" else {
       result(FlutterMethodNotImplemented)
       return
@@ -285,6 +296,22 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
     }
   }
 
+  private func shareText(text: String, anchor: CGRect, result: @escaping FlutterResult) {
+    guard let window = keyWindow() else {
+      result(false)
+      return
+    }
+    let sheet = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+    if let pop = sheet.popoverPresentationController {
+      pop.sourceView = window
+      pop.sourceRect = anchor
+    }
+    var top = window.rootViewController
+    while let next = top?.presentedViewController { top = next }
+    top?.present(sheet, animated: true)
+    result(true)
+  }
+
   #elseif os(macOS)
 
   private func fullBleed(result: @escaping FlutterResult) { result(true) }
@@ -333,6 +360,20 @@ public class PlateSharePlugin: NSObject, FlutterPlugin {
       picker.show(relativeTo: rect, of: view, preferredEdge: .minY)
       result(true)
     }
+  }
+
+  private func shareText(text: String, anchor: CGRect, result: @escaping FlutterResult) {
+    guard let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first,
+      let view = window.contentView
+    else {
+      result(false)
+      return
+    }
+    let picker = NSSharingServicePicker(items: [text])
+    var rect = anchor
+    if !view.isFlipped { rect.origin.y = view.bounds.height - anchor.maxY }
+    picker.show(relativeTo: rect, of: view, preferredEdge: .minY)
+    result(true)
   }
 
   #endif

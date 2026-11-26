@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
-import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
+import '../main.dart' show caps, ink, madder, sepia, serif;
 import '../native/native_plate.dart';
 import 'onboarding_screen.dart';
+import 'paper_surface.dart';
 import 'plate_view.dart';
 import 'settings_screen.dart';
 
@@ -168,40 +169,33 @@ class _ModelNotice extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 600),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-          child: Material(
-            color: paper.withValues(alpha: 0.95),
-            elevation: 4,
-            shadowColor: const Color(0x382A241C),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: BorderSide(color: rule.withValues(alpha: 0.65)),
-            ),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(14, 6, actions.length == 1 ? 6 : 14, 6),
-              child: actions.isEmpty
-                  ? message
-                  : actions.length == 1
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(child: message),
-                            actions.single,
-                          ],
-                        )
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            message,
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 40,
-                              alignment: WrapAlignment.center,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: actions,
-                            ),
-                          ],
-                        ),
-            ),
+          child: PaperSurface(
+            borderRadius: 14,
+            opacity: 0.92,
+            padding: EdgeInsets.fromLTRB(14, 6, actions.length == 1 ? 6 : 14, 6),
+            child: actions.isEmpty
+                ? message
+                : actions.length == 1
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(child: message),
+                          actions.single,
+                        ],
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          message,
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 40,
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: actions,
+                          ),
+                        ],
+                      ),
           ),
         ),
       ),

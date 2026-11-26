@@ -47,6 +47,22 @@ class PlateShare {
     return ok ?? false;
   }
 
+  /// Shares plain text (e.g. a map pin name, coordinates & link) via the
+  /// native iOS/macOS share sheet without taking a plate screenshot.
+  static Future<bool> shareText(String text, {Rect? from}) async {
+    if (!supported) return false;
+    final ok = await _channel.invokeMethod<bool>('shareText', {
+      'text': text,
+      if (from != null) ...{
+        'x': from.left,
+        'y': from.top,
+        'w': from.width,
+        'h': from.height,
+      },
+    });
+    return ok ?? false;
+  }
+
   /// Encodes a WAV audio file at [inputPath] into an AAC (.m4a) file at
   /// [outputPath] using Apple's AVFoundation at [bitrate] bps (default 128 kbps).
   /// Returns true on success.

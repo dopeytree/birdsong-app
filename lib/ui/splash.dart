@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../main.dart' show caps, paper, sepia, serif;
+import 'bird_chime.dart';
 import 'home_shell.dart';
 
 
@@ -157,6 +160,7 @@ class _BootState extends State<Boot> {
   @override
   void initState() {
     super.initState();
+    unawaited(BirdChime.play(force: true));
     widget.boot.then((a) {
       if (!mounted) return;
       setState(() => _app = a);

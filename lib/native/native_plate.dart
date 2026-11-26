@@ -6,13 +6,16 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:plate_share/plate_share.dart';
 
 import '../app_state.dart';
 import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../settings.dart';
 import '../store/detection_store.dart';
+import '../ui/bird_chime.dart';
 import '../ui/format.dart';
+import '../ui/paper_surface.dart';
 import '../ui/plate_buttons.dart';
 import 'song_scribble.dart';
 import '../ui/settings_button.dart';
@@ -211,9 +214,9 @@ class _NativePlateState extends State<NativePlate> {
   /// while one alone is shown.
   Widget _lightToggle(StationFeed f, Color lines, {bool end = false}) {
     final icon = switch (f.light) {
-      Light.all => Icons.brightness_6_outlined,
-      Light.day => Icons.wb_sunny_outlined,
-      Light.night => Icons.nightlight_outlined,
+      Light.all => Symbols.brightness_6,
+      Light.day => Symbols.wb_sunny,
+      Light.night => Symbols.nightlight,
     };
     return Semantics(
       button: true,
@@ -249,14 +252,14 @@ class _NativePlateState extends State<NativePlate> {
         for (final st in s.stations)
           ModernMenuItem(
             value: st.id,
-            icon: Icons.sensors,
+            icon: Symbols.sensors,
             label: st.name,
             subtitle: st.kind,
             selected: st.id == current,
           ),
         const ModernMenuItem(
           value: '+',
-          icon: Icons.add,
+          icon: Symbols.add,
           label: 'Add a station',
         ),
       ],
@@ -302,19 +305,24 @@ class _NativePlateState extends State<NativePlate> {
   /// plate (Settings.plateMode, shared by both). Stepping onto a, f or g
   /// also sets how the collage is sized, as the web plate does.
   void _nextMode() {
+    hapticTap();
     final s = app.settings;
     final next = s.plateMode % plateModes.length + 1;
     final mode = plateModes[next - 1];
-    if (_sortOpen || _zoomTier != 1.0) {
+    if (_sortOpen || _zoomTier != 1.0 || _zoomScale != 1.0) {
       setState(() {
         _sortOpen = false;
         _zoomTier = 1.0;
+        _zoomScale = 1.0;
       });
     }
     s.update((x) {
       x.plateMode = next;
       if (mode.sizeBy != null) x.nativeSizeBy = mode.sizeBy!;
     });
+    if (next == defaultPlateMode) {
+      unawaited(BirdChime.play(suppress: app.engine.running || app.engine.starting));
+    }
   }
 
   AppState get app => widget.app;
@@ -340,7 +348,12 @@ class _NativePlateState extends State<NativePlate> {
         traits.dispose();
       }
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => widget.onLoaded?.call());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onLoaded?.call();
+      if (app.settings.plateMode == defaultPlateMode) {
+        unawaited(BirdChime.play(suppress: app.engine.running || app.engine.starting));
+      }
+    });
   }
 
   void _onIcloudChanged() {
@@ -404,8 +417,10 @@ class _NativePlateState extends State<NativePlate> {
   /// Tap the top-left heading to hide it; tap that corner again to reshow it.
   bool _headingHidden = false;
 
-  /// Resolution multiplier for zoomed-in high-res decoding on No pecking order.
+  /// Resolution multiplier & live zoom scale for high-res decoding and crisp
+  /// zoom-scaled labels on collages.
   double _zoomTier = 1.0;
+  double _zoomScale = 1.0;
 
   /// Whether the sort slide-out is open on No pecking order or Index of Species.
   bool _sortOpen = false;
@@ -497,6 +512,13 @@ class _NativePlateState extends State<NativePlate> {
   }
 
   void _flipSort() => app.settings.update((x) => x.equalSortAsc = !x.equalSortAsc);
+
+  /// Resets filters to defaults: Labels off, sort by Species ascending.
+  void _resetFilters() => app.settings.update((x) {
+        x.nativeAllNameTickets = false;
+        x.equalSort = 'family';
+        x.equalSortAsc = true;
+      });
 
   void _ensureColours(List<_Row> rows) {
     for (final r in rows) {
@@ -682,16 +704,18 @@ class _NativePlateState extends State<NativePlate> {
   // ---- the walk on a map, in place of the collage --------------------------
 
   void _goHome() {
-    if (_sortOpen || _zoomTier != 1.0) {
+    if (_sortOpen || _zoomTier != 1.0 || _zoomScale != 1.0) {
       setState(() {
         _sortOpen = false;
         _zoomTier = 1.0;
+        _zoomScale = 1.0;
       });
     }
     app.settings.update((x) {
       x.plateMode = defaultPlateMode;
       x.nativeSizeBy = x.mode == AppMode.station ? 'calls' : 'time';
     });
+    unawaited(BirdChime.play(suppress: app.engine.running || app.engine.starting));
   }
 
   /// Jumps straight to the local session with the highest distinct species count.
@@ -710,10 +734,11 @@ class _NativePlateState extends State<NativePlate> {
       }
     }
     if (best != null) app.store.select(best);
-    if (_sortOpen || _zoomTier != 1.0) {
+    if (_sortOpen || _zoomTier != 1.0 || _zoomScale != 1.0) {
       setState(() {
         _sortOpen = false;
         _zoomTier = 1.0;
+        _zoomScale = 1.0;
       });
     }
     app.settings.update((x) {
@@ -721,6 +746,7 @@ class _NativePlateState extends State<NativePlate> {
       x.plateMode = defaultPlateMode;
       x.nativeSizeBy = 'time';
     });
+    unawaited(BirdChime.play(suppress: app.engine.running || app.engine.starting));
   }
 
   /// The map step of the view cycle (and Quick Launch -> Map): opens the walk
@@ -879,6 +905,7 @@ class _NativePlateState extends State<NativePlate> {
                           onHold: (_) {},
                           landmarks: app.settings.mapExtras ? _landmarks : null,
                           settings: app.settings,
+                          pins: app.pins,
                           species: [for (final r in rows) (sci: r.sci, common: r.common)],
                           fullScreen: true,
                           onPoi: passed.isNotEmpty
@@ -921,7 +948,7 @@ class _NativePlateState extends State<NativePlate> {
                             child: () {
                               final isRemote = app.settings.mode == AppMode.station;
                               final backIcon =
-                                  isRemote ? Icons.view_quilt_outlined : Icons.auto_awesome_mosaic_outlined;
+                                  isRemote ? Symbols.view_quilt : Symbols.auto_awesome_mosaic;
                               final backTip = isRemote ? 'Most heard' : 'Recent ramblings';
                               return isInk
                                   ? IconButton(
@@ -1139,15 +1166,19 @@ class _NativePlateState extends State<NativePlate> {
       builder: (context, _) {
         final store = app.store, engine = app.engine;
         // Whenever Local / Remote mode swaps from anywhere (pill, station list,
-        // Settings), guarantee we land on View 1 (Most recent / Most heard).
+        // Settings), guarantee we land on View 1 (Most recent / Most heard) and
+        // play the birdsong chime (unless actively recording).
         final curMode = app.settings.mode;
-        if (_lastAppMode != null && _lastAppMode != curMode && app.settings.plateMode != defaultPlateMode) {
+        if (_lastAppMode != null && _lastAppMode != curMode) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            app.settings.update((x) {
-              x.plateMode = defaultPlateMode;
-              x.nativeSizeBy = x.mode == AppMode.station ? 'calls' : 'time';
-            });
+            if (app.settings.plateMode != defaultPlateMode) {
+              app.settings.update((x) {
+                x.plateMode = defaultPlateMode;
+                x.nativeSizeBy = x.mode == AppMode.station ? 'calls' : 'time';
+              });
+            }
+            unawaited(BirdChime.play(suppress: app.engine.running || app.engine.starting));
           });
         }
         _lastAppMode = curMode;
@@ -1227,6 +1258,8 @@ class _NativePlateState extends State<NativePlate> {
               canNext: feed?.canStepOn ?? (i >= 0 && i < n - 1),
               onStep: feed?.stepDay ?? store.step,
               onOpen: (e) => _openCard(rows.firstWhere((r) => r.sci == e.sci)),
+              filterOpen: _indexSortOpen,
+              onToggleFilter: () => setState(() => _indexSortOpen = !_indexSortOpen),
               sortBar: inline
                   ? null
                   : SpeciesSortBar(
@@ -1236,7 +1269,9 @@ class _NativePlateState extends State<NativePlate> {
                       showLabels: app.settings.nativeAllNameTickets,
                       onToggleLabels: () =>
                           app.settings.update((x) => x.nativeAllNameTickets = !x.nativeAllNameTickets),
+                      onReset: _resetFilters,
                       centered: true,
+                      showTrigger: false,
                       onToggleOpen: () => setState(() => _indexSortOpen = !_indexSortOpen),
                       onSelect: _selectSort,
                       onFlipDirection: _flipSort,
@@ -1415,7 +1450,8 @@ class _NativePlateState extends State<NativePlate> {
             Positioned.fill(
               child: Stack(
                 children: [
-                // Top-left modern transparent black-icon sort bar on No pecking order.
+                // Top-left frosted-paper filter bar on No pecking order (icon
+                // automatically inverts colour when drawn over dark bird art).
                 if (equal)
                   Positioned(
                     left: cornerLeft,
@@ -1428,6 +1464,8 @@ class _NativePlateState extends State<NativePlate> {
                       showLabels: app.settings.nativeAllNameTickets,
                       onToggleLabels: () =>
                           app.settings.update((x) => x.nativeAllNameTickets = !x.nativeAllNameTickets),
+                      onReset: _resetFilters,
+                      adaptiveTrigger: true,
                       onToggleOpen: () => setState(() => _sortOpen = !_sortOpen),
                       onSelect: (key) {
                         _selectSort(key);
@@ -1436,61 +1474,59 @@ class _NativePlateState extends State<NativePlate> {
                       onFlipDirection: _flipSort,
                     ),
                   ),
-                // Top-right controls: Menu icon anchored cleanly in the top-right
-                // corner across every view, with Record/Stations + SourcePill tucked
-                // right underneath it on the home view so the title fits freely.
+                // Top-right controls: horizontal row [Record/Stations] [Pill] [Menu]
+                // on the home view, and solo contrast-inverting Menu on No pecking order.
                 Positioned(
                   right: cornerRight,
                   top: topInset,
-                  child: Column(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      if (showTopRight) ...[
+                        // record in Listen here, or while a session records
+                        if (feed == null || engine.running || engine.starting)
+                          RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
+                        // on a station: the list of stations, to choose or add one
+                        if (feed != null)
+                          Builder(
+                            builder: (bc) => IconButton(
+                              tooltip: 'Stations',
+                              constraints: const BoxConstraints.tightFor(
+                                  width: SourcePill.rowHeight, height: SourcePill.rowHeight),
+                              icon: const Icon(Symbols.cell_tower, size: 20, color: ink),
+                              color: ink,
+                              onPressed: () {
+                                hapticTap();
+                                _stationsTap(bc);
+                              },
+                            ),
+                          ),
+                        SizedBox(
+                          height: SourcePill.rowHeight,
+                          child: Center(
+                            child: SourcePill(
+                              listen: feed == null,
+                              stationName: app.settings.station?.name,
+                              onListen: () => app.settings.update((x) {
+                                x.mode = AppMode.listen;
+                                x.plateMode = defaultPlateMode;
+                                x.nativeSizeBy = 'time';
+                              }),
+                              onRemote: _toRemote,
+                            ),
+                          ),
+                        ),
+                      ],
                       SettingsButton(
                         app: app,
                         color: ink,
+                        adaptiveContrast: equal,
                         onGoHome: _goHome,
                         onOpenMap: () => _openMap(feed, rows),
                         onOpenCalendar: _pickDay,
                         onOpenBestSession: _openBestSession,
                       ),
-                      if (showTopRight) ...[
-                        const SizedBox(height: 2),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // record in Listen here, or while a session records
-                            if (feed == null || engine.running || engine.starting)
-                              RecordButton(recording: engine.running, busy: engine.starting, onTap: _record),
-                            // on a station: the list of stations, to choose or add one
-                            if (feed != null)
-                              Builder(
-                                builder: (bc) => IconButton(
-                                  tooltip: 'Stations',
-                                  constraints: const BoxConstraints.tightFor(width: 38, height: 38),
-                                  padding: EdgeInsets.zero,
-                                  icon: const Icon(Icons.cell_tower, size: 20, color: ink),
-                                  color: ink,
-                                  onPressed: () => _stationsTap(bc),
-                                ),
-                              ),
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: SourcePill(
-                                listen: feed == null,
-                                stationName: app.settings.station?.name,
-                                onListen: () => app.settings.update((x) {
-                                  x.mode = AppMode.listen;
-                                  x.plateMode = defaultPlateMode;
-                                  x.nativeSizeBy = 'time';
-                                }),
-                                onRemote: _toRemote,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -1515,46 +1551,52 @@ class _NativePlateState extends State<NativePlate> {
                       ),
                     ),
                   ),
-                // On a phone, the four in short words at the right, neatly under
-                // the stacked menu + pill, aligned to the right edge.
+                // On a phone, the four in short words at the right, under
+                // the buttons, lined up with the menu icon's right edge.
                 if (feed != null && showTopRight && MediaQuery.sizeOf(context).width < 900)
                   Positioned(
-                    top: rowTop + SourcePill.rowHeight + 40,
-                    right: cornerRight + 6,
+                    top: rowTop + SourcePill.rowHeight,
+                    right: cornerRight + 12,
                     child: _spanRow(feed, short: true),
                   ),
                 // and the sun and moon under All, ending with it
                 if (feed != null && feed.canLight && showTopRight && MediaQuery.sizeOf(context).width < 900)
                   Positioned(
-                    top: rowTop + SourcePill.rowHeight + 74,
-                    right: cornerRight + 6,
+                    top: rowTop + SourcePill.rowHeight + 34,
+                    right: cornerRight + 12,
                     child: _lightToggle(feed, app.settings.nativeHeadingInk ? ink : sepia, end: true),
                   ),
-                // Single bottom-left view cycle button (order: 1 -> 3 -> 4 -> 2 -> 1):
-                // 1. Default (Most recent / Most heard) -> interests -> 3. Latest & most heard
-                // 3. Latest & most heard                -> grid      -> 4. No pecking order
-                // 4. No pecking order                   -> map       -> 2. Map
-                // 2. Map                                -> mosaic/quilt -> 1. Default
+                // Single bottom-left view cycle button (order: 1 -> 3 -> 4 -> 2 -> 1);
+                // auto-inverts over bird art on No pecking order.
                 Positioned(
                   left: cornerLeft,
                   bottom: cornerBottom,
-                  child: IconButton(
-                    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                    padding: EdgeInsets.zero,
-                    iconSize: 22,
-                    tooltip: switch (mode.key) {
-                      'time' => 'Latest & most heard',
-                      'spotlight' => 'No pecking order',
-                      _ => 'The walk on a map',
-                    },
-                    icon: switch (mode.key) {
-                      'time' => const Icon(Icons.interests_outlined, color: ink),
-                      'spotlight' => const Icon(Icons.grid_view_outlined, color: ink),
-                      _ => const Icon(Icons.map_outlined, color: ink),
-                    },
-                    color: ink,
-                    onPressed: equal ? () => _openMap(feed, rows) : _nextMode,
-                  ),
+                  child: () {
+                    final iconData = switch (mode.key) {
+                      'time' => Symbols.interests,
+                      'spotlight' => Symbols.grid_view,
+                      _ => Symbols.map,
+                    };
+                    final glyph = Icon(iconData, color: equal ? adaptiveInkSource : ink);
+                    return IconButton(
+                      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                      padding: EdgeInsets.zero,
+                      iconSize: 22,
+                      tooltip: switch (mode.key) {
+                        'time' => 'Latest & most heard',
+                        'spotlight' => 'No pecking order',
+                        _ => 'The walk on a map',
+                      },
+                      icon: equal ? AdaptiveContrast(child: glyph) : glyph,
+                      color: ink,
+                      onPressed: equal
+                          ? () {
+                              hapticTap();
+                              _openMap(feed, rows);
+                            }
+                          : _nextMode,
+                    );
+                  }(),
                 ),
                 // The folded index's heading, on a row of its own just above
                 // the buttons along the bottom.
@@ -1568,11 +1610,9 @@ class _NativePlateState extends State<NativePlate> {
                         MediaQuery.sizeOf(context).width - cornerLeft - cornerRight, MediaQuery.sizeOf(context).width,
                         inline: true),
                   ),
-                // The song scribble between the buttons along the bottom: live
-                // mic when listening here, or the matching resting line with
-                // the latest heard species when on a remote station. Hidden on
-                // No pecking order for a clean museum plate.
-                if (app.settings.songScribble && !equal)
+                // Bottom song scribble + latest-detection ticket (same for both
+                // local & remote, configurable via Settings > Display).
+                if ((app.settings.songScribble || app.settings.nativeShowLatestDetection) && !equal)
                   Positioned(
                     left: cornerLeft + 40 + 8,
                     right: (PlateShare.supported ? cornerRight + 40 : cornerRight) + 8,
@@ -1580,12 +1620,21 @@ class _NativePlateState extends State<NativePlate> {
                     height: 40,
                     child: SongScribble(
                       engine: engine,
+                      showLine: app.settings.songScribble,
                       simpleWave: app.settings.songScribbleMode == 'wave',
                       remote: feed != null,
-                      remoteName: feed != null ? newestCommon : null,
+                      latestName: newestCommon,
+                      showLatest: app.settings.nativeShowLatestDetection,
+                      useTicket: app.settings.nativeBottomTicket,
+                      onTapLatest: newest == null
+                          ? null
+                          : () {
+                              final row = rows.where((r) => r.sci == newest).firstOrNull;
+                              if (row != null) _openCard(row);
+                            },
                     ),
                   ),
-                // Share or save, out of the way at the bottom right (modern translucent menu).
+                // Share or save, out of the way at the bottom right (auto-inverts on No pecking order).
                 if (PlateShare.supported)
                   Positioned(
                     right: cornerRight,
@@ -1593,6 +1642,7 @@ class _NativePlateState extends State<NativePlate> {
                     child: _shareMenu(
                       key: _shareKey,
                       tooltip: 'Share or save the plate',
+                      adaptiveContrast: equal,
                       onShare: _share,
                       onSave: _save,
                     ),
@@ -1647,10 +1697,9 @@ class _NativePlateState extends State<NativePlate> {
     final sub = capsOn
         ? TextStyle(fontFamily: caps, fontSize: 14.4, letterSpacing: 14.4 * .06, color: lines, height: 1.5)
         : TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15.2, color: lines, height: 1.5);
-    // Top line only shares space with the 48 px menu button; lines below
-    // share space with the stacked record dot + source pill (~136 px).
-    const row1Title = 64.0;
-    const row2Meta = 144.0;
+    // record 44, pill 82, menu 48, and edge gap: the heading stops clear of them
+    const row1Title = 194.0;
+    const row2Meta = 194.0;
     final weather = feed != null ? feed.weather : ses?.weather;
     final temp = (weather?['temperatureC'] as num?)?.round();
     final sky = weather?['symbol'] as String?;
@@ -1795,6 +1844,7 @@ class _NativePlateState extends State<NativePlate> {
       showAllNameTickets: app.settings.nativeAllNameTickets,
       allowDrag: false,
       resolutionScale: _zoomTier,
+      zoomScale: _zoomScale,
       onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
     );
     return ZoomableCollage(
@@ -1807,6 +1857,9 @@ class _NativePlateState extends State<NativePlate> {
       maxScale: deepMaxScale,
       onScaleTier: (t) {
         if (mounted && t != _zoomTier) setState(() => _zoomTier = t);
+      },
+      onZoomChanged: (z) {
+        if (mounted && (z - _zoomScale).abs() > 0.01) setState(() => _zoomScale = z);
       },
       onHold: (held) {
         final want = held ? baseShowing : null;
@@ -1822,7 +1875,9 @@ class _NativePlateState extends State<NativePlate> {
     required String tooltip,
     required VoidCallback onShare,
     required VoidCallback onSave,
+    bool adaptiveContrast = false,
   }) {
+    final glyph = Icon(Symbols.ios_share, color: adaptiveContrast ? adaptiveInkSource : ink);
     return Builder(
       builder: (bc) => IconButton(
         key: key,
@@ -1830,15 +1885,16 @@ class _NativePlateState extends State<NativePlate> {
         padding: EdgeInsets.zero,
         iconSize: 22,
         tooltip: tooltip,
-        icon: const Icon(Icons.ios_share, color: ink),
+        icon: adaptiveContrast ? AdaptiveContrast(child: glyph) : glyph,
         color: ink,
         onPressed: () async {
+          hapticTap();
           final picked = await showModernMenu<String>(
             anchorContext: bc,
             minWidth: 176,
             items: const [
-              ModernMenuItem(value: 'share', icon: Icons.ios_share, label: 'Share'),
-              ModernMenuItem(value: 'save', icon: Icons.photo_library_outlined, label: 'Save to Photos'),
+              ModernMenuItem(value: 'share', icon: Symbols.ios_share, label: 'Share'),
+              ModernMenuItem(value: 'save', icon: Symbols.photo_library, label: 'Save to Photos'),
             ],
           );
           if (picked == 'share') onShare();
@@ -2070,7 +2126,8 @@ class _HeartCounterState extends State<_HeartCounter> with SingleTickerProviderS
               return Transform.scale(
                 scale: beating ? _scale.value : 1.0,
                 child: Icon(
-                  beating ? Icons.favorite : Icons.favorite_border,
+                  Symbols.favorite,
+                  fill: beating ? 1.0 : 0.0,
                   size: 16,
                   color: beating ? _heartRed : ink,
                 ),
@@ -2085,17 +2142,17 @@ class _HeartCounterState extends State<_HeartCounter> with SingleTickerProviderS
 }
 
 /// A picture for MET Norway's weather symbol ("partlycloudy_day",
-/// "lightrainshowers_night", ...), from Material's icons.
+/// "lightrainshowers_night", ...), from Google's Material Symbols pack.
 IconData weatherIcon(String symbol) {
   final s = symbol.toLowerCase(), night = s.endsWith('_night');
-  if (s.contains('thunder')) return Icons.thunderstorm_outlined;
-  if (s.contains('snow') || s.contains('sleet')) return Icons.ac_unit;
-  if (s.contains('rain')) return Icons.water_drop_outlined;
-  if (s.startsWith('fog')) return Icons.foggy;
-  if (s.startsWith('cloudy')) return Icons.cloud_outlined;
-  if (s.startsWith('partlycloudy')) return Icons.wb_cloudy_outlined;
+  if (s.contains('thunder')) return Symbols.thunderstorm;
+  if (s.contains('snow') || s.contains('sleet')) return Symbols.ac_unit;
+  if (s.contains('rain')) return Symbols.water_drop;
+  if (s.startsWith('fog')) return Symbols.foggy;
+  if (s.startsWith('cloudy')) return Symbols.cloud;
+  if (s.startsWith('partlycloudy')) return Symbols.partly_cloudy_day;
   // clear sky, fair
-  return night ? Icons.nights_stay_outlined : Icons.wb_sunny_outlined;
+  return night ? Symbols.nights_stay : Symbols.wb_sunny;
 }
 
 /// A bird's card from a remote station: the particulars its list gave,

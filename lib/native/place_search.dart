@@ -6,8 +6,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:latlong2/latlong.dart' hide Path;
+import 'package:material_symbols_icons/symbols.dart';
 
-import '../main.dart' show caps, ink, madder, paper, paperDeep, rule, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, paperDeep, sepia, serif;
+import '../ui/paper_surface.dart';
 
 /// A place found by the map's search: its name, a line saying where it is,
 /// its point, and its extent when it has one.
@@ -67,22 +69,8 @@ int _rankOf(Map<String, dynamic> p) {
   return 2;
 }
 
-/// Photon's answer as places. Its extent is two corners, in no stated
-/// order, so it is read as the smallest and largest of each. One place of
-/// each name and where: Photon gives a town's point, its boundary and its
-/// parish separately, which read the same; the first (its best) is kept.
-///
-/// Results are nature and places, not shops. Dropped: an `osm_key` of
-/// amenity, shop, office, craft, healthcare, building, highway, railway,
-/// public_transport, aeroway, emergency, man_made, power, club, or tourism
-/// (except tourism=viewpoint), and any feature with a house number. What
-/// remains is ranked, Photon's own order kept within each rank: `place`
-/// first (isles, islands, towns, villages, cities, hamlets, localities —
-/// every place value), then nature (natural, water, waterway, leisure,
-/// boundary, landuse, historic, mountain_pass, a viewpoint), then anything
-/// else not dropped.
+/// Photon's answer as places.
 List<FoundPlace> placesOf(Map<String, dynamic> j) {
-  // 0 named places, 1 nature, 2 the rest.
   final bands = [<FoundPlace>[], <FoundPlace>[], <FoundPlace>[]];
   final seen = <String>{};
   for (final f in (j['features'] as List?) ?? const []) {
@@ -115,8 +103,6 @@ List<FoundPlace> placesOf(Map<String, dynamic> j) {
 }
 
 /// Ask Photon (komoot, OpenStreetMap data) for [q], nearest [near] first.
-/// Twenty-five are asked for, so dropping shops still leaves enough; the
-/// list shows 6.
 Future<List<FoundPlace>> searchPlaces(String q, LatLng near) async {
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
   try {
@@ -136,9 +122,9 @@ Future<List<FoundPlace>> searchPlaces(String q, LatLng near) async {
   }
 }
 
-/// The map's search, floating at its top right: suggestions as you type
-/// (from three letters, after a pause), Enter takes the first, Escape or ×
-/// clears. [near] is where to look first; [onPick] moves the map.
+/// The map's search bar: hand-drawn black pencil border, right-aligned "Search"
+/// text, frosted-paper results dropdown that collapses immediately once a
+/// result is selected.
 class PlaceSearch extends StatefulWidget {
   const PlaceSearch({
     super.key,
@@ -169,7 +155,12 @@ class _PlaceSearchState extends State<PlaceSearch> {
   void initState() {
     super.initState();
     _focus.addListener(() {
-      if (!_focus.hasFocus && mounted) setState(() => _found = const []);
+      if (!_focus.hasFocus && mounted) {
+        setState(() {
+          _found = const [];
+          _note = null;
+        });
+      }
     });
   }
 
@@ -213,9 +204,16 @@ class _PlaceSearchState extends State<PlaceSearch> {
   }
 
   void _pick(FoundPlace p) {
+    // Cancel any in-flight query and collapse the search results immediately.
+    _wait?.cancel();
+    _run++;
+    hapticTap();
     _text.text = p.name;
     _focus.unfocus();
-    setState(() => _found = const []);
+    setState(() {
+      _found = const [];
+      _note = null;
+    });
     widget.onPick(p);
   }
 
@@ -236,127 +234,191 @@ class _PlaceSearchState extends State<PlaceSearch> {
     final bg = isMadder
         ? madder
         : isInk
-            ? paper.withValues(alpha: 0.72)
+            ? paper.withValues(alpha: 0.80)
             : paper.withValues(alpha: 0.94);
     final fg = isMadder ? paper : (isInk ? ink : madder);
     final radius = BorderRadius.all(Radius.circular(isMadder ? 4 : 16));
-    final bar = BoxDecoration(
-      color: bg,
-      borderRadius: radius,
-      border: isMadder ? null : Border.all(color: paperDeep.withValues(alpha: isInk ? 0.6 : 1.0)),
-      boxShadow: isInk ? null : const [BoxShadow(color: Color(0x4D3C280A), offset: Offset(0, 2), blurRadius: 8)],
-    );
-    final box = BoxDecoration(
-      color: paper.withValues(alpha: 0.96),
-      borderRadius: const BorderRadius.all(Radius.circular(14)),
-      border: Border.fromBorderSide(BorderSide(color: rule.withValues(alpha: 0.6))),
-    );
-    // TextFieldTapRegion: a click on a suggestion counts as inside the field,
-    // so the field keeps its focus (and the list stays) until the tap lands.
     return TextFieldTapRegion(
       child: SizedBox(
-      width: widget.width,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            height: 32,
-            decoration: bar,
-            child: Row(children: [
-              Padding(
-                padding: const EdgeInsetsDirectional.only(start: 9, end: 4),
-                child: Icon(Icons.search, size: 16, color: fg),
-              ),
-              Expanded(
-                child: CallbackShortcuts(
-                  bindings: {const SingleActivator(LogicalKeyboardKey.escape): _clear},
-                  child: TextField(
-                    controller: _text,
-                    focusNode: _focus,
-                    // A tap that focuses the field clears the last place, so
-                    // typing starts fresh. A tap while it already has focus
-                    // (moving the cursor) leaves the text.
-                    onTap: () {
-                      if (!_focus.hasFocus) _clear();
-                    },
-                    onChanged: _typed,
-                    onSubmitted: (_) {
-                      if (_found.isNotEmpty) _pick(_found.first);
-                    },
-                    textInputAction: TextInputAction.search,
-                    style: TextStyle(fontFamily: caps, fontSize: 14, letterSpacing: 0.6, color: fg, height: 1.2),
-                    cursorColor: fg,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      hintText: 'Search',
-                      hintStyle: TextStyle(
-                        fontFamily: caps,
-                        fontSize: 14,
-                        letterSpacing: 0.8,
-                        color: fg.withValues(alpha: 0.75),
+        width: widget.width,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CustomPaint(
+              foregroundPainter: isInk ? const _PencilBorderPainter(radius: 16, color: ink) : null,
+              child: Container(
+                height: 34,
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: radius,
+                  border: isMadder || isInk ? null : Border.all(color: paperDeep),
+                  boxShadow: isInk
+                      ? null
+                      : const [BoxShadow(color: Color(0x4D3C280A), offset: Offset(0, 2), blurRadius: 8)],
+                ),
+                child: Row(children: [
+                  if (_text.text.isNotEmpty)
+                    Semantics(
+                      button: true,
+                      label: 'Clear the search',
+                      child: InkResponse(
+                        radius: 16,
+                        onTap: _clear,
+                        child: Padding(
+                          padding: const EdgeInsetsDirectional.only(start: 8, end: 2),
+                          child: Icon(Symbols.close, size: 17, color: fg),
+                        ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 7),
-                    ),
-                  ),
-                ),
-              ),
-              if (_text.text.isNotEmpty)
-                Semantics(
-                  button: true,
-                  label: 'Clear the search',
-                  child: InkResponse(
-                    radius: 16,
-                    onTap: _clear,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Icon(Icons.close, size: 17, color: fg),
-                    ),
-                  ),
-                ),
-            ]),
-          ),
-          if (_found.isNotEmpty || (_note != null && _focus.hasFocus))
-            Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: box.copyWith(boxShadow: const [BoxShadow(color: Color(0x2E3C280A), offset: Offset(0, 6), blurRadius: 18)]),
-              margin: const EdgeInsets.only(top: 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_found.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
-                      child: Text(_note!,
-                          style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14, color: sepia)),
-                    ),
-                  for (final p in _found.take(6))
-                    InkWell(
-                      onTap: () => _pick(p),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 5, 10, 6),
-                        child: Text.rich(
-                          TextSpan(children: [
-                            TextSpan(text: p.name, style: const TextStyle(color: ink)),
-                            if (p.where.isNotEmpty)
-                              TextSpan(
-                                  text: '  ${p.where}',
-                                  style: const TextStyle(color: sepia, fontStyle: FontStyle.italic, fontSize: 13)),
-                          ]),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontFamily: serif, fontSize: 15, height: 1.3),
+                    )
+                  else
+                    const SizedBox(width: 10),
+                  Expanded(
+                    child: CallbackShortcuts(
+                      bindings: {const SingleActivator(LogicalKeyboardKey.escape): _clear},
+                      child: TextField(
+                        controller: _text,
+                        focusNode: _focus,
+                        textAlign: TextAlign.right,
+                        onTap: () {
+                          if (!_focus.hasFocus) _clear();
+                        },
+                        onChanged: _typed,
+                        onSubmitted: (_) {
+                          if (_found.isNotEmpty) _pick(_found.first);
+                        },
+                        textInputAction: TextInputAction.search,
+                        style: TextStyle(fontFamily: caps, fontSize: 14, letterSpacing: 0.6, color: fg, height: 1.2),
+                        cursorColor: fg,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          hintText: 'Search',
+                          hintStyle: TextStyle(
+                            fontFamily: caps,
+                            fontSize: 14,
+                            letterSpacing: 0.8,
+                            color: fg.withValues(alpha: 0.72),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 8),
                         ),
                       ),
                     ),
-                ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 6, end: 10),
+                    child: Icon(Symbols.search, size: 17, color: fg),
+                  ),
+                ]),
               ),
             ),
-        ],
-      ),
+            if (_found.isNotEmpty || (_note != null && _focus.hasFocus))
+              PaperSurface(
+                margin: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.all(4),
+                borderRadius: 14,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_found.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
+                        child: Text(_note!,
+                            style: const TextStyle(
+                                fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14, color: sepia)),
+                      ),
+                    for (final p in _found.take(6))
+                      Material(
+                        type: MaterialType.transparency,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          hoverColor: ink.withValues(alpha: 0.08),
+                          highlightColor: ink.withValues(alpha: 0.12),
+                          onTap: () => _pick(p),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
+                            child: Text.rich(
+                              TextSpan(children: [
+                                TextSpan(text: p.name, style: const TextStyle(color: ink)),
+                                if (p.where.isNotEmpty)
+                                  TextSpan(
+                                      text: '  ${p.where}',
+                                      style: const TextStyle(color: sepia, fontStyle: FontStyle.italic, fontSize: 13)),
+                              ]),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontFamily: serif, fontSize: 15, height: 1.3),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Subtle hand-drawn black pencil border around the search bar, echoing the
+/// organic graphite character of [SongScribblePainter].
+class _PencilBorderPainter extends CustomPainter {
+  const _PencilBorderPainter({required this.radius, required this.color});
+
+  final double radius;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0.8, 0.8, size.width - 1.6, size.height - 1.6);
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
+    final base = Path()..addRRect(rrect);
+    final metrics = base.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+
+    void strokePass(double seed, double strokeW, double alpha, double amp) {
+      final path = Path();
+      final m = metrics.first;
+      final total = m.length;
+      const step = 4.0;
+      var first = true;
+      for (var d = 0.0; d <= total + step; d += step) {
+        final t = m.getTangentForOffset(math.min(d, total));
+        if (t == null) continue;
+        // Normal perpendicular to the border
+        final nx = -t.vector.dy;
+        final ny = t.vector.dx;
+        final w = (math.sin(d * 0.23 + seed) * 0.6 + math.sin(d * 0.61 + seed * 1.7) * 0.4) * amp;
+        final px = t.position.dx + nx * w;
+        final py = t.position.dy + ny * w;
+        if (first) {
+          path.moveTo(px, py);
+          first = false;
+        } else {
+          path.lineTo(px, py);
+        }
+      }
+      path.close();
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = color.withValues(alpha: alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeW
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    strokePass(0.0, 1.15, 0.85, 0.45);
+    strokePass(19.4, 0.65, 0.32, 0.65);
+  }
+
+  @override
+  bool shouldRepaint(_PencilBorderPainter old) => old.radius != radius || old.color != color;
 }

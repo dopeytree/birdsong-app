@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart' show ink, madder, paper, paperDeep, rule, sepia, serif;
@@ -383,7 +384,7 @@ class _BirdCardState extends State<BirdCard> {
           right: narrow ? 6 : 8,
           child: IconButton(
             tooltip: 'Close',
-            icon: const Icon(Icons.close),
+            icon: const Icon(Symbols.close),
             color: ink,
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -470,7 +471,7 @@ class _BirdCardState extends State<BirdCard> {
               right: 8,
               child: IconButton(
                 tooltip: 'Close',
-                icon: const Icon(Icons.close),
+                icon: const Icon(Symbols.close),
                 color: ink,
                 onPressed: () => Navigator.of(c).pop(),
               ),

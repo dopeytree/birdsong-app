@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, rootBundle;
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:plate_share/plate_share.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,19 +16,20 @@ import '../server/page_control.dart';
 import '../settings.dart';
 import '../store/detection_store.dart';
 import 'format.dart';
+import 'paper_surface.dart';
 import 'splash.dart' show Cardinal, SupportQuote;
 import 'station_editor.dart';
 import 'station_history.dart';
 
 enum _SettingsTab {
-  display('Display', Icons.palette_outlined),
-  map('Map', Icons.map_outlined),
-  stations('Stations', Icons.sensors),
-  listening('Listening', Icons.mic_none_outlined),
-  models('Models', Icons.psychology_outlined),
-  location('Location', Icons.location_on_outlined),
-  data('Data', Icons.storage_outlined),
-  about('About', Icons.info_outline);
+  display('Display', Symbols.palette),
+  map('Map', Symbols.map),
+  stations('Stations', Symbols.sensors),
+  listening('Listening', Symbols.mic),
+  models('Models', Symbols.psychology),
+  location('Location', Symbols.location_on),
+  data('Data', Symbols.storage),
+  about('About', Symbols.info);
 
   const _SettingsTab(this.label, this.icon);
   final String label;
@@ -145,8 +147,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           IconButton(
             tooltip: 'Close',
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Symbols.close),
+            onPressed: () {
+              hapticTap();
+              Navigator.of(context).pop();
+            },
           ),
         ],
       ),
@@ -208,7 +213,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             borderRadius: BorderRadius.circular(14),
             hoverColor: ink.withValues(alpha: 0.08),
             highlightColor: ink.withValues(alpha: 0.12),
-            onTap: onTap,
+            onTap: () {
+              hapticTap();
+              onTap();
+            },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
               child: Column(
@@ -241,7 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final tiles = <Widget>[
       tile(
-        icon: Icons.home_outlined,
+        icon: Symbols.home,
         label: 'Home',
         onTap: () {
           Navigator.of(context).pop();
@@ -257,7 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       if (widget.onOpenMap != null)
         tile(
-          icon: Icons.map_outlined,
+          icon: Symbols.map,
           label: 'Map',
           onTap: () {
             Navigator.of(context).pop();
@@ -266,7 +274,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       if (widget.onOpenCalendar != null)
         tile(
-          icon: Icons.calendar_today_outlined,
+          icon: Symbols.calendar_today,
           label: 'Calendar',
           onTap: () {
             Navigator.of(context).pop();
@@ -275,7 +283,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       if (best != null)
         tile(
-          icon: Icons.emoji_events_outlined,
+          icon: Symbols.emoji_events,
           label: 'Best walk',
           detail: '${best.species} sp.',
           onTap: () {
@@ -330,7 +338,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       borderRadius: BorderRadius.circular(10),
       hoverColor: ink.withValues(alpha: 0.08),
       highlightColor: ink.withValues(alpha: 0.12),
-      onTap: () => setState(() => _tab = tab),
+      onTap: () {
+        hapticTap();
+        setState(() => _tab = tab);
+      },
       child: Container(
         width: 46,
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
@@ -444,7 +455,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           for (final st in s.stations)
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.sensors,
+              leading: Icon(Symbols.sensors,
                   color: st.id == shown ? theme.colorScheme.primary : theme.disabledColor),
               title: Text(st.name),
               subtitle: Text(st.isBirdWeather ? st.kind : st.birdnetUrl,
@@ -460,12 +471,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   IconButton(
                     tooltip: 'Edit',
-                    icon: const Icon(Icons.edit_outlined),
+                    icon: const Icon(Symbols.edit),
                     onPressed: () => editStation(context, s, station: st),
                   ),
                   IconButton(
                     tooltip: 'Remove',
-                    icon: const Icon(Icons.delete_outline),
+                    icon: const Icon(Symbols.delete),
                     onPressed: () => _confirmRemove(context, st),
                   ),
                 ],
@@ -482,12 +493,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               FilledButton.tonalIcon(
                 onPressed: () => editStation(context, s),
-                icon: const Icon(Icons.add),
+                icon: const Icon(Symbols.add),
                 label: const Text('Add a station'),
               ),
               TextButton.icon(
                 onPressed: openBirdWeatherMap,
-                icon: const Icon(Icons.map_outlined, size: 18),
+                icon: const Icon(Symbols.map, size: 18),
                 label: const Text('Find one on BirdWeather'),
               ),
             ],
@@ -760,13 +771,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             else if (installed)
               IconButton(
                 tooltip: 'Delete',
-                icon: const Icon(Icons.delete_outline),
+                icon: const Icon(Symbols.delete),
                 onPressed: locked ? null : () => m.remove(spec),
               )
             else
               IconButton(
                 tooltip: 'Download',
-                icon: const Icon(Icons.download),
+                icon: const Icon(Symbols.download),
                 onPressed: () => m.install(spec),
               ),
           ],
@@ -815,7 +826,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? LinearProgressIndicator(value: m.progress[geomodel.id])
               : TextButton.icon(
                   onPressed: () => m.install(geomodel),
-                  icon: const Icon(Icons.download_outlined),
+                  icon: const Icon(Symbols.download),
                   label: Text('Geomodel, ${megabytes(geomodel.totalBytes)}'),
                 ),
         const Divider(height: 20, color: rule),
@@ -907,7 +918,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   OutlinedButton.icon(
                     onPressed: _converting || app.engine.running || count == 0 ? null : _batchConvert,
-                    icon: const Icon(Icons.compress_outlined),
+                    icon: const Icon(Symbols.compress),
                     label: Text(count > 0
                         ? 'Convert $count WAV recordings to AAC'
                         : 'All recordings compressed'),
@@ -927,7 +938,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (v) icloud.syncNow(manual: true);
           }),
           Text(
-            'Syncs sessions, recordings, chosen bird plates, settings, remote stations and logs '
+            'Syncs sessions, recordings, chosen bird plates, saved map pins, settings, remote stations and logs '
             'via iCloud Drive across your iPhone, iPad and Mac.',
             style: theme.textTheme.bodySmall,
           ),
@@ -940,7 +951,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: icloud.syncing
                       ? const SizedBox.square(
                           dimension: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.cloud_sync_outlined, size: 18),
+                      : const Icon(Symbols.cloud_sync, size: 18),
                   label: Text(icloud.syncing ? 'Syncing…' : 'Sync now'),
                 ),
               ],
@@ -997,7 +1008,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       .showSnackBar(const SnackBar(content: Text('Sync log copied.')));
                                 }
                               },
-                              icon: const Icon(Icons.copy, size: 16),
+                              icon: const Icon(Symbols.content_copy, size: 16),
                               label: const Text('Copy log'),
                             ),
                           ),
@@ -1012,7 +1023,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const Divider(height: 24, color: rule),
         OutlinedButton.icon(
           onPressed: app.engine.running ? null : () => _confirmClear(context),
-          icon: const Icon(Icons.delete_sweep_outlined),
+          icon: const Icon(Symbols.delete_sweep),
           label: const Text('Forget everything heard'),
         ),
       ],
@@ -1044,6 +1055,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'off': 'Off',
               },
               (v) => s.update((x) => x.songScribbleMode = v)),
+          _switch('Show latest detection', s.nativeShowLatestDetection,
+              (v) => s.update((x) => x.nativeShowLatestDetection = v)),
+          if (s.nativeShowLatestDetection)
+            _switch('Latest detection ticket', s.nativeBottomTicket,
+                (v) => s.update((x) => x.nativeBottomTicket = v)),
           _switch('Name tickets on all birds', s.nativeAllNameTickets,
               (v) => s.update((x) => x.nativeAllNameTickets = v)),
           _switch('Show bird info on hover', s.nativeHoverInfo, (v) => s.update((x) => x.nativeHoverInfo = v)),

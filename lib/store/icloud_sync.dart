@@ -8,6 +8,7 @@ import 'package:plate_share/plate_share.dart';
 import '../native/plate_library.dart';
 import '../settings.dart';
 import 'detection_store.dart';
+import 'map_pins.dart';
 
 /// The Apple iCloud ubiquity container shared across iPhone, iPad and Mac.
 const icloudContainerId = 'iCloud.uk.co.edstone.birdsongApp';
@@ -28,18 +29,21 @@ class ICloudSync extends ChangeNotifier {
     this.dataDir,
     this.settings,
     this.store, {
+    this.pins,
     Future<String?> Function()? cloudPathProvider,
     bool? supportedOverride,
   })  : _cloudPathProvider = cloudPathProvider,
         _supportedOverride = supportedOverride {
     store.addListener(_scheduleSync);
     settings.addListener(_onSettingsChanged);
+    pins?.addListener(_onPinsChanged);
     PlateLibrary.choicesChanged.addListener(_scheduleSync);
   }
 
   final Directory dataDir;
   final Settings settings;
   final DetectionStore store;
+  final MapPinStore? pins;
   final Future<String?> Function()? _cloudPathProvider;
   final bool? _supportedOverride;
 
@@ -62,6 +66,11 @@ class ICloudSync extends ChangeNotifier {
 
   void _onSettingsChanged() {
     if (settings.applyingRemoteSync) return;
+    _scheduleSync();
+  }
+
+  void _onPinsChanged() {
+    if (pins?.applyingRemoteSync ?? false) return;
     _scheduleSync();
   }
 
@@ -141,6 +150,13 @@ class ICloudSync extends ChangeNotifier {
       final stationRes = await _syncStations(Directory('$path/stations'));
       pushed += stationRes.pushed;
       pulled += stationRes.pulled;
+
+      // 5. User-dropped map pins
+      if (pins != null) {
+        final pinsRes = await _syncPins(File('$path/preferences/map_pins.json'));
+        pushed += pinsRes.pushed;
+        pulled += pinsRes.pulled;
+      }
 
       if (sessionsPulled > 0) {
         await store.reload();
@@ -342,6 +358,30 @@ class ICloudSync extends ChangeNotifier {
     return (pushed: pushed, pulled: pulled);
   }
 
+  /// Bidirectionally merges dropped map pins & tombstones.
+  Future<({int pushed, int pulled})> _syncPins(File cloudFile) async {
+    final p = pins;
+    if (p == null) return (pushed: 0, pulled: 0);
+    await cloudFile.parent.create(recursive: true);
+    await p.saved;
+    final remote = await _readDynamicMap(cloudFile);
+    var pushed = 0;
+    var pulled = 0;
+    if (remote.isNotEmpty) {
+      if (p.mergeFromSyncJson(remote)) {
+        await p.saved;
+        pulled = 1;
+      }
+    }
+    final localSync = p.toSyncJson();
+    if ((p.pins.isNotEmpty || p.deletedIds.isNotEmpty) &&
+        (remote.isEmpty || jsonEncode(remote) != jsonEncode(localSync))) {
+      await _writeJsonAtomic(cloudFile, localSync);
+      pushed = 1;
+    }
+    return (pushed: pushed, pulled: pulled);
+  }
+
   Future<void> _appendLog(String message, {File? cloudLogFile}) async {
     try {
       await logFile.parent.create(recursive: true);
@@ -437,6 +477,7 @@ class ICloudSync extends ChangeNotifier {
     _debounce?.cancel();
     store.removeListener(_scheduleSync);
     settings.removeListener(_onSettingsChanged);
+    pins?.removeListener(_onPinsChanged);
     PlateLibrary.choicesChanged.removeListener(_scheduleSync);
     super.dispose();
   }

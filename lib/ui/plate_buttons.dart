@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
-import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, sepia, serif;
+import 'paper_surface.dart';
 
 // The plate's own controls, shared by the web plate (plate_view.dart) and
 // the Flutter plate (native/native_plate.dart) so both carry the same ones.
@@ -50,19 +52,12 @@ Future<T?> showModernMenu<T>({
     pageBuilder: (dialogContext, _, __) {
       final menu = Material(
         type: MaterialType.transparency,
-        child: Container(
+        child: PaperSurface(
+          borderRadius: 16,
+          padding: const EdgeInsets.all(6),
           constraints: BoxConstraints(
             minWidth: minWidth,
             maxWidth: math.min(280.0, screen.width - 16),
-          ),
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: paper.withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: rule.withValues(alpha: 0.55)),
-            boxShadow: const [
-              BoxShadow(color: Color(0x262A241C), offset: Offset(0, 4), blurRadius: 16),
-            ],
           ),
           child: IntrinsicWidth(
             child: Column(
@@ -76,7 +71,10 @@ Future<T?> showModernMenu<T>({
                       borderRadius: BorderRadius.circular(12),
                       hoverColor: ink.withValues(alpha: 0.08),
                       highlightColor: ink.withValues(alpha: 0.12),
-                      onTap: () => Navigator.of(dialogContext).pop(item.value),
+                      onTap: () {
+                        hapticTap();
+                        Navigator.of(dialogContext).pop(item.value);
+                      },
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                         child: Row(
@@ -118,7 +116,7 @@ Future<T?> showModernMenu<T>({
                             ),
                             if (item.selected) ...[
                               const SizedBox(width: 8),
-                              const Icon(Icons.check, size: 16, color: madder),
+                              const Icon(Symbols.check, size: 16, color: madder),
                             ],
                           ],
                         ),
@@ -189,40 +187,32 @@ class PlateNote extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 600),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-          child: Material(
-            color: paper.withValues(alpha: 0.95),
-            elevation: 4,
-            shadowColor: const Color(0x382A241C),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: BorderSide(color: rule.withValues(alpha: 0.65)),
-            ),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(14, 6, action == null ? 14 : 6, 6),
-              child: action == null
-                  ? message
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(child: message),
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: madder,
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            minimumSize: const Size(0, 32),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            textStyle: const TextStyle(
-                              fontFamily: caps,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w400,
-                            ),
+          child: PaperSurface(
+            borderRadius: 14,
+            padding: EdgeInsets.fromLTRB(14, 6, action == null ? 14 : 6, 6),
+            child: action == null
+                ? message
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(child: message),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: madder,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          minimumSize: const Size(0, 32),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          textStyle: const TextStyle(
+                            fontFamily: caps,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w400,
                           ),
-                          onPressed: onAction,
-                          child: Text(action!),
                         ),
-                      ],
-                    ),
-            ),
+                        onPressed: onAction,
+                        child: Text(action!),
+                      ),
+                    ],
+                  ),
           ),
         ),
       ),
@@ -271,7 +261,10 @@ class SourcePill extends StatelessWidget {
               borderRadius: r,
               clipBehavior: Clip.antiAlias,
               child: InkWell(
-                onTap: tap,
+                onTap: () {
+                  hapticTap();
+                  tap();
+                },
                 hoverColor: ink.withValues(alpha: 0.08),
                 highlightColor: ink.withValues(alpha: 0.12),
                 child: SizedBox(
@@ -292,9 +285,9 @@ class SourcePill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          part(listen, Icons.mic_none_outlined, 'Listen here & now', onListen,
+          part(listen, Symbols.mic, 'Listen here & now', onListen,
               const BorderRadius.horizontal(left: Radius.circular(height / 2))),
-          part(!listen, Icons.sensors,
+          part(!listen, Symbols.sensors,
               stationName == null ? 'Add a remote station' : 'Remote station: $stationName',
               onRemote, const BorderRadius.horizontal(right: Radius.circular(height / 2))),
         ],
@@ -303,8 +296,8 @@ class SourcePill extends StatelessWidget {
   }
 }
 
-/// Record a new session, or stop the one recording: a black dot when idle,
-/// a softly glowing red recording dot while active, a spinner while starting.
+/// Record a new session, or stop the one recording: a solid filled red dot
+/// when idle; while recording, smoothly shrinks and fades then grows back.
 class RecordButton extends StatefulWidget {
   const RecordButton({super.key, required this.recording, required this.busy, required this.onTap});
 
@@ -317,35 +310,35 @@ class RecordButton extends StatefulWidget {
 }
 
 class _RecordButtonState extends State<RecordButton> with SingleTickerProviderStateMixin {
-  late final AnimationController _glow =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
+  late final AnimationController _pulse =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
 
   static const _recRed = Color(0xFFC82820);
 
   @override
   void initState() {
     super.initState();
-    if (widget.recording) _glow.repeat(reverse: true);
+    if (widget.recording) _pulse.repeat(reverse: true);
   }
 
   @override
   void didUpdateWidget(RecordButton old) {
     super.didUpdateWidget(old);
-    if (widget.recording && !_glow.isAnimating) _glow.repeat(reverse: true);
-    if (!widget.recording && _glow.isAnimating) _glow.reset();
+    if (widget.recording && !_pulse.isAnimating) _pulse.repeat(reverse: true);
+    if (!widget.recording && _pulse.isAnimating) _pulse.reset();
   }
 
   @override
   void dispose() {
-    _glow.dispose();
+    _pulse.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 38,
-      height: 38,
+      width: 44,
+      height: SourcePill.rowHeight,
       child: Center(
         child: widget.busy
             ? const SizedBox(
@@ -354,33 +347,37 @@ class _RecordButtonState extends State<RecordButton> with SingleTickerProviderSt
                 child: CircularProgressIndicator(strokeWidth: 2, color: ink),
               )
             : IconButton(
-                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+                constraints: const BoxConstraints.tightFor(width: 40, height: 40),
                 padding: EdgeInsets.zero,
                 tooltip: widget.recording ? 'Stop recording' : 'Record a new session',
                 onPressed: widget.onTap,
                 icon: widget.recording
                     ? AnimatedBuilder(
-                        animation: _glow,
+                        animation: _pulse,
                         builder: (context, _) {
-                          final g = 0.35 + 0.55 * Curves.easeInOut.transform(_glow.value);
-                          return Container(
-                            width: 14,
-                            height: 14,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _recRed,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: _recRed.withValues(alpha: g),
-                                  blurRadius: 10,
-                                  spreadRadius: 2.5,
-                                ),
-                              ],
+                          final t = Curves.easeInOut.transform(_pulse.value);
+                          final scale = 1.0 - 0.44 * t;
+                          final opacity = 1.0 - 0.68 * t;
+                          return Transform.scale(
+                            scale: scale,
+                            child: Opacity(
+                              opacity: opacity,
+                              child: const Icon(
+                                Symbols.fiber_manual_record,
+                                fill: 1.0,
+                                size: 17,
+                                color: _recRed,
+                              ),
                             ),
                           );
                         },
                       )
-                    : const Icon(Icons.fiber_manual_record, size: 17, color: ink),
+                    : const Icon(
+                        Symbols.fiber_manual_record,
+                        fill: 1.0,
+                        size: 17,
+                        color: _recRed,
+                      ),
               ),
       ),
     );

@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../main.dart' show caps, ink, madder, rule, sepia, serif;
+import '../ui/paper_surface.dart' show hapticTap;
 
 /// One line of the index.
 class IndexEntry {
@@ -73,6 +75,8 @@ class IndexView extends StatelessWidget {
     required this.onStep,
     required this.onOpen,
     this.sortBar,
+    this.filterOpen = false,
+    this.onToggleFilter,
   });
 
   final List<IndexEntry> entries;
@@ -110,8 +114,13 @@ class IndexView extends StatelessWidget {
   final ValueChanged<int> onStep;
   final ValueChanged<IndexEntry> onOpen;
 
-  /// Optional sort bar displayed above the expanded index columns.
+  /// Optional sort panel displayed below the expanded heading when open.
   final Widget? sortBar;
+
+  /// When expanded ([folded] == false), places the filter trigger icon inline
+  /// beside the "Index of Species" heading.
+  final bool filterOpen;
+  final VoidCallback? onToggleFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -199,13 +208,18 @@ class IndexView extends StatelessWidget {
               tooltip: label,
               color: ink,
               icon: Icon(icon),
-              onPressed: on ? () => onStep(by) : null,
+              onPressed: on
+                  ? () {
+                      hapticTap();
+                      onStep(by);
+                    }
+                  : null,
             ),
           );
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (steps) step(-1, Icons.chevron_left, 'Earlier session', canPrev),
+          if (steps) step(-1, Symbols.chevron_left, 'Earlier session', canPrev),
           Flexible(
             child: _IndexHeading(
               title: species > 0 ? 'Index of Species | ${thousands(species)}' : 'Index of Species',
@@ -215,19 +229,24 @@ class IndexView extends StatelessWidget {
               compact: compact,
               folded: folded,
               foldable: foldable,
-              onFold: onFold,
+              onFold: () {
+                hapticTap();
+                onFold();
+              },
+              filterOpen: filterOpen,
+              onToggleFilter: (!inlineMode && !folded) ? onToggleFilter : null,
             ),
           ),
-          if (steps) step(1, Icons.chevron_right, 'Later session', canNext),
+          if (steps) step(1, Symbols.chevron_right, 'Later session', canNext),
         ],
       );
     });
   }
 }
 
-/// Interactive "Index of Species" heading with hover pill highlight, rule
-/// emphasis, and animated expand/collapse chevron so its open/close action
-/// is immediately unmistakable.
+/// Interactive "Index of Species" heading with hover pill highlight and rule
+/// emphasis. When expanded in full, displays the Material Symbols filter
+/// button inline beside the heading.
 class _IndexHeading extends StatefulWidget {
   const _IndexHeading({
     required this.title,
@@ -238,6 +257,8 @@ class _IndexHeading extends StatefulWidget {
     required this.folded,
     required this.foldable,
     required this.onFold,
+    this.filterOpen = false,
+    this.onToggleFilter,
   });
 
   final String title;
@@ -248,6 +269,8 @@ class _IndexHeading extends StatefulWidget {
   final bool folded;
   final bool foldable;
   final VoidCallback onFold;
+  final bool filterOpen;
+  final VoidCallback? onToggleFilter;
 
   @override
   State<_IndexHeading> createState() => _IndexHeadingState();
@@ -269,7 +292,7 @@ class _IndexHeadingState extends State<_IndexHeading> {
           height: 1,
           color: ruleColor,
         );
-    return Semantics(
+    final headingButton = Semantics(
       button: widget.foldable,
       expanded: widget.foldable ? !widget.folded : null,
       child: MouseRegion(
@@ -318,24 +341,6 @@ class _IndexHeadingState extends State<_IndexHeading> {
                         color: ink,
                       ),
                     ),
-                    if (widget.foldable) ...[
-                      const SizedBox(width: 3),
-                      AnimatedScale(
-                        scale: active ? 1.15 : 1.0,
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutCubic,
-                        child: AnimatedRotation(
-                          turns: widget.folded ? 0.0 : 0.5,
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOutCubic,
-                          child: Icon(
-                            Icons.expand_more,
-                            size: widget.size >= 18 ? 19 : 16,
-                            color: active ? ink : ink.withValues(alpha: 0.72),
-                          ),
-                        ),
-                      ),
-                    ],
                     SizedBox(width: widget.gap),
                     line(),
                   ],
@@ -345,6 +350,25 @@ class _IndexHeadingState extends State<_IndexHeading> {
           ),
         ),
       ),
+    );
+    if (widget.onToggleFilter == null) return headingButton;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: headingButton),
+        const SizedBox(width: 2),
+        IconButton(
+          constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+          padding: EdgeInsets.zero,
+          iconSize: 19,
+          tooltip: widget.filterOpen ? 'Hide filters' : 'Filter & sort',
+          icon: Icon(widget.filterOpen ? Symbols.close : Symbols.filter_alt, color: ink),
+          onPressed: () {
+            hapticTap();
+            widget.onToggleFilter!();
+          },
+        ),
+      ],
     );
   }
 }

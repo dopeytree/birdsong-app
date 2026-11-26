@@ -23,11 +23,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-MIC = ("Birdsong listens for birds and identifies them on this device. "
+MIC = ("birdsongs.ai listens for birds and identifies them on this device. "
        "Audio never leaves it.")
-LOC = ("Birdsong marks each listening session with where it happened, draws the "
+LOC = ("birdsongs.ai marks each listening session with where it happened, draws the "
        "way you walked on its map, and leaves out birds that don't live there.")
-LAN = "Birdsong reads detections from your BirdNET-Go station on your home network."
+LAN = "birdsongs.ai reads detections from your BirdNET-Go station on your home network."
 
 # Built with the iOS 27 SDK; runs on iOS 27 and the two releases before it
 # (iOS 26 and iOS 18: Apple went from 18 straight to 26).
@@ -65,7 +65,7 @@ def patch_text(path, pattern, repl, flags=0):
         say(f"updated {path.relative_to(ROOT)} ({n} change{'s' if n != 1 else ''})")
 
 
-PHOTOS = "Birdsong saves pictures of your plates to Photos when you ask it to."
+PHOTOS = "birdsongs.ai saves pictures of your plates to Photos when you ask it to."
 
 
 BUNDLE = "uk.co.edstone.birdsongApp"
@@ -74,7 +74,7 @@ UBIQUITOUS = {
     ICLOUD_CONTAINER: {
         "NSUbiquitousContainerIsDocumentScopePublic": True,
         "NSUbiquitousContainerSupportedFolderLevels": "Any",
-        "NSUbiquitousContainerName": "Birdsong",
+        "NSUbiquitousContainerName": "birdsongs.ai",
     }
 }
 ICLOUD_ENTITLEMENTS = {
@@ -88,7 +88,7 @@ def ios():
     # BIRDSONG_COPY=<MMDDHHMM> (Run on iPhone as a copy.command): a separate
     # app with its own ID, name and data; unset puts the usual app back.
     copy = os.environ.get("BIRDSONG_COPY", "").strip()
-    name = f"Birdsong {copy[4:6]}:{copy[6:8]}" if len(copy) == 8 else "Birdsong"
+    name = f"birdsongs.ai {copy[4:6]}:{copy[6:8]}" if len(copy) == 8 else "birdsongs.ai"
     patch_text(ROOT / "ios/Runner.xcodeproj/project.pbxproj",
                r"PRODUCT_BUNDLE_IDENTIFIER = " + re.escape(BUNDLE) + r"(\.copy\d+)?;",
                f"PRODUCT_BUNDLE_IDENTIFIER = {BUNDLE}{'.copy' + copy if copy else ''};")
@@ -150,6 +150,7 @@ def android_launch():
 
 def macos():
     patch_plist(ROOT / "macos/Runner/Info.plist", {
+        "CFBundleDisplayName": "birdsongs.ai",
         "NSMicrophoneUsageDescription": MIC,
         "NSLocationUsageDescription": LOC,
         "NSLocationWhenInUseUsageDescription": LOC,

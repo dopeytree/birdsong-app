@@ -11,17 +11,19 @@ import 'server/page_control.dart';
 import 'settings.dart';
 import 'store/detection_store.dart';
 import 'store/icloud_sync.dart';
+import 'store/map_pins.dart';
 
 /// Everything the screens share, made once at start-up.
 class AppState {
   AppState._(
-      this.dataDir, this.settings, this.models, this.updates, this.store, this.icloud, this.engine, this.server);
+      this.dataDir, this.settings, this.models, this.updates, this.store, this.pins, this.icloud, this.engine, this.server);
 
   final Directory dataDir;
   final Settings settings;
   final ModelManager models;
   final ModelUpdates updates;
   final DetectionStore store;
+  final MapPinStore pins;
   final ICloudSync icloud;
   final ListenEngine engine;
   final LocalServer server;
@@ -43,11 +45,12 @@ class AppState {
     // Session folders under <app data>/sessions; older data in detections/
     // is moved across on first launch.
     final store = await DetectionStore.open(dir);
-    final icloud = ICloudSync(dir, settings, store);
+    final pins = await MapPinStore.open(dir);
+    final icloud = ICloudSync(dir, settings, store, pins: pins);
     if (settings.icloudSync) unawaited(icloud.syncNow(manual: false));
     final engine = ListenEngine(settings, models, store);
     final server = LocalServer(settings, store, plateModel: () => settings.plateModel);
     await server.start();
-    return AppState._(dir, settings, models, updates, store, icloud, engine, server);
+    return AppState._(dir, settings, models, updates, store, pins, icloud, engine, server);
   }
 }

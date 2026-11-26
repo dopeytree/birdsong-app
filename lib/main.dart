@@ -92,7 +92,7 @@ ThemeData birdsongTheme() {
     hoverColor: hoverFill,
     highlightColor: pressFill,
     splashColor: ink.withValues(alpha: 0.10),
-    iconTheme: const IconThemeData(color: ink),
+    iconTheme: const IconThemeData(color: ink, weight: 300, opticalSize: 24, grade: 0, fill: 0),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
         foregroundColor: ink,
@@ -226,7 +226,7 @@ ThemeData birdsongTheme() {
     appBarTheme: const AppBarTheme(
       backgroundColor: paper,
       foregroundColor: ink,
-      iconTheme: IconThemeData(color: ink),
+      iconTheme: IconThemeData(color: ink, weight: 300, opticalSize: 24, grade: 0, fill: 0),
       surfaceTintColor: Colors.transparent,
       scrolledUnderElevation: 0,
     ),

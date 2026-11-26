@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../main.dart' show paperDeep;
 import '../native/station_archive.dart';
@@ -139,7 +140,7 @@ class _StationHistoryState extends State<StationHistory> {
                       .showSnackBar(const SnackBar(content: Text('The log is copied.')));
                 }
               },
-              icon: const Icon(Icons.copy, size: 16),
+              icon: const Icon(Symbols.content_copy, size: 16),
               label: const Text('Copy the log'),
             ),
           ),

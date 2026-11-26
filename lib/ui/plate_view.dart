@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:plate_share/plate_share.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -406,7 +407,7 @@ class _PlateViewState extends State<PlateView> {
             value: st.id,
             child: ListTile(
               dense: true,
-              leading: Icon(st.id == current ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              leading: Icon(st.id == current ? Symbols.radio_button_checked : Symbols.radio_button_unchecked,
                   color: Theme.of(context).colorScheme.primary),
               title: Text(st.name),
               subtitle: Text(st.kind),
@@ -414,7 +415,7 @@ class _PlateViewState extends State<PlateView> {
           ),
         const PopupMenuItem(
           value: '+',
-          child: ListTile(dense: true, leading: Icon(Icons.add), title: Text('Add a station')),
+          child: ListTile(dense: true, leading: Icon(Symbols.add), title: Text('Add a station')),
         ),
       ],
     );
@@ -499,7 +500,7 @@ class _PlateViewState extends State<PlateView> {
                           tooltip: 'Stations',
                           constraints: const BoxConstraints.tightFor(
                               width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                          icon: Icon(Icons.cell_tower, size: 20, color: Theme.of(context).colorScheme.primary),
+                          icon: Icon(Symbols.cell_tower, size: 20, color: Theme.of(context).colorScheme.primary),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: () => _stationsTap(bc),
                         ),
@@ -527,7 +528,7 @@ class _PlateViewState extends State<PlateView> {
                             app: widget.app, color: Theme.of(context).colorScheme.primary),
                         IconButton(
                           tooltip: 'Plate: ${plateModes[_s.plateMode - 1].name}',
-                          icon: const Icon(Icons.dashboard_outlined),
+                          icon: const Icon(Symbols.dashboard),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: _nextMode,
                         ),
@@ -548,7 +549,7 @@ class _PlateViewState extends State<PlateView> {
                   padding: EdgeInsets.zero,
                   iconSize: 22,
                   tooltip: _mapOn ? 'Back to the plate' : 'The walk on a map',
-                  icon: Icon(_mapOn ? Icons.auto_awesome_mosaic_outlined : Icons.map_outlined),
+                  icon: Icon(_mapOn ? Symbols.auto_awesome_mosaic : Symbols.map),
                   color: Theme.of(context).colorScheme.primary,
                   onPressed: _toggleMap,
                 ),
@@ -563,7 +564,7 @@ class _PlateViewState extends State<PlateView> {
                   padding: const EdgeInsets.all(9),
                   iconSize: 22,
                   tooltip: 'Share or save the plate',
-                  icon: Icon(Icons.ios_share,
+                  icon: Icon(Symbols.ios_share,
                       color: Theme.of(context).colorScheme.primary),
                   color: paper,
                   onSelected: (v) => v == 'save' ? _save() : _share(),
@@ -571,12 +572,12 @@ class _PlateViewState extends State<PlateView> {
                     PopupMenuItem(
                       value: 'share',
                       child: ListTile(
-                          leading: Icon(Icons.ios_share), title: Text('Share…')),
+                          leading: Icon(Symbols.ios_share), title: Text('Share…')),
                     ),
                     PopupMenuItem(
                       value: 'save',
                       child: ListTile(
-                          leading: Icon(Icons.photo_library_outlined),
+                          leading: Icon(Symbols.photo_library),
                           title: Text('Save to Photos')),
                     ),
                   ],
@@ -611,7 +612,7 @@ class _PlateViewState extends State<PlateView> {
                 left: safe.left,
                 top: _arrowTop(context),
                 child: _Arrow(
-                  icon: Icons.chevron_left,
+                  icon: Symbols.chevron_left,
                   tooltip: 'Earlier session',
                   onPressed: i > 0 ? () => store.step(-1) : null,
                 ),
@@ -620,7 +621,7 @@ class _PlateViewState extends State<PlateView> {
                 right: safe.right,
                 top: _arrowTop(context),
                 child: _Arrow(
-                  icon: Icons.chevron_right,
+                  icon: Symbols.chevron_right,
                   tooltip: 'Later session',
                   onPressed: i >= 0 && i < n - 1 ? () => store.step(1) : null,
                 ),
