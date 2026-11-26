@@ -831,9 +831,12 @@ class _NativePlateState extends State<NativePlate> {
         final red = Theme.of(context).colorScheme.primary;
         final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
         final spotlight = mode.key == 'spotlight';
+        final equal = mode.key == 'equal';
         final onDefaultView = mode.key == 'time';
-        final showPlate = true, showIndex = true;
-        final showHeading = true;
+        final showPlate = true;
+        final showIndex = !equal;
+        final showHeading = !equal;
+        final showTopRight = !spotlight && !equal;
         final fit = app.settings.nativeFit;
         _bottomRoom = 40 + 8 + 6.0;
         // the folded index's heading has a row above the buttons
@@ -907,7 +910,7 @@ class _NativePlateState extends State<NativePlate> {
                                       ),
                                     ),
                                   )
-                                else
+                                else if (!equal)
                                   const SizedBox(height: _buttonsTop),
                                 Expanded(
                                   child: ShaderMask(
@@ -982,8 +985,10 @@ class _NativePlateState extends State<NativePlate> {
                                   onPlate,
                                   newest,
                                   box.maxWidth - 2 * plateSide,
-                                  _plateHeight(box.maxWidth, box.maxHeight) - 12,
-                                  sizeBy: mode.key == 'equal'
+                                  equal
+                                      ? math.max(140.0, box.maxHeight - 2 * _fadeRoom - 12)
+                                      : _plateHeight(box.maxWidth, box.maxHeight) - 12,
+                                  sizeBy: equal
                                       ? 'equal'
                                       : (feed != null ? 'calls' : 'time'),
                                 ),
@@ -1063,11 +1068,13 @@ class _NativePlateState extends State<NativePlate> {
               child: Stack(
                 children: [
                 // The same buttons as over the web plate: record, the
-                // source pill, the menu, and the plate's view under it.
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Row(
+                // source pill, and the menu (hidden on Latest & most heard
+                // and No pecking order so the birds get the full screen).
+                if (showTopRight)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Row(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1115,7 +1122,7 @@ class _NativePlateState extends State<NativePlate> {
                 // left; not in the views of one bird (d and e).
                 // A station's four periods, centred at the top on a wide
                 // screen, as the web plate's header has them.
-                if (feed != null && showHeading && MediaQuery.sizeOf(context).width >= 900)
+                if (feed != null && showTopRight && MediaQuery.sizeOf(context).width >= 900)
                   Positioned(
                     top: 8,
                     left: 0,
@@ -1136,7 +1143,7 @@ class _NativePlateState extends State<NativePlate> {
                   ),
                 // On a phone, the four in short words at the right, under
                 // the buttons, lined up with the menu icon's right edge.
-                if (feed != null && showHeading && MediaQuery.sizeOf(context).width < 900)
+                if (feed != null && showTopRight && MediaQuery.sizeOf(context).width < 900)
                   Positioned(
                     top: _buttonsTop,
                     // the menu's 48 square sits 8 in, its 24 icon 12 further:
@@ -1145,7 +1152,7 @@ class _NativePlateState extends State<NativePlate> {
                     child: _spanRow(feed, short: true),
                   ),
                 // and the sun and moon under All, ending with it
-                if (feed != null && feed.canLight && showHeading && MediaQuery.sizeOf(context).width < 900)
+                if (feed != null && feed.canLight && showTopRight && MediaQuery.sizeOf(context).width < 900)
                   Positioned(
                     top: _buttonsTop + 34,
                     right: 8 + 12,
@@ -1486,7 +1493,7 @@ class _NativePlateState extends State<NativePlate> {
         final latestPanel = _spotlightPanel('Most recent', latestRow, latestDetail, panelWidth, narrow);
         final mostPanel = _spotlightPanel('Most heard', mostHeard, mostDetail, panelWidth, narrow);
         return Padding(
-          padding: EdgeInsets.fromLTRB(16, 64, 16, 16 + _bottomRoom),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + _bottomRoom),
           child: narrow
               ? Column(
                   children: [

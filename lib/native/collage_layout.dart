@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'dart:ui' show Rect, Size;
+import 'dart:ui' show Offset, Rect, Size;
 
 /// One figure to place on the collage.
 class CollageItem {
@@ -51,7 +51,7 @@ List<CollagePlace> layoutCollage(List<CollageItem> items, Size box) {
   final placed = <_Placed>[];
   final sx = math.sqrt(ar) * 1.08, sy = 1 / math.sqrt(ar);
   for (final it in sized) {
-    for (var i = 0; i < 20000; i++) {
+    for (var i = 0; i < 80000; i++) {
       final r = step * math.sqrt(i), a = i * 2.399963;
       final cx = r * math.cos(a) * sx, cy = r * math.sin(a) * sy;
       var clear = true;
@@ -87,6 +87,63 @@ List<CollagePlace> layoutCollage(List<CollageItem> items, Size box) {
         1 + ((p.cy - y0) * 3).round(),
       )
   ];
+}
+
+/// Evenly distributes [items] across [box] in a balanced grid with equal cell
+/// size (for "No pecking order"), preserving each bird's aspect ratio and
+/// centring any partial last row.
+List<CollagePlace> layoutEvenGrid(List<CollageItem> items, Size box) {
+  final n = items.length;
+  if (n == 0 || box.width <= 0 || box.height <= 0) return [];
+
+  // Choose the column count that maximises the usable cell area inside [box].
+  var bestCols = 1;
+  var bestScore = -1.0;
+  for (var cols = 1; cols <= n; cols++) {
+    final rows = (n / cols).ceil();
+    final cw = box.width / cols;
+    final ch = box.height / rows;
+    // Prefer cells whose aspect ratio is reasonably close to a typical bird
+    // plate (~1.1) while maximising the limiting dimension.
+    final score = math.min(cw, ch * 1.15);
+    if (score > bestScore) {
+      bestScore = score;
+      bestCols = cols;
+    }
+  }
+
+  final rows = (n / bestCols).ceil();
+  final cellW = box.width / bestCols;
+  final cellH = box.height / rows;
+  final padX = cellW * 0.06;
+  final padY = cellH * 0.06;
+  final availW = math.max(1.0, cellW - 2 * padX);
+  final availH = math.max(1.0, cellH - 2 * padY);
+
+  final out = <CollagePlace>[];
+  for (var idx = 0; idx < n; idx++) {
+    final it = items[idx];
+    final r = idx ~/ bestCols;
+    final c = idx % bestCols;
+    final inRow = r == rows - 1 ? n - r * bestCols : bestCols;
+    final rowOffsetX = (bestCols - inRow) * cellW / 2;
+
+    double w, h;
+    if (it.blank) {
+      w = math.min(availW * 0.7, 96.0);
+      h = math.min(availH * 0.35, 32.0);
+    } else if (availW / availH > it.aspect) {
+      h = availH;
+      w = h * it.aspect;
+    } else {
+      w = availW;
+      h = w / it.aspect;
+    }
+    final cx = rowOffsetX + (c + 0.5) * cellW;
+    final cy = (r + 0.5) * cellH;
+    out.add(CollagePlace(it.id, Rect.fromCenter(center: Offset(cx, cy), width: w, height: h), r + 1));
+  }
+  return out;
 }
 
 class _Placed {

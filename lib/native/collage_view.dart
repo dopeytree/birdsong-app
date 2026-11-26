@@ -196,7 +196,7 @@ class _CollageViewState extends State<CollageView> {
       return baseWeight(b);
     }
 
-    final places = layoutCollage([
+    final items = [
       for (final b in birds)
         CollageItem(
           b.sci,
@@ -204,10 +204,13 @@ class _CollageViewState extends State<CollageView> {
           aspect: art[b.sci]?.aspect ?? 1.7,
           blank: art[b.sci] == null && b.sci != _focusedSci,
         )
-    ], widget.size);
+    ];
+    final useEvenGrid = widget.sizeBy == 'equal' && _focusedSci == null;
+    final places = useEvenGrid ? layoutEvenGrid(items, widget.size) : layoutCollage(items, widget.size);
     _lastPlaces = places;
-    // layoutCollage puts the largest / hero bird first, dead centre.
-    final centerSci = places.isEmpty ? null : places.first.id;
+    // layoutCollage puts the largest / hero bird first, dead centre;
+    // in No pecking order (even grid), no bird is singled out as hero.
+    final centerSci = useEvenGrid || places.isEmpty ? null : places.first.id;
     final bird = {for (final b in birds) b.sci: b};
     final newest = widget.markAt == 'none' ? null : widget.newest;
     // has-newest: the rest only stand back when the latest is on the plate
