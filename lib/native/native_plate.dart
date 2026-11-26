@@ -1421,6 +1421,20 @@ class _NativePlateState extends State<NativePlate> {
       }
       _revealed = showing;
     }
+    if (sizeBy == 'equal' && app.settings.experimentalInfinityView) {
+      return InfinityCollage(
+        key: ValueKey('infinity|$showing'),
+        birds: [for (final r in ready) CollageBird(r.sci, r.common, r.count, r.last)],
+        art: _art,
+        size: Size(width, height),
+        showAllNameTickets: app.settings.nativeAllNameTickets,
+        onHold: (held) {
+          final want = held ? showing : null;
+          if (want != _holdFor && mounted) setState(() => _holdFor = want);
+        },
+        onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
+      );
+    }
     final collage = CollageView(
       birds: [for (final r in ready) CollageBird(r.sci, r.common, r.count, r.last)],
       art: _art,

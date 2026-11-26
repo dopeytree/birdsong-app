@@ -200,6 +200,11 @@ class Settings extends ChangeNotifier {
   /// Whether the plate is Flutter's own ([webPlate] off).
   bool get nativePlate => !webPlate;
 
+  /// Experimental: turn "No pecking order" into a large zoomable/pannable
+  /// infinity canvas with a 2-second intro zoom so big species counts (100+)
+  /// can be explored smoothly.
+  bool experimentalInfinityView = false;
+
   /// The Flutter plate's heading: the title line ("Birdsong #3/12") and the
   /// lines under it (when, where, the weather), as the web plate's Title
   /// and Date switches.
@@ -407,6 +412,7 @@ class Settings extends ChangeNotifier {
       modelOverrides = next;
     }
     webPlate = (j['webPlate'] as bool?) ?? webPlate;
+    experimentalInfinityView = (j['experimentalInfinityView'] as bool?) ?? experimentalInfinityView;
     nativeShowTitle = (j['nativeShowTitle'] as bool?) ?? nativeShowTitle;
     nativeShowDate = (j['nativeShowDate'] as bool?) ?? nativeShowDate;
     final scribbleMode = j['songScribbleMode'];
@@ -504,6 +510,7 @@ class Settings extends ChangeNotifier {
         'modelSkipped': modelSkipped.toList(),
         'modelOverrides': modelOverrides,
         'webPlate': webPlate,
+        'experimentalInfinityView': experimentalInfinityView,
         'nativeShowTitle': nativeShowTitle,
         'nativeShowDate': nativeShowDate,
         'songScribble': songScribble,
