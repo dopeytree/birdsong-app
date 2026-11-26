@@ -213,12 +213,16 @@ class Settings extends ChangeNotifier {
   /// Whether the plate is Flutter's own ([webPlate] off).
   bool get nativePlate => !webPlate;
 
-  /// Sort order shared by "No pecking order" and "Index of Species":
-  /// defaults to 'family' (Species), ascending.
+  /// Sort order saved for "No pecking order":
+  /// defaults to 'family' (Species), ascending, labels off.
   String equalSort = 'family';
 
   /// Sort direction for [equalSort]: true = ascending, false = descending.
   bool equalSortAsc = true;
+
+  /// Name-ticket labels toggle saved specifically for "No pecking order"
+  /// (per-view filter state so cycling views never bleeds labels onto Home).
+  bool equalLabels = false;
 
   /// The Flutter plate's heading: the title line ("Birdsong #3/12") and the
   /// lines under it (when, where, the weather), as the web plate's Title
@@ -455,6 +459,7 @@ class Settings extends ChangeNotifier {
       equalSort = rawSort!;
     }
     equalSortAsc = (j['equalSortAsc'] as bool?) ?? equalSortAsc;
+    equalLabels = (j['equalLabels'] as bool?) ?? equalLabels;
     nativeShowTitle = (j['nativeShowTitle'] as bool?) ?? nativeShowTitle;
     nativeShowDate = (j['nativeShowDate'] as bool?) ?? nativeShowDate;
     final scribbleMode = j['songScribbleMode'];
@@ -557,6 +562,7 @@ class Settings extends ChangeNotifier {
         'webPlate': webPlate,
         'equalSort': equalSort,
         'equalSortAsc': equalSortAsc,
+        'equalLabels': equalLabels,
         'nativeShowTitle': nativeShowTitle,
         'nativeShowDate': nativeShowDate,
         'songScribble': songScribble,
@@ -607,6 +613,7 @@ class Settings extends ChangeNotifier {
         'recordWeather': recordWeather,
         'equalSort': equalSort,
         'equalSortAsc': equalSortAsc,
+        'equalLabels': equalLabels,
         'nativeShowTitle': nativeShowTitle,
         'nativeShowDate': nativeShowDate,
         'songScribbleMode': songScribbleMode,
@@ -699,6 +706,7 @@ class Settings extends ChangeNotifier {
         equalSort = rawSort!;
       }
       equalSortAsc = (remote['equalSortAsc'] as bool?) ?? equalSortAsc;
+      equalLabels = (remote['equalLabels'] as bool?) ?? equalLabels;
       nativeShowTitle = (remote['nativeShowTitle'] as bool?) ?? nativeShowTitle;
       nativeShowDate = (remote['nativeShowDate'] as bool?) ?? nativeShowDate;
       final scribble = remote['songScribbleMode'];

@@ -275,6 +275,7 @@ class _NativePlateState extends State<NativePlate> {
       x.plateMode = defaultPlateMode;
       x.nativeSizeBy = 'calls';
     });
+    _resetHomeFilters();
   }
 
   /// Look for the plates of [rows] not asked for yet.
@@ -309,13 +310,15 @@ class _NativePlateState extends State<NativePlate> {
     final s = app.settings;
     final next = s.plateMode % plateModes.length + 1;
     final mode = plateModes[next - 1];
-    if (_sortOpen || _zoomTier != 1.0 || _zoomScale != 1.0) {
+    if (_sortOpen || _indexSortOpen || _zoomTier != 1.0 || _zoomScale != 1.0) {
       setState(() {
         _sortOpen = false;
+        _indexSortOpen = false;
         _zoomTier = 1.0;
         _zoomScale = 1.0;
       });
     }
+    if (next == defaultPlateMode) _resetHomeFilters();
     s.update((x) {
       x.plateMode = next;
       if (mode.sizeBy != null) x.nativeSizeBy = mode.sizeBy!;
@@ -422,9 +425,40 @@ class _NativePlateState extends State<NativePlate> {
   double _zoomTier = 1.0;
   double _zoomScale = 1.0;
 
+  /// Shared TapRegion group for Index of Species filter trigger + panel.
+  static const _indexFilterTapGroup = Object();
+
+  /// The classic five-species Birdsong sample plate (assets/web/index.html),
+  /// shown whenever there are no recordings yet (fresh install, empty session,
+  /// or an error) alongside the status or error message.
+  static List<_Row> _sampleRows() {
+    final now = DateTime.now();
+    const spec = [
+      (common: 'Northern Cardinal', sci: 'Cardinalis cardinalis', count: 222, h: 13, m: 50),
+      (common: 'Blue Jay', sci: 'Cyanocitta cristata', count: 44, h: 13, m: 53),
+      (common: 'Snowy Owl', sci: 'Bubo scandiacus', count: 33, h: 13, m: 54),
+      (common: 'European Greenfinch', sci: 'Chloris chloris', count: 22, h: 13, m: 55),
+      (common: 'Eurasian Blue Tit', sci: 'Cyanistes caeruleus', count: 11, h: 13, m: 54),
+    ];
+    return [
+      for (final s in spec)
+        _Row(s.sci, s.common)
+          ..count = s.count
+          ..last = DateTime(now.year, now.month, now.day, s.h, s.m),
+    ];
+  }
+
   /// Whether the sort slide-out is open on No pecking order or Index of Species.
   bool _sortOpen = false;
   bool _indexSortOpen = false;
+
+  /// Per-view filter state for Home (View 1 + Index of Species). Home always
+  /// starts with filters off on launch, return Home, Local/Remote switch, or
+  /// Calendar selection, while No pecking order keeps its own saved settings.
+  String _homeSort = 'family';
+  bool _homeSortAsc = true;
+  bool _homeLabels = false;
+  bool _pickedFromCalendar = false;
 
   /// Cached dominant plumage colour key per species (for Colour sort).
   final Map<String, double> _colourKey = {};
@@ -476,7 +510,7 @@ class _NativePlateState extends State<NativePlate> {
         _remoteActiveLoading.remove(k);
         final mean = res == null ? null : circularMeanHour(res.hours);
         _remoteActiveHour[k] = mean;
-        if (mounted && app.settings.equalSort == 'active') setState(() {});
+        if (mounted && (app.settings.equalSort == 'active' || _homeSort == 'active')) setState(() {});
       }).catchError((Object e) {
         debugPrint('activeHour ${sp.sci}: $e');
         _remoteActiveLoading.remove(k);
@@ -500,7 +534,7 @@ class _NativePlateState extends State<NativePlate> {
     return out;
   }
 
-  void _selectSort(String key) {
+  void _selectEqualSort(String key) {
     final opt = speciesSortOptions.firstWhere(
       (o) => o.key == key,
       orElse: () => speciesSortOptions.first,
@@ -511,14 +545,41 @@ class _NativePlateState extends State<NativePlate> {
     });
   }
 
-  void _flipSort() => app.settings.update((x) => x.equalSortAsc = !x.equalSortAsc);
+  void _flipEqualSort() => app.settings.update((x) => x.equalSortAsc = !x.equalSortAsc);
 
-  /// Resets filters to defaults: Labels off, sort by Species ascending.
-  void _resetFilters() => app.settings.update((x) {
-        x.nativeAllNameTickets = false;
+  /// Resets No pecking order filters to defaults: Labels off, sort by Species ascending.
+  void _resetEqualFilters() => app.settings.update((x) {
+        x.equalLabels = false;
         x.equalSort = 'family';
         x.equalSortAsc = true;
       });
+
+  void _selectHomeSort(String key) {
+    final opt = speciesSortOptions.firstWhere(
+      (o) => o.key == key,
+      orElse: () => speciesSortOptions.first,
+    );
+    setState(() {
+      _homeSort = opt.key;
+      _homeSortAsc = opt.defaultAsc;
+    });
+  }
+
+  void _flipHomeSort() => setState(() => _homeSortAsc = !_homeSortAsc);
+
+  /// Resets Home (View 1 + Index of Species) filters to off: no labels, sort
+  /// by Species ascending, and closes the filter panel.
+  void _resetHomeFilters() {
+    if (!mounted) return;
+    if (_homeSort != 'family' || !_homeSortAsc || _homeLabels || _indexSortOpen) {
+      setState(() {
+        _homeSort = 'family';
+        _homeSortAsc = true;
+        _homeLabels = false;
+        _indexSortOpen = false;
+      });
+    }
+  }
 
   void _ensureColours(List<_Row> rows) {
     for (final r in rows) {
@@ -588,7 +649,7 @@ class _NativePlateState extends State<NativePlate> {
         key = best * 10.0 + (lumSum / count);
       }
       _colourKey[sci] = key;
-      if (mounted && app.settings.equalSort == 'colour') setState(() {});
+      if (mounted && (app.settings.equalSort == 'colour' || _homeSort == 'colour')) setState(() {});
     } catch (e) {
       debugPrint('colour $sci: $e');
       _colourKey[sci] = 999;
@@ -597,11 +658,8 @@ class _NativePlateState extends State<NativePlate> {
     }
   }
 
-  /// Sort [rows] using the shared sort setting (`equalSort` + `equalSortAsc`),
-  /// used by both "No pecking order" and "Index of Species".
-  List<_Row> _sortRows(List<_Row> rows, {Session? ses, StationFeed? feed}) {
-    final sort = app.settings.equalSort;
-    final asc = app.settings.equalSortAsc;
+  /// Sort [rows] using the view's own sort key and direction.
+  List<_Row> _sortRows(List<_Row> rows, {required String sort, required bool asc, Session? ses, StationFeed? feed}) {
     final dir = asc ? 1 : -1;
     final out = [...rows];
     int cmpOptNum(double? a, double? b, String fallbackA, String fallbackB) {
@@ -704,9 +762,14 @@ class _NativePlateState extends State<NativePlate> {
   // ---- the walk on a map, in place of the collage --------------------------
 
   void _goHome() {
-    if (_sortOpen || _zoomTier != 1.0 || _zoomScale != 1.0) {
+    if (_sortOpen || _indexSortOpen || _zoomTier != 1.0 || _zoomScale != 1.0 ||
+        _homeSort != 'family' || !_homeSortAsc || _homeLabels) {
       setState(() {
         _sortOpen = false;
+        _indexSortOpen = false;
+        _homeSort = 'family';
+        _homeSortAsc = true;
+        _homeLabels = false;
         _zoomTier = 1.0;
         _zoomScale = 1.0;
       });
@@ -734,9 +797,14 @@ class _NativePlateState extends State<NativePlate> {
       }
     }
     if (best != null) app.store.select(best);
-    if (_sortOpen || _zoomTier != 1.0 || _zoomScale != 1.0) {
+    if (_sortOpen || _indexSortOpen || _zoomTier != 1.0 || _zoomScale != 1.0 ||
+        _homeSort != 'family' || !_homeSortAsc || _homeLabels) {
       setState(() {
         _sortOpen = false;
+        _indexSortOpen = false;
+        _homeSort = 'family';
+        _homeSortAsc = true;
+        _homeLabels = false;
         _zoomTier = 1.0;
         _zoomScale = 1.0;
       });
@@ -759,6 +827,7 @@ class _NativePlateState extends State<NativePlate> {
       return;
     }
     if (app.settings.showMap) app.settings.update((x) => x.showMap = false);
+    _pickedFromCalendar = false;
     await _mapFullScreen(
       () => feed != null
           ? Walk.station(feed.station.name, feed.place)
@@ -768,13 +837,14 @@ class _NativePlateState extends State<NativePlate> {
                   ignore: app.settings.isIgnoredSpecies)),
       rows,
     );
-    if (mounted) _goHome();
+    if (mounted && !_pickedFromCalendar) _goHome();
   }
 
-  /// The calendar button (day_picker.dart): a month with the days that
-  /// have a session, and that day's sessions listed under it to pick from;
-  /// OK shows the day's first, and the ‹ › step through the rest.
-  Future<void> _pickDay() async {
+  /// The calendar button (day_picker.dart): picking a session or station day
+  /// always opens the default view (Local or Remote) with Index of Species
+  /// expanded and Home filters reset to off. Returns true when a day/session
+  /// was selected.
+  Future<bool> _pickDay() async {
     final f = _feed;
     if (f != null) {
       // a station: any day since its records began
@@ -790,8 +860,23 @@ class _NativePlateState extends State<NativePlate> {
           },
         ),
       );
-      if (picked != null && mounted) f.setDay(picked);
-      return;
+      if (picked == null || !mounted) return false;
+      f.setDay(picked);
+      setState(() {
+        _sortOpen = false;
+        _indexSortOpen = false;
+        _homeSort = 'family';
+        _homeSortAsc = true;
+        _homeLabels = false;
+        _zoomTier = 1.0;
+        _zoomScale = 1.0;
+      });
+      app.settings.update((x) {
+        x.plateMode = defaultPlateMode;
+        x.nativeSizeBy = 'calls';
+        x.nativeIndexFolded = false;
+      });
+      return true;
     }
     final store = app.store;
     final model = app.settings.plateModel;
@@ -806,8 +891,23 @@ class _NativePlateState extends State<NativePlate> {
         }.length,
       ),
     );
-    if (picked == null || !mounted) return;
+    if (picked == null || !mounted) return false;
     store.select(picked);
+    setState(() {
+      _sortOpen = false;
+      _indexSortOpen = false;
+      _homeSort = 'family';
+      _homeSortAsc = true;
+      _homeLabels = false;
+      _zoomTier = 1.0;
+      _zoomScale = 1.0;
+    });
+    app.settings.update((x) {
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = 'time';
+      x.nativeIndexFolded = false;
+    });
+    return true;
   }
 
   /// A cross on the map: the bird's card, from this session's row when it
@@ -933,7 +1033,13 @@ class _NativePlateState extends State<NativePlate> {
                               color: ink,
                               onGoHome: () => Navigator.of(context).maybePop(),
                               onOpenMap: () {},
-                              onOpenCalendar: _pickDay,
+                              onOpenCalendar: () async {
+                                final picked = await _pickDay();
+                                if (picked && context.mounted) {
+                                  _pickedFromCalendar = true;
+                                  Navigator.of(context).maybePop();
+                                }
+                              },
                               onOpenBestSession: () {
                                 _openBestSession();
                                 Navigator.of(context).maybePop();
@@ -1091,6 +1197,7 @@ class _NativePlateState extends State<NativePlate> {
       editStation(context, s);
       return;
     }
+    _resetHomeFilters();
     s.update((x) {
       x.mode = AppMode.station;
       x.stationId = x.station!.id;
@@ -1102,9 +1209,25 @@ class _NativePlateState extends State<NativePlate> {
   /// The bird's card (bird_card.dart), as the web plate's: what is on the
   /// plate (the session's) for the facts and recordings, and everything on
   /// this device for how long the bird has been known here.
-  void _openCard(_Row r, {List<Detection>? heard}) {
+  void _openCard(_Row r, {List<Detection>? heard, bool isSample = false}) {
     final lib = _lib;
     if (lib == null) return;
+    if (isSample) {
+      BirdCard.show(
+        context,
+        BirdCard(
+          lib: lib,
+          style: _style,
+          source: _SampleCard(r),
+          art: _art[r.sci],
+          traits: _traits,
+          onChosen: (art) {
+            if (mounted) setState(() => _art[r.sci] = art);
+          },
+        ),
+      );
+      return;
+    }
     final f = _feed;
     if (f != null) {
       final s = (f.species ?? const <StationSpecies>[]).where((x) => x.sci == r.sci).firstOrNull;
@@ -1172,6 +1295,7 @@ class _NativePlateState extends State<NativePlate> {
         if (_lastAppMode != null && _lastAppMode != curMode) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
+            _resetHomeFilters();
             if (app.settings.plateMode != defaultPlateMode) {
               app.settings.update((x) {
                 x.plateMode = defaultPlateMode;
@@ -1191,8 +1315,27 @@ class _NativePlateState extends State<NativePlate> {
         // Default view loads up to maxOnPlate (200); No pecking order loads all.
         final all = _rows(ses), limit = app.settings.nativeLimit;
         final rows = limit > 0 && all.length > limit ? all.sublist(0, limit) : all;
-        final onPlate = equal ? rows : rows.take(maxOnPlate).toList();
+        // When there are no recordings yet (fresh install, empty session, or an
+        // engine/station error), show the classic 5-bird sample plate alongside
+        // the status or error message.
+        final showSample = rows.isEmpty &&
+            (feed == null || feed.error != null || (!feed.loading && feed.species != null));
+        final displayRows = showSample ? _sampleRows() : rows;
+        final onPlate = equal ? displayRows : displayRows.take(maxOnPlate).toList();
         _ensure(onPlate);
+        final sampleMessage = !showSample
+            ? null
+            : feed != null
+                ? (feed.error ??
+                    'Nothing heard ${switch (feed.light) {
+                      Light.all => '',
+                      Light.day => 'in the daytime ',
+                      Light.night => 'at night ',
+                    }}${feed.day != null ? 'that day' : 'in this period'}. Showing sample plate.')
+                : (engine.error ??
+                    (engine.running
+                        ? 'Listening — birds appear here as they are heard.'
+                        : 'Nothing recorded yet — tap record to listen. Showing sample plate.'));
         // the creature heard last (the page's newestSci)
         String? newest;
         String? newestCommon;
@@ -1204,7 +1347,14 @@ class _NativePlateState extends State<NativePlate> {
             newestCommon = r.common;
           }
         }
-        final marked = app.settings.nativeMarkAt == 'none' ? null : newest;
+        // Historical data (ended local sessions, past remote days, or multi-day
+        // remote ranges) never shows a live red dot or bottom detection ticket.
+        final isHistorical = showSample ||
+            (feed == null
+                ? (ses == null || !ses.live)
+                : ((feed.day != null && !sameDay(feed.day!, DateTime.now())) ||
+                    (feed.day == null && feed.span != Span.today)));
+        final marked = (isHistorical || app.settings.nativeMarkAt == 'none') ? null : newest;
         WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
         final calls = all.fold<int>(0, (n, r) => n + r.count);
         _checkHeartPulse(_showingFor(ses), calls);
@@ -1237,7 +1387,7 @@ class _NativePlateState extends State<NativePlate> {
                 mediaPad.right > 16 ? math.max(10.0, mediaPad.right - 12.0) : 0.0,
                 cornerBottom,
               );
-        final sortedIndex = _sortRows(rows, ses: ses, feed: feed);
+        final sortedIndex = _sortRows(rows, sort: _homeSort, asc: _homeSortAsc, ses: ses, feed: feed);
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
               entries: [
                 for (final r in sortedIndex)
@@ -1258,23 +1408,33 @@ class _NativePlateState extends State<NativePlate> {
               canNext: feed?.canStepOn ?? (i >= 0 && i < n - 1),
               onStep: feed?.stepDay ?? store.step,
               onOpen: (e) => _openCard(rows.firstWhere((r) => r.sci == e.sci)),
+              onOpenCalendar: _pickDay,
               filterOpen: _indexSortOpen,
+              filterTapGroupId: _indexFilterTapGroup,
               onToggleFilter: () => setState(() => _indexSortOpen = !_indexSortOpen),
               sortBar: inline
                   ? null
                   : SpeciesSortBar(
                       open: _indexSortOpen,
-                      sortKey: app.settings.equalSort,
-                      ascending: app.settings.equalSortAsc,
-                      showLabels: app.settings.nativeAllNameTickets,
-                      onToggleLabels: () =>
-                          app.settings.update((x) => x.nativeAllNameTickets = !x.nativeAllNameTickets),
-                      onReset: _resetFilters,
+                      sortKey: _homeSort,
+                      ascending: _homeSortAsc,
+                      showLabels: _homeLabels || app.settings.nativeAllNameTickets,
+                      onToggleLabels: () {
+                        if (app.settings.nativeAllNameTickets) {
+                          app.settings.update((x) => x.nativeAllNameTickets = false);
+                          setState(() => _homeLabels = false);
+                        } else {
+                          setState(() => _homeLabels = !_homeLabels);
+                        }
+                      },
+                      onReset: _resetHomeFilters,
                       centered: true,
                       showTrigger: false,
+                      tapRegionGroupId: _indexFilterTapGroup,
                       onToggleOpen: () => setState(() => _indexSortOpen = !_indexSortOpen),
-                      onSelect: _selectSort,
-                      onFlipDirection: _flipSort,
+                      onClose: () => setState(() => _indexSortOpen = false),
+                      onSelect: _selectHomeSort,
+                      onFlipDirection: _flipHomeSort,
                     ),
             );
         return Stack(
@@ -1286,7 +1446,8 @@ class _NativePlateState extends State<NativePlate> {
                 child: Padding(
                   padding: platePad,
                   child: spotlight
-                      ? _spotlight(rows, newest)
+                      ? _spotlight(displayRows, showSample ? null : newest,
+                          isSample: showSample, sampleMessage: sampleMessage)
                       // The heading stays put beside the buttons at the top; the
                       // rest scrolls between it and the buttons along the bottom,
                       // never under either, fading out at both edges.
@@ -1352,24 +1513,13 @@ class _NativePlateState extends State<NativePlate> {
                       key: _allKey,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (rows.isEmpty)
+                        if (rows.isEmpty && !showSample)
                           Padding(
                             key: _plateKey,
                             padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
                             child: Center(
                               child: Text(
-                                feed != null
-                                    ? (feed.error ??
-                                        (feed.loading || feed.species == null
-                                            ? 'Asking the station…'
-                                            : 'Nothing heard ${switch (feed.light) {
-                                                Light.all => '',
-                                                Light.day => 'in the daytime ',
-                                                Light.night => 'at night ',
-                                              }}${feed.day != null ? 'that day' : 'in this period'}.'))
-                                    : engine.running
-                                        ? 'Listening. Birds appear here as they are heard.'
-                                        : 'Nothing heard yet. Press record to listen.',
+                                'Asking the station…',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                     fontFamily: serif,
@@ -1380,23 +1530,40 @@ class _NativePlateState extends State<NativePlate> {
                             ),
                           )
                         else
-                          // Full-canvas plate (defunct side < > arrows removed).
+                          // Full-canvas plate (shows the classic 5-bird sample
+                          // plate with status/error notice whenever there are
+                          // no recordings yet).
                           Padding(
                             key: _plateKey,
                             padding: equal
                                 ? const EdgeInsets.fromLTRB(8, 8, 8, 8)
                                 : EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
-                            child: _collage(
-                              ses,
-                              onPlate,
-                              newest,
-                              equal ? math.max(100.0, box.maxWidth - 16) : box.maxWidth - 2 * plateSide,
-                              equal
-                                  ? math.max(140.0, box.maxHeight - 16)
-                                  : _plateHeight(box.maxWidth, box.maxHeight) - 12,
-                              sizeBy: equal
-                                  ? 'equal'
-                                  : (feed != null ? 'calls' : 'time'),
+                            child: Stack(
+                              alignment: Alignment.bottomCenter,
+                              children: [
+                                _collage(
+                                  ses,
+                                  onPlate,
+                                  marked,
+                                  equal ? math.max(100.0, box.maxWidth - 16) : box.maxWidth - 2 * plateSide,
+                                  equal
+                                      ? math.max(140.0, box.maxHeight - 16)
+                                      : _plateHeight(box.maxWidth, box.maxHeight) - 12,
+                                  sizeBy: equal
+                                      ? 'equal'
+                                      : (feed != null ? 'calls' : 'time'),
+                                  isSample: showSample,
+                                ),
+                                if (sampleMessage != null)
+                                  Positioned(
+                                    left: 12,
+                                    right: 12,
+                                    bottom: equal ? 56 : 8,
+                                    child: Center(
+                                      child: _sampleBanner(sampleMessage),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         // The page's caption, under the plate; not when it is
@@ -1450,6 +1617,14 @@ class _NativePlateState extends State<NativePlate> {
             Positioned.fill(
               child: Stack(
                 children: [
+                // Tap anywhere outside the No pecking order filter panel to close it.
+                if (equal && _sortOpen)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(() => _sortOpen = false),
+                    ),
+                  ),
                 // Top-left frosted-paper filter bar on No pecking order (icon
                 // automatically inverts colour when drawn over dark bird art).
                 if (equal)
@@ -1461,17 +1636,24 @@ class _NativePlateState extends State<NativePlate> {
                       open: _sortOpen,
                       sortKey: app.settings.equalSort,
                       ascending: app.settings.equalSortAsc,
-                      showLabels: app.settings.nativeAllNameTickets,
-                      onToggleLabels: () =>
-                          app.settings.update((x) => x.nativeAllNameTickets = !x.nativeAllNameTickets),
-                      onReset: _resetFilters,
+                      showLabels: app.settings.equalLabels || app.settings.nativeAllNameTickets,
+                      onToggleLabels: () => app.settings.update((x) {
+                        if (x.nativeAllNameTickets) {
+                          x.nativeAllNameTickets = false;
+                          x.equalLabels = false;
+                        } else {
+                          x.equalLabels = !x.equalLabels;
+                        }
+                      }),
+                      onReset: _resetEqualFilters,
                       adaptiveTrigger: true,
                       onToggleOpen: () => setState(() => _sortOpen = !_sortOpen),
+                      onClose: () => setState(() => _sortOpen = false),
                       onSelect: (key) {
-                        _selectSort(key);
+                        _selectEqualSort(key);
                         setState(() => _sortOpen = false);
                       },
-                      onFlipDirection: _flipSort,
+                      onFlipDirection: _flipEqualSort,
                     ),
                   ),
                 // Top-right controls: horizontal row [Record/Stations] [Pill] [Menu]
@@ -1508,11 +1690,14 @@ class _NativePlateState extends State<NativePlate> {
                             child: SourcePill(
                               listen: feed == null,
                               stationName: app.settings.station?.name,
-                              onListen: () => app.settings.update((x) {
-                                x.mode = AppMode.listen;
-                                x.plateMode = defaultPlateMode;
-                                x.nativeSizeBy = 'time';
-                              }),
+                              onListen: () {
+                                _resetHomeFilters();
+                                app.settings.update((x) {
+                                  x.mode = AppMode.listen;
+                                  x.plateMode = defaultPlateMode;
+                                  x.nativeSizeBy = 'time';
+                                });
+                              },
                               onRemote: _toRemote,
                             ),
                           ),
@@ -1610,9 +1795,9 @@ class _NativePlateState extends State<NativePlate> {
                         MediaQuery.sizeOf(context).width - cornerLeft - cornerRight, MediaQuery.sizeOf(context).width,
                         inline: true),
                   ),
-                // Bottom song scribble + latest-detection ticket (same for both
-                // local & remote, configurable via Settings > Display).
-                if ((app.settings.songScribble || app.settings.nativeShowLatestDetection) && !equal)
+                // Bottom song scribble + latest-detection ticket (live/today
+                // data only — hidden on historical sessions and sample plate).
+                if ((app.settings.songScribble || (!isHistorical && app.settings.nativeShowLatestDetection)) && !equal)
                   Positioned(
                     left: cornerLeft + 40 + 8,
                     right: (PlateShare.supported ? cornerRight + 40 : cornerRight) + 8,
@@ -1623,10 +1808,10 @@ class _NativePlateState extends State<NativePlate> {
                       showLine: app.settings.songScribble,
                       simpleWave: app.settings.songScribbleMode == 'wave',
                       remote: feed != null,
-                      latestName: newestCommon,
-                      showLatest: app.settings.nativeShowLatestDetection,
+                      latestName: isHistorical ? null : newestCommon,
+                      showLatest: !isHistorical && app.settings.nativeShowLatestDetection,
                       useTicket: app.settings.nativeBottomTicket,
-                      onTapLatest: newest == null
+                      onTapLatest: isHistorical || newest == null
                           ? null
                           : () {
                               final row = rows.where((r) => r.sci == newest).firstOrNull;
@@ -1709,10 +1894,10 @@ class _NativePlateState extends State<NativePlate> {
     final when = feed != null
         ? feed.dates
         : ses == null
-        ? 'Nothing recorded yet: tap the microphone to start.'
+        ? 'Nothing recorded yet — tap record to listen.'
         : ses.live
             ? 'Listening now, since ${clock(ses.start)}.'
-            : '${span(ses.start, ses.end ?? ses.start)}.';
+            : span(ses.start, ses.end ?? ses.start);
     // a station: where it is, when it says, as a session's place line
     final where = feed != null
         ? (feed.place == null ? '' : place(feed.place!.$1, feed.place!.$2))
@@ -1813,9 +1998,52 @@ class _NativePlateState extends State<NativePlate> {
   /// something asks them to: the sizing button, the window changing size, or
   /// a new bird joining while listening (it appears once its plate is
   /// ready, and the rest make room).
+  Widget _sampleBanner(String message) {
+    final openModels = message.contains('Models');
+    return PaperSurface(
+      borderRadius: 14,
+      opacity: 0.90,
+      padding: EdgeInsets.fromLTRB(14, 7, openModels ? 8 : 14, 7),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: serif,
+                fontStyle: FontStyle.italic,
+                fontSize: 14.5,
+                height: 1.3,
+                color: ink,
+              ),
+            ),
+          ),
+          if (openModels) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: madder,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(fontFamily: caps, fontSize: 13),
+              ),
+              onPressed: widget.openSettings,
+              child: const Text('Models'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _collage(Session? ses, List<_Row> rows, String? newest, double width, double height,
-      {required String sizeBy}) {
-    final baseShowing = _showingFor(ses);
+      {required String sizeBy, bool isSample = false}) {
+    final baseShowing = isSample
+        ? 'sample|${_style.name}|${app.settings.nativeParts ? 'parts' : ''}'
+        : _showingFor(ses);
     final showing = sizeBy == 'equal' ? '$baseShowing|equal|${rows.length}' : baseShowing;
     final ready = [for (final r in rows) if (_art.containsKey(r.sci)) r];
     // Not before the height is known either (_measure), or they would be
@@ -1830,7 +2058,12 @@ class _NativePlateState extends State<NativePlate> {
       }
       _revealed = showing;
     }
-    final ordered = sizeBy == 'equal' ? _sortRows(ready, ses: ses, feed: _feed) : ready;
+    final ordered = sizeBy == 'equal'
+        ? _sortRows(ready, sort: app.settings.equalSort, asc: app.settings.equalSortAsc, ses: ses, feed: _feed)
+        : ready;
+    final showTickets = sizeBy == 'equal'
+        ? (app.settings.equalLabels || app.settings.nativeAllNameTickets)
+        : (_homeLabels || app.settings.nativeAllNameTickets);
     final deepMaxScale = math.max(14.0, math.sqrt(ordered.length) * 2.0);
     final collage = CollageView(
       birds: [for (final r in ordered) CollageBird(r.sci, r.common, r.count, r.last)],
@@ -1839,13 +2072,13 @@ class _NativePlateState extends State<NativePlate> {
       sizeBy: sizeBy,
       markAt: app.settings.nativeMarkAt,
       newest: newest,
-      live: app.engine.liveSpecies,
+      live: isSample ? const <String>{} : app.engine.liveSpecies,
       showHoverInfo: app.settings.nativeHoverInfo,
-      showAllNameTickets: app.settings.nativeAllNameTickets,
+      showAllNameTickets: showTickets,
       allowDrag: false,
       resolutionScale: _zoomTier,
       zoomScale: _zoomScale,
-      onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci)),
+      onOpen: (b) => _openCard(rows.firstWhere((r) => r.sci == b.sci), isSample: isSample),
     );
     return ZoomableCollage(
       // A new session or style is a new collage: nothing glides across from
@@ -1906,13 +2139,13 @@ class _NativePlateState extends State<NativePlate> {
 
   /// Combined Latest & Most heard view: stacked one above the other on mobile
   /// (width <= 720), side by side on larger screens.
-  Widget _spotlight(List<_Row> rows, String? newest) {
+  Widget _spotlight(List<_Row> rows, String? newest, {bool isSample = false, String? sampleMessage}) {
     if (rows.isEmpty) {
       return Center(
         child: Padding(
           padding: EdgeInsets.fromLTRB(24, 64, 24, 16 + _bottomRoom),
           child: const Text(
-            'Nothing heard yet. Press record to listen.',
+            'Asking the station…',
             textAlign: TextAlign.center,
             style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 18, color: sepia),
           ),
@@ -1924,51 +2157,64 @@ class _NativePlateState extends State<NativePlate> {
     _ensure([latestRow, mostHeard]);
 
     final last = latestRow.last;
-    final latestDetail = last == null
-        ? ''
-        : (sameDay(last, DateTime.now()) ? clock(last) : '${dayMonth(last)}, ${clock(last)}');
-    final mostDetail = '${calls(mostHeard.count)} this session';
+    final latestDetail = isSample
+        ? 'Sample plate'
+        : last == null
+            ? ''
+            : (sameDay(last, DateTime.now()) ? clock(last) : '${dayMonth(last)}, ${clock(last)}');
+    final mostDetail = isSample ? '${calls(mostHeard.count)} (sample)' : '${calls(mostHeard.count)} this session';
 
     return LayoutBuilder(
       builder: (context, box) {
         final narrow = box.maxWidth <= 720;
         final panelWidth = narrow ? box.maxWidth - 32 : (box.maxWidth - 65) / 2;
-        final latestPanel = _spotlightPanel('Most recent', latestRow, latestDetail, panelWidth, narrow);
-        final mostPanel = _spotlightPanel('Most heard', mostHeard, mostDetail, panelWidth, narrow);
-        return Padding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + _bottomRoom),
-          child: narrow
-              ? Column(
-                  children: [
-                    Expanded(child: latestPanel),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
-                      child: Divider(height: 1, color: rule),
+        final latestPanel = _spotlightPanel('Most recent', latestRow, latestDetail, panelWidth, narrow, isSample: isSample);
+        final mostPanel = _spotlightPanel('Most heard', mostHeard, mostDetail, panelWidth, narrow, isSample: isSample);
+        return Stack(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + _bottomRoom),
+              child: narrow
+                  ? Column(
+                      children: [
+                        Expanded(child: latestPanel),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 10),
+                          child: Divider(height: 1, color: rule),
+                        ),
+                        Expanded(child: mostPanel),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: latestPanel),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: VerticalDivider(width: 1, color: rule),
+                        ),
+                        Expanded(child: mostPanel),
+                      ],
                     ),
-                    Expanded(child: mostPanel),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Expanded(child: latestPanel),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: VerticalDivider(width: 1, color: rule),
-                    ),
-                    Expanded(child: mostPanel),
-                  ],
-                ),
+            ),
+            if (sampleMessage != null)
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 12 + _bottomRoom,
+                child: Center(child: _sampleBanner(sampleMessage)),
+              ),
+          ],
         );
       },
     );
   }
 
-  Widget _spotlightPanel(String heading, _Row r, String detail, double width, bool narrow) {
+  Widget _spotlightPanel(String heading, _Row r, String detail, double width, bool narrow, {bool isSample = false}) {
     final art = _art[r.sci];
     final titleSize = narrow ? (width * .052).clamp(18.0, 24.0) : (width * .048).clamp(20.0, 30.0);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _openCard(r),
+      onTap: () => _openCard(r, isSample: isSample),
       child: Semantics(
         button: true,
         label: '$heading: ${r.common}, open its card',
@@ -2198,4 +2444,28 @@ class _StationCard implements CardSource {
             spectrogramUrl: r.spectrogramUrl,
           )
       ];
+}
+
+/// Synthetic particulars for a bird tapped on the default sample plate.
+class _SampleCard implements CardSource {
+  _SampleCard(this.r);
+
+  final _Row r;
+
+  @override
+  String get sci => r.sci;
+  @override
+  String get common => r.common;
+  @override
+  List<(String, String)> get rows => [
+        ('Sample plate', calls(r.count)),
+      ];
+  @override
+  Future<List<(String, String)>> moreRows() async => const [];
+  @override
+  Future<({List<int> hours, String label})?> hours() async => null;
+  @override
+  Future<List<({DateTime day, int count})>?> trend() async => null;
+  @override
+  Future<List<CardRecording>> recordings() async => const [];
 }

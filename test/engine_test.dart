@@ -161,6 +161,6 @@ void main() {
     expect(lasting(const Duration(minutes: 65)), '1hr05');
     expect(lasting(const Duration(hours: 2)), '2hr');
     final t = DateTime(2026, 11, 18, 22, 19);
-    expect(span(t, t.add(const Duration(minutes: 13))), endsWith('22:19 for 13m'));
+    expect(span(t, t.add(const Duration(minutes: 13))), endsWith('.  22:19 ~ 13m'));
   });
 }

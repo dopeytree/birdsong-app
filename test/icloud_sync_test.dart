@@ -27,6 +27,7 @@ void main() {
       s.icloudSync = true;
       s.useCoreMl = true; // device-local: must NOT overwrite Mac
       s.nativeAllNameTickets = true; // portable preference: MUST sync
+      s.equalLabels = true; // per-view No pecking order labels: MUST sync
       s.nativeBottomTicket = false; // portable preference: MUST sync
       s.stations = [Station(id: 'st-garden', name: 'Garden', birdweather: '1234')];
     });
@@ -133,6 +134,7 @@ void main() {
 
     // Verify portable preferences synced, stations unioned, device-local useCoreMl preserved
     expect(macSettings.nativeAllNameTickets, isTrue);
+    expect(macSettings.equalLabels, isTrue);
     expect(macSettings.nativeBottomTicket, isFalse);
     expect(macSettings.useCoreMl, isFalse);
     expect(macSettings.stations.map((s) => s.id), containsAll(['st-garden', 'st-woods']));

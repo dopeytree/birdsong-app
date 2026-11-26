@@ -64,18 +64,21 @@ class SpeciesSortBar extends StatelessWidget {
     required this.onToggleOpen,
     required this.onSelect,
     required this.onFlipDirection,
+    this.onClose,
     this.onReset,
     this.showLabels,
     this.onToggleLabels,
     this.centered = false,
     this.showTrigger = true,
     this.adaptiveTrigger = false,
+    this.tapRegionGroupId,
   });
 
   final bool open;
   final String sortKey;
   final bool ascending;
   final VoidCallback onToggleOpen;
+  final VoidCallback? onClose;
   final ValueChanged<String> onSelect;
   final VoidCallback onFlipDirection;
   final VoidCallback? onReset;
@@ -93,12 +96,19 @@ class SpeciesSortBar extends StatelessWidget {
   /// stays crisp over dark bird artwork on No pecking order.
   final bool adaptiveTrigger;
 
+  /// Shared [TapRegion] group id so tapping outside both trigger & panel
+  /// dismisses the filter panel cleanly.
+  final Object? tapRegionGroupId;
+
   @override
   Widget build(BuildContext context) {
     final active = speciesSortOptions.firstWhere(
       (o) => o.key == sortKey,
       orElse: () => speciesSortOptions.first,
     );
+    final splitIdx = speciesSortOptions.indexWhere((o) => o.key == 'wingspan');
+    final row1Options = splitIdx > 0 ? speciesSortOptions.sublist(0, splitIdx) : speciesSortOptions;
+    final row2Options = splitIdx > 0 ? speciesSortOptions.sublist(splitIdx) : const <SortOption>[];
     final triggerIcon = Icon(
       open ? Symbols.close : Symbols.filter_alt,
       color: adaptiveTrigger ? adaptiveInkSource : ink,
@@ -121,63 +131,89 @@ class SpeciesSortBar extends StatelessWidget {
       child: open
           ? PaperSurface(
               margin: const EdgeInsets.only(top: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               borderRadius: 16,
-              child: Wrap(
-                spacing: 2,
-                runSpacing: 2,
-                alignment: centered ? WrapAlignment.center : WrapAlignment.start,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
                 children: [
-                  // Far left: Reset to defaults (Labels off, sort by Species).
-                  if (onReset != null)
-                    IconButton(
-                      constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-                      padding: EdgeInsets.zero,
-                      iconSize: 18,
-                      tooltip: 'Reset filters (no labels, sort by Species)',
-                      icon: const Icon(Symbols.refresh, color: ink),
-                      onPressed: () {
-                        hapticTap();
-                        onReset!();
-                      },
-                    ),
-                  // Labels toggle (filled Material Symbol when enabled).
-                  if (showLabels != null && onToggleLabels != null) ...[
-                    _labelsChip(showLabels!, onToggleLabels!),
-                    Container(
-                      width: 1,
-                      height: 18,
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      color: rule.withValues(alpha: 0.6),
+                  Wrap(
+                    spacing: 2,
+                    runSpacing: 2,
+                    alignment: centered ? WrapAlignment.center : WrapAlignment.start,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      // Far left: Reset to defaults (Labels off, sort by Species).
+                      if (onReset != null)
+                        IconButton(
+                          constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                          padding: EdgeInsets.zero,
+                          iconSize: 18,
+                          tooltip: 'Reset filters (no labels, sort by Species)',
+                          icon: const Icon(Symbols.refresh, color: ink),
+                          onPressed: () {
+                            hapticTap();
+                            onReset!();
+                          },
+                        ),
+                      // Labels toggle (filled Material Symbol when enabled).
+                      if (showLabels != null && onToggleLabels != null) ...[
+                        _labelsChip(showLabels!, onToggleLabels!),
+                        Container(
+                          width: 1,
+                          height: 18,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          color: rule.withValues(alpha: 0.6),
+                        ),
+                      ],
+                      // Sort direction arrow.
+                      IconButton(
+                        constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                        padding: EdgeInsets.zero,
+                        iconSize: 18,
+                        tooltip: ascending ? 'Ascending (tap to reverse)' : 'Descending (tap to reverse)',
+                        icon: Icon(ascending ? Symbols.arrow_upward : Symbols.arrow_downward, color: ink),
+                        onPressed: () {
+                          hapticTap();
+                          onFlipDirection();
+                        },
+                      ),
+                      for (final opt in row1Options) _chip(opt),
+                    ],
+                  ),
+                  if (row2Options.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Wrap(
+                      spacing: 2,
+                      runSpacing: 2,
+                      alignment: centered ? WrapAlignment.center : WrapAlignment.start,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        for (final opt in row2Options) _chip(opt),
+                      ],
                     ),
                   ],
-                  // Sort direction arrow.
-                  IconButton(
-                    constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-                    padding: EdgeInsets.zero,
-                    iconSize: 18,
-                    tooltip: ascending ? 'Ascending (tap to reverse)' : 'Descending (tap to reverse)',
-                    icon: Icon(ascending ? Symbols.arrow_upward : Symbols.arrow_downward, color: ink),
-                    onPressed: () {
-                      hapticTap();
-                      onFlipDirection();
-                    },
-                  ),
-                  for (final opt in speciesSortOptions) _chip(opt),
                 ],
               ),
             )
           : const SizedBox.shrink(),
     );
-    if (!showTrigger) return panel;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-      children: [
-        trigger,
-        panel,
-      ],
+    final body = !showTrigger
+        ? panel
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+            children: [
+              trigger,
+              panel,
+            ],
+          );
+    return TapRegion(
+      groupId: tapRegionGroupId ?? this,
+      onTapOutside: (_) {
+        if (open) (onClose ?? onToggleOpen)();
+      },
+      child: body,
     );
   }
 

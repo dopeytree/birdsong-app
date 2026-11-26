@@ -77,6 +77,8 @@ class IndexView extends StatelessWidget {
     this.sortBar,
     this.filterOpen = false,
     this.onToggleFilter,
+    this.filterTapGroupId,
+    this.onOpenCalendar,
   });
 
   final List<IndexEntry> entries;
@@ -121,6 +123,11 @@ class IndexView extends StatelessWidget {
   /// beside the "Index of Species" heading.
   final bool filterOpen;
   final VoidCallback? onToggleFilter;
+  final Object? filterTapGroupId;
+
+  /// Calendar trigger placed to the left of the "Index of Species" heading,
+  /// always visible whether the index is folded or expanded.
+  final VoidCallback? onOpenCalendar;
 
   @override
   Widget build(BuildContext context) {
@@ -222,7 +229,7 @@ class IndexView extends StatelessWidget {
           if (steps) step(-1, Symbols.chevron_left, 'Earlier session', canPrev),
           Flexible(
             child: _IndexHeading(
-              title: species > 0 ? 'Index of Species | ${thousands(species)}' : 'Index of Species',
+              title: species > 0 ? 'Index of Species - ${thousands(species)}' : 'Index of Species',
               rules: rules,
               gap: gap,
               size: size,
@@ -233,8 +240,10 @@ class IndexView extends StatelessWidget {
                 hapticTap();
                 onFold();
               },
+              onOpenCalendar: onOpenCalendar,
               filterOpen: filterOpen,
               onToggleFilter: (!inlineMode && !folded) ? onToggleFilter : null,
+              filterTapGroupId: filterTapGroupId,
             ),
           ),
           if (steps) step(1, Symbols.chevron_right, 'Later session', canNext),
@@ -257,8 +266,10 @@ class _IndexHeading extends StatefulWidget {
     required this.folded,
     required this.foldable,
     required this.onFold,
+    this.onOpenCalendar,
     this.filterOpen = false,
     this.onToggleFilter,
+    this.filterTapGroupId,
   });
 
   final String title;
@@ -269,8 +280,10 @@ class _IndexHeading extends StatefulWidget {
   final bool folded;
   final bool foldable;
   final VoidCallback onFold;
+  final VoidCallback? onOpenCalendar;
   final bool filterOpen;
   final VoidCallback? onToggleFilter;
+  final Object? filterTapGroupId;
 
   @override
   State<_IndexHeading> createState() => _IndexHeadingState();
@@ -351,23 +364,46 @@ class _IndexHeadingState extends State<_IndexHeading> {
         ),
       ),
     );
-    if (widget.onToggleFilter == null) return headingButton;
+    if (widget.onOpenCalendar == null && widget.onToggleFilter == null) return headingButton;
+    final btnSize = widget.compact ? 32.0 : 34.0;
+    final filterBtn = widget.onToggleFilter == null
+        ? null
+        : IconButton(
+            constraints: BoxConstraints.tightFor(width: btnSize, height: btnSize),
+            padding: EdgeInsets.zero,
+            iconSize: 19,
+            tooltip: widget.filterOpen ? 'Hide filters' : 'Filter & sort',
+            icon: Icon(widget.filterOpen ? Symbols.close : Symbols.filter_alt, color: ink),
+            onPressed: () {
+              hapticTap();
+              widget.onToggleFilter!();
+            },
+          );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (widget.onOpenCalendar != null) ...[
+          IconButton(
+            constraints: BoxConstraints.tightFor(width: btnSize, height: btnSize),
+            padding: EdgeInsets.zero,
+            iconSize: widget.compact ? 18 : 19,
+            tooltip: 'Calendar',
+            icon: const Icon(Symbols.calendar_today, color: ink),
+            onPressed: () {
+              hapticTap();
+              widget.onOpenCalendar!();
+            },
+          ),
+          const SizedBox(width: 2),
+        ],
         Flexible(child: headingButton),
-        const SizedBox(width: 2),
-        IconButton(
-          constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-          padding: EdgeInsets.zero,
-          iconSize: 19,
-          tooltip: widget.filterOpen ? 'Hide filters' : 'Filter & sort',
-          icon: Icon(widget.filterOpen ? Symbols.close : Symbols.filter_alt, color: ink),
-          onPressed: () {
-            hapticTap();
-            widget.onToggleFilter!();
-          },
-        ),
+        if (filterBtn != null) ...[
+          const SizedBox(width: 2),
+          if (widget.filterTapGroupId != null)
+            TapRegion(groupId: widget.filterTapGroupId!, child: filterBtn)
+          else
+            filterBtn,
+        ],
       ],
     );
   }
