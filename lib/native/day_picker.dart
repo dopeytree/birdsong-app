@@ -1,47 +1,255 @@
 import 'package:flutter/material.dart';
 
-import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
 import '../engine/place_names.dart';
+import '../main.dart' show caps, ink, madder, paper, rule, sepia, serif;
+import '../store/detection_store.dart';
+import '../ui/format.dart';
 import 'index_view.dart' show thousands;
 import 'station_archive.dart';
 import 'station_feed.dart';
 import 'walk_names.dart';
-import '../store/detection_store.dart';
-import '../ui/format.dart';
 
-/// The calendar button's dialog: a month with only the days that have a
-/// session to pick, and under it that day's sessions, grouped under the
-/// nearest town or village (named from OpenStreetMap, saved with each
-/// session; sessions not yet named are named while it is open) and where
-/// the walk went ("Ashcott – RSPB Ham Wall", walk_names.dart), each with
-/// its number, start time, how long it ran and how many species it heard. A tap on a
-/// session shows it; OK shows the day's first, and the ‹ › step through the
-/// rest. Returns the session to show, or null.
-///
-/// A simple way in for now; the calendar can say more about each day later.
+DateTime _day(DateTime t) => DateTime(t.year, t.month, t.day);
+
+const _monthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const _weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+/// Modern, compact, auto-fitting month grid shared by [DayPicker] and
+/// [StationDayPicker]. Takes ~215 px vertically so sessions are always visible
+/// immediately below on phones (and side-by-side on tablets/desktop).
+class _CompactMonthGrid extends StatelessWidget {
+  const _CompactMonthGrid({
+    required this.month,
+    required this.selected,
+    required this.today,
+    required this.canPrev,
+    required this.canNext,
+    required this.onPrev,
+    required this.onNext,
+    required this.isSelectable,
+    required this.hasDot,
+    required this.onSelect,
+  });
+
+  final DateTime month;
+  final DateTime selected;
+  final DateTime today;
+  final bool canPrev;
+  final bool canNext;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final bool Function(DateTime d) isSelectable;
+  final bool Function(DateTime d) hasDot;
+  final ValueChanged<DateTime> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final firstOfMonth = DateTime(month.year, month.month, 1);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final leadingBlanks = (firstOfMonth.weekday - DateTime.monday) % 7;
+    final totalCells = leadingBlanks + daysInMonth;
+    final rows = (totalCells / 7).ceil();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+              padding: EdgeInsets.zero,
+              iconSize: 20,
+              color: ink,
+              icon: const Icon(Icons.chevron_left),
+              onPressed: canPrev ? onPrev : null,
+            ),
+            Expanded(
+              child: Text(
+                '${_monthNames[month.month - 1]} ${month.year}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontFamily: caps, fontSize: 14.5, letterSpacing: 0.7, color: ink),
+              ),
+            ),
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+              padding: EdgeInsets.zero,
+              iconSize: 20,
+              color: ink,
+              icon: const Icon(Icons.chevron_right),
+              onPressed: canNext ? onNext : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            for (final wd in _weekdays)
+              Expanded(
+                child: Text(
+                  wd,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: caps, fontSize: 11, color: sepia.withValues(alpha: 0.75)),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        for (var r = 0; r < rows; r++)
+          Row(
+            children: [
+              for (var c = 0; c < 7; c++)
+                Expanded(
+                  child: () {
+                    final idx = r * 7 + c - leadingBlanks + 1;
+                    if (idx < 1 || idx > daysInMonth) return const SizedBox(height: 32);
+                    final d = DateTime(month.year, month.month, idx);
+                    final sel = sameDay(d, selected);
+                    final isToday = sameDay(d, today);
+                    final ok = isSelectable(d);
+                    final dot = hasDot(d);
+                    return SizedBox(
+                      height: 32,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        hoverColor: ink.withValues(alpha: 0.08),
+                        onTap: ok ? () => onSelect(d) : null,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 24,
+                              height: 24,
+                              alignment: Alignment.center,
+                              decoration: sel
+                                  ? const BoxDecoration(color: ink, shape: BoxShape.circle)
+                                  : isToday
+                                      ? BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: ink.withValues(alpha: 0.45)),
+                                        )
+                                      : null,
+                              child: Text(
+                                '$idx',
+                                style: TextStyle(
+                                  fontFamily: serif,
+                                  fontSize: 13.5,
+                                  color: sel
+                                      ? paper
+                                      : ok
+                                          ? ink
+                                          : sepia.withValues(alpha: 0.35),
+                                ),
+                              ),
+                            ),
+                            SizedBox(
+                              height: 4,
+                              child: dot && !sel
+                                  ? Center(
+                                      child: Container(
+                                        width: 3.5,
+                                        height: 3.5,
+                                        decoration: const BoxDecoration(color: ink, shape: BoxShape.circle),
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }(),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+/// Modern responsive shell shared by [DayPicker] and [StationDayPicker],
+/// matching the translucent rounded styling of the filter bar.
+Widget _calendarFrame({
+  required BuildContext context,
+  required String title,
+  required Widget body,
+}) {
+  final screen = MediaQuery.sizeOf(context);
+  final wide = screen.width >= 640;
+  return Dialog(
+    backgroundColor: paper.withValues(alpha: 0.96),
+    surfaceTintColor: Colors.transparent,
+    elevation: 8,
+    shadowColor: const Color(0x382A241C),
+    insetPadding: EdgeInsets.symmetric(
+      horizontal: wide ? 32 : 14,
+      vertical: wide ? 28 : 18,
+    ),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(18),
+      side: BorderSide(color: rule.withValues(alpha: 0.65)),
+    ),
+    child: ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: wide ? 680 : 420,
+        maxHeight: screen.height * 0.88,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const SizedBox(width: 36),
+                Expanded(
+                  child: Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontFamily: caps, fontSize: 16, letterSpacing: 1.0, color: ink),
+                  ),
+                ),
+                IconButton(
+                  constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+                  padding: EdgeInsets.zero,
+                  iconSize: 20,
+                  color: ink,
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Flexible(child: body),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// The calendar dialog for local walks: compact auto-fitting month grid with
+/// sessions immediately visible beside it (tablet/Mac) or directly below it
+/// (iPhone), with rich delete confirmation.
 class DayPicker extends StatefulWidget {
   const DayPicker({super.key, required this.store, required this.speciesIn, this.shown});
 
-  /// Where the sessions are (oldest first), and where their names are saved.
   final DetectionStore store;
-
-  /// How many species the plate draws for a session.
   final int Function(Session) speciesIn;
-
-  /// The session on show now: its day opens first, and it is marked.
   final Session? shown;
 
   static Future<Session?> show(BuildContext context, DayPicker picker) => showDialog<Session>(
         context: context,
-        barrierColor: const Color(0x8C2A241C),
+        barrierColor: const Color(0x662A241C),
         builder: (_) => picker,
       );
 
   @override
   State<DayPicker> createState() => _DayPickerState();
 }
-
-DateTime _day(DateTime t) => DateTime(t.year, t.month, t.day);
 
 class _DayPickerState extends State<DayPicker> {
   List<Session> get _sessions => [
@@ -52,6 +260,7 @@ class _DayPickerState extends State<DayPicker> {
   late DateTime _picked = _sessions.isEmpty
       ? _day(DateTime.now())
       : _day(widget.shown?.start ?? _sessions.last.start);
+  late DateTime _month = DateTime(_picked.year, _picked.month);
 
   List<Session> get _that => [for (final x in _sessions) if (sameDay(x.start, _picked)) x];
 
@@ -130,6 +339,7 @@ class _DayPickerState extends State<DayPicker> {
       final days = _days;
       if (days.isNotEmpty && !days.contains(_picked)) {
         _picked = days.reduce((a, b) => a.isAfter(b) ? a : b);
+        _month = DateTime(_picked.year, _picked.month);
       }
     });
   }
@@ -138,199 +348,144 @@ class _DayPickerState extends State<DayPicker> {
   void initState() {
     super.initState();
     if (_sessions.isEmpty) return;
-    // name the places of sessions that have none yet; the list follows
     widget.store.namePlaces(nearestPlace);
-    // and where each walk went (a reserve, wood or heath)
     widget.store.nameAreas(areaOfWalk);
   }
 
   @override
   Widget build(BuildContext context) {
-    final screen = MediaQuery.sizeOf(context);
-    const small = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia);
+    const small = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14.5, color: sepia);
     if (_days.isEmpty) {
-      return Dialog(
-        backgroundColor: paper,
-        surfaceTintColor: Colors.transparent,
-        insetPadding: EdgeInsets.symmetric(horizontal: screen.width * .04, vertical: screen.height * .04),
-        shape: const RoundedRectangleBorder(side: BorderSide(color: sepia)),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 400, maxHeight: screen.height * .92),
-          child: Stack(
-            children: [
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: Padding(
-                    padding: EdgeInsets.all(6),
-                    child: DecoratedBox(
-                        decoration: BoxDecoration(border: Border.fromBorderSide(BorderSide(color: rule)))),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text('Sessions on',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 1.1, color: ink)),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 36),
-                      child: Text('Nothing recorded yet.', textAlign: TextAlign.center, style: small),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+      return _calendarFrame(
+        context: context,
+        title: 'Sessions',
+        body: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 36),
+          child: Text('Nothing recorded yet.', textAlign: TextAlign.center, style: small),
         ),
       );
     }
+
     final first = _days.reduce((a, b) => a.isBefore(b) ? a : b);
     final last = _days.reduce((a, b) => a.isAfter(b) ? a : b);
+    final firstMonth = DateTime(first.year, first.month);
+    final lastMonth = DateTime(last.year, last.month);
     final that = _that;
-    return Dialog(
-      backgroundColor: paper,
-      surfaceTintColor: Colors.transparent,
-      insetPadding: EdgeInsets.symmetric(horizontal: screen.width * .04, vertical: screen.height * .04),
-      shape: const RoundedRectangleBorder(side: BorderSide(color: sepia)),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 400, maxHeight: screen.height * .92),
-        child: Stack(
-          children: [
-            // the page's dialogs: a rule just inside the edge
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: Padding(
-                  padding: EdgeInsets.all(6),
-                  child: DecoratedBox(decoration: BoxDecoration(border: Border.fromBorderSide(BorderSide(color: rule)))),
-                ),
-              ),
+    final wide = MediaQuery.sizeOf(context).width >= 640;
+
+    final cal = _CompactMonthGrid(
+      month: _month,
+      selected: _picked,
+      today: _day(DateTime.now()),
+      canPrev: _month.isAfter(firstMonth),
+      canNext: _month.isBefore(lastMonth),
+      onPrev: () => setState(() => _month = DateTime(_month.year, _month.month - 1)),
+      onNext: () => setState(() => _month = DateTime(_month.year, _month.month + 1)),
+      isSelectable: (d) => _days.contains(d),
+      hasDot: (d) => _days.contains(d),
+      onSelect: (d) => setState(() => _picked = d),
+    );
+
+    final list = ListenableBuilder(
+      listenable: widget.store,
+      builder: (context, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              that.length == 1 ? '1 session · ${day(_picked)}' : '${that.length} sessions · ${day(_picked)}',
+              style: const TextStyle(fontFamily: caps, fontSize: 12.5, letterSpacing: 0.6, color: sepia),
             ),
-            SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Sessions on',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 1.1, color: ink)),
-                  SizedBox(
-                    height: 352,
-                    child: CalendarDatePicker(
-                      initialDate: _picked,
-                      firstDate: first,
-                      lastDate: last,
-                      currentDate: _day(DateTime.now()),
-                      selectableDayPredicate: (d) => _days.contains(_day(d)),
-                      onDateChanged: (d) => setState(() => _picked = _day(d)),
+                  for (final (placeName, group) in _byPlace(_that)) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 6, 4, 2),
+                      child: Text(placeName,
+                          style: const TextStyle(fontFamily: caps, fontSize: 13.5, letterSpacing: 0.6, color: ink)),
                     ),
-                  ),
-                  const Divider(color: rule, height: 1),
-                  const SizedBox(height: 8),
-                  Text(
-                    that.length == 1 ? '1 session on ${day(_picked)}' : '${that.length} sessions on ${day(_picked)}',
-                    textAlign: TextAlign.center,
-                    style: small,
-                  ),
-                  const SizedBox(height: 4),
-                  ListenableBuilder(
-                    listenable: widget.store,
-                    builder: (context, _) => Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final (place, group) in _byPlace(_that)) ...[
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(6, 10, 6, 2),
-                            child: Text(place,
-                                style: const TextStyle(
-                                    fontFamily: caps, fontSize: 16, letterSpacing: 16 * .06, color: ink)),
-                          ),
-                          for (final x in group) _session(x),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-                      TextButton(
-                        onPressed: that.isEmpty ? null : () => Navigator.of(context).pop(that.first),
-                        child: const Text('OK'),
-                      ),
-                    ],
-                  ),
+                    for (final x in group) _session(x),
+                  ],
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+
+    return _calendarFrame(
+      context: context,
+      title: 'Sessions',
+      body: wide
+          ? IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 280, child: cal),
+                  const VerticalDivider(width: 24, color: rule),
+                  Expanded(child: SizedBox(height: 290, child: list)),
+                ],
+              ),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                cal,
+                const Divider(height: 16, color: rule),
+                Flexible(child: list),
+              ],
+            ),
     );
   }
 
-  /// The day's sessions under their places, in the order the places were
-  /// first visited that day.
-  List<(String, List<Session>)> _byPlace(List<Session> day) {
+  List<(String, List<Session>)> _byPlace(List<Session> daySessions) {
     final groups = <String, List<Session>>{};
-    for (final x in day) {
-      final town = !x.hasPlace
-          ? 'Place unknown'
-          : x.placeName == null
-              ? place(x.lat!, x.lon!) // being named
-              : x.placeName!.isEmpty
-                  ? place(x.lat!, x.lon!)
-                  : x.placeName!;
-      final area = x.placeArea ?? '';
-      // "Ashcott – RSPB Ham Wall"; not "Shapwick – Shapwick"
-      final name = area.isEmpty || area == town ? town : '$town – $area';
+    for (final x in daySessions) {
+      final name = _placeLabel(x);
       (groups[name] ??= []).add(x);
     }
     return [for (final e in groups.entries) (e.key, e.value)];
   }
 
-  /// "#3  07:42 for 38m  ·  12 species", the one on show in madder.
   Widget _session(Session x) {
     final i = widget.store.sessions.indexOf(x);
     final on = widget.shown?.id == x.id;
-    final when = x.live ? '${clock(x.start)}, listening now' : '${clock(x.start)} for ${lasting(x.end!.difference(x.start))}';
+    final when = x.live ? '${clock(x.start)}, live' : '${clock(x.start)} · ${lasting(x.end!.difference(x.start))}';
     final n = widget.speciesIn(x);
     return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      hoverColor: ink.withValues(alpha: 0.08),
       onTap: () => Navigator.of(context).pop(x),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: rule))),
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: rule.withValues(alpha: 0.55)))),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
-              width: 44,
+              width: 36,
               child: Text('#${i + 1}',
-                  style: TextStyle(fontFamily: caps, fontSize: 15, color: on ? madder : sepia)),
+                  style: TextStyle(fontFamily: caps, fontSize: 13.5, color: on ? madder : sepia)),
             ),
             Expanded(
-              child: Text(when, style: TextStyle(fontFamily: serif, fontSize: 17, color: on ? madder : ink)),
+              child: Text(when, style: TextStyle(fontFamily: serif, fontSize: 15.5, color: on ? madder : ink)),
             ),
-            Text(n == 1 ? '1 species' : '$n species',
-                style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia)),
+            Text(n == 1 ? '1 sp.' : '$n sp.',
+                style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14, color: sepia)),
             if (!x.live)
               IconButton(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.only(left: 6),
-                constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                iconSize: 18,
-                color: sepia,
+                constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+                padding: EdgeInsets.zero,
+                iconSize: 17,
+                color: ink.withValues(alpha: 0.7),
                 icon: const Icon(Icons.delete_outline),
                 onPressed: () => _confirmDelete(x, i + 1),
               ),
@@ -341,24 +496,18 @@ class _DayPickerState extends State<DayPicker> {
   }
 }
 
-/// The calendar button on a remote station: any day from when its records
-/// begin (as far as it says) to today, each day like one of Listen's
-/// sessions. Days known to have heard nothing are greyed; under the month,
-/// the picked day's row: how many species and calls, and whether it is kept
-/// on the phone (station_archive.dart). Returns the day picked, or null.
+/// The calendar dialog for a remote station, sharing the same compact modern
+/// layout as [DayPicker].
 class StationDayPicker extends StatefulWidget {
   const StationDayPicker({super.key, required this.feed, this.keepPast, this.onKeepPast});
 
   final StationFeed feed;
-
-  /// Whether the station's past days are filled in on this device; null on
-  /// a phone not yet asked, when the calendar asks, and [onKeepPast] hears.
   final bool? keepPast;
   final ValueChanged<bool>? onKeepPast;
 
   static Future<DateTime?> show(BuildContext context, StationDayPicker picker) => showDialog<DateTime>(
         context: context,
-        barrierColor: const Color(0x8C2A241C),
+        barrierColor: const Color(0x662A241C),
         builder: (_) => picker,
       );
 
@@ -369,6 +518,7 @@ class StationDayPicker extends StatefulWidget {
 class _StationDayPickerState extends State<StationDayPicker> {
   late final DateTime _today = _day(DateTime.now());
   late DateTime _picked = widget.feed.day ?? _today;
+  late DateTime _month = DateTime(_picked.year, _picked.month);
   late bool? _keep = widget.keepPast;
 
   @override
@@ -377,88 +527,98 @@ class _StationDayPickerState extends State<StationDayPicker> {
     widget.feed.archive?.markMonth(_picked);
   }
 
+  void _stepMonth(int delta) {
+    final next = DateTime(_month.year, _month.month + delta);
+    setState(() => _month = next);
+    widget.feed.archive?.markMonth(next);
+  }
+
   @override
   Widget build(BuildContext context) {
     final since = widget.feed.since;
     final first = since == null ? DateTime(_today.year - 2, _today.month, _today.day) : _day(since);
+    final firstMonth = DateTime(first.year, first.month);
+    final lastMonth = DateTime(_today.year, _today.month);
     final archive = widget.feed.archive;
-    final screen = MediaQuery.sizeOf(context);
-    const small = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia);
+    const small = TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 13.5, color: sepia);
     final shown = _picked.isBefore(first) ? first : _picked;
-    return Dialog(
-      backgroundColor: paper,
-      surfaceTintColor: Colors.transparent,
-      insetPadding: EdgeInsets.symmetric(horizontal: screen.width * .04, vertical: screen.height * .04),
-      shape: const RoundedRectangleBorder(side: BorderSide(color: sepia)),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 400, maxHeight: screen.height * .92),
-        child: Stack(
-          children: [
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: Padding(
-                  padding: EdgeInsets.all(6),
-                  child: DecoratedBox(decoration: BoxDecoration(border: Border.fromBorderSide(BorderSide(color: rule)))),
+    final wide = MediaQuery.sizeOf(context).width >= 640;
+
+    return _calendarFrame(
+      context: context,
+      title: widget.feed.station.name,
+      body: ListenableBuilder(
+        listenable: archive ?? widget.feed,
+        builder: (context, _) {
+          final cal = _CompactMonthGrid(
+            month: _month,
+            selected: shown,
+            today: _today,
+            canPrev: _month.isAfter(firstMonth),
+            canNext: _month.isBefore(lastMonth),
+            onPrev: () => _stepMonth(-1),
+            onNext: () => _stepMonth(1),
+            isSelectable: (d) {
+              if (d.isBefore(first) || d.isAfter(_today)) return false;
+              final k = archive?.dayOf(d);
+              return k == null || k.calls > 0 || sameDay(d, shown);
+            },
+            hasDot: (d) {
+              final k = archive?.dayOf(d);
+              return k != null && k.calls > 0;
+            },
+            onSelect: (d) => setState(() => _picked = d),
+          );
+
+          final details = Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _row(shown, archive?.dayOf(shown)),
+              if (archive != null && _keep == null && widget.onKeepPast != null)
+                _ask(archive)
+              else if (archive != null) ...[
+                const SizedBox(height: 8),
+                Text(_kept(archive), textAlign: TextAlign.center, style: small),
+              ],
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: ink, foregroundColor: paper),
+                  onPressed: () => Navigator.of(context).pop(shown),
+                  child: const Text('Open day'),
                 ),
               ),
+            ],
+          );
+
+          if (wide) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 280, child: cal),
+                const VerticalDivider(width: 24, color: rule),
+                Expanded(child: details),
+              ],
+            );
+          }
+          return SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                cal,
+                const Divider(height: 16, color: rule),
+                details,
+              ],
             ),
-            SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-              child: ListenableBuilder(
-                listenable: archive ?? widget.feed,
-                builder: (context, _) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(widget.feed.station.name,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontFamily: caps, fontSize: 18, letterSpacing: 1.1, color: ink)),
-                    SizedBox(
-                      height: 352,
-                      child: CalendarDatePicker(
-                        initialDate: shown,
-                        firstDate: first,
-                        lastDate: _today,
-                        currentDate: _today,
-                        // a day known to have heard nothing can't be picked
-                        // (the one picked always can)
-                        selectableDayPredicate: (d) {
-                          final k = archive?.dayOf(d);
-                          return k == null || k.calls > 0 || _day(d) == shown;
-                        },
-                        onDisplayedMonthChanged: (m) => archive?.markMonth(m),
-                        onDateChanged: (d) => setState(() => _picked = _day(d)),
-                      ),
-                    ),
-                    const Divider(color: rule, height: 1),
-                    const SizedBox(height: 8),
-                    _row(shown, archive?.dayOf(shown)),
-                    if (archive != null && _keep == null && widget.onKeepPast != null)
-                      _ask(archive)
-                    else if (archive != null) ...[
-                      const SizedBox(height: 6),
-                      Text(_kept(archive), textAlign: TextAlign.center, style: small.copyWith(fontSize: 13)),
-                    ],
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-                        TextButton(onPressed: () => Navigator.of(context).pop(shown), child: const Text('OK')),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  /// The day as one of Listen's session rows: "Sat 21 Nov  ·  17 species,
-  /// 412 calls", in madder when it is the day on show; a tap shows it.
   Widget _row(DateTime d, StationDay? k) {
     final on = widget.feed.day == d || (widget.feed.day == null && d == _today && widget.feed.span == Span.today);
     final what = k == null
@@ -468,32 +628,32 @@ class _StationDayPickerState extends State<StationDayPicker> {
             : '${k.species == 1 ? '1 species' : '${k.species} species'}, '
                 '${k.calls == 1 ? '1 call' : '${thousands(k.calls)} calls'}';
     return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      hoverColor: ink.withValues(alpha: 0.08),
       onTap: () => Navigator.of(context).pop(d),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: rule))),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: rule.withValues(alpha: 0.55)))),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
             Expanded(
               child: Text(d == _today ? 'Today' : dayWords(d),
-                  style: TextStyle(fontFamily: serif, fontSize: 17, color: on ? madder : ink)),
+                  style: TextStyle(fontFamily: serif, fontSize: 16.5, color: on ? madder : ink)),
             ),
             if (k != null && k.saved)
               const Padding(
                 padding: EdgeInsets.only(right: 6),
-                child: Icon(Icons.download_done, size: 15, color: sepia),
+                child: Icon(Icons.download_done, size: 15, color: ink),
               ),
-            Text(what, style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 15, color: sepia)),
+            Text(what, style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14.5, color: sepia)),
           ],
         ),
       ),
     );
   }
 
-  /// A phone asks once before filling in a station's past days: each is a
-  /// request to the station and a little room on the phone.
   Widget _ask(StationArchive a) {
     final since = widget.feed.since;
     final back = since == null ? null : _today.difference(_day(since)).inDays;
@@ -513,7 +673,7 @@ class _StationDayPickerState extends State<StationDayPicker> {
             'fetched quietly while the station is shown, so they open without it. '
             'Days you open are kept either way.',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 14, color: sepia),
+            style: const TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: 13.5, color: sepia),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -527,7 +687,6 @@ class _StationDayPickerState extends State<StationDayPicker> {
     );
   }
 
-  /// How many of the station's days are kept on this device.
   String _kept(StationArchive a) {
     if (a.unsupported) return "This station can't list a day's calls, so only its counts are kept.";
     final n = a.days.values.where((k) => k.saved && k.calls > 0).length;

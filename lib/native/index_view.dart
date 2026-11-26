@@ -191,7 +191,7 @@ class IndexView extends StatelessWidget {
             padding: EdgeInsets.zero,
             iconSize: fit ? 20 : 22,
             tooltip: label,
-            color: sepia,
+            color: ink,
             icon: Icon(icon),
             onPressed: on ? () => onStep(by) : null,
           ),

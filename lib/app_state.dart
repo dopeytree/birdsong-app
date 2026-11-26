@@ -33,6 +33,11 @@ class AppState {
     final dir = await getApplicationSupportDirectory();
     await dir.create(recursive: true);
     final settings = await Settings.load(dir);
+    // On app launch / restart, always open on the home page: Local record mode
+    // on View 1 (without altering saved stations or preferences on disk).
+    settings.mode = AppMode.listen;
+    settings.plateMode = defaultPlateMode;
+    settings.nativeSizeBy = 'time';
     final models = ModelManager(Directory('${dir.path}/models'));
     final updates = ModelUpdates(settings, models);
     // Session folders under <app data>/sessions; older data in detections/

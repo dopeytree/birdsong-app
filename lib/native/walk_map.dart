@@ -1444,8 +1444,8 @@ class _WalkMapState extends State<WalkMap> {
                 ),
               if (kit != null)
                 Positioned(
-                  right: 10,
-                  top: widget.fullScreen ? 52 : 10,
+                  right: (widget.fullScreen ? MediaQuery.paddingOf(context).right : 0) + 10,
+                  top: (widget.fullScreen ? MediaQuery.paddingOf(context).top + 52 : 10),
                   child: _ZoomButtons(
                     map: _map,
                     style: widget.settings?.mapButtonStyle ?? 'ink',
@@ -1456,8 +1456,8 @@ class _WalkMapState extends State<WalkMap> {
                 ),
               if (kit != null)
                 Positioned(
-                  left: 10,
-                  top: 10,
+                  left: (widget.fullScreen ? MediaQuery.paddingOf(context).left : 0) + 10,
+                  top: (widget.fullScreen ? MediaQuery.paddingOf(context).top : 0) + 10,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -1505,8 +1505,8 @@ class _WalkMapState extends State<WalkMap> {
                 ),
               if (kit != null)
                 Positioned(
-                    left: widget.fullScreen ? 48 : 6,
-                    bottom: 10,
+                    left: (widget.fullScreen ? MediaQuery.paddingOf(context).left + 48 : 6),
+                    bottom: (widget.fullScreen ? MediaQuery.paddingOf(context).bottom : 0) + 10,
                     child: _Credit(_credit +
                         (widget.landmarks != null ? _extrasCredit() : '') +
                         (_recordsKey != null ? '\nBird records: GBIF.org' : '') +

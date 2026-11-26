@@ -176,22 +176,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _iconButton(_SettingsTab tab) {
     final active = _tab == tab;
-    final fg = active ? madder : sepia;
     return InkWell(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(10),
+      hoverColor: ink.withValues(alpha: 0.08),
+      highlightColor: ink.withValues(alpha: 0.12),
       onTap: () => setState(() => _tab = tab),
       child: Container(
         width: 46,
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
         decoration: active
             ? const BoxDecoration(
-                border: Border(bottom: BorderSide(color: madder, width: 2)),
+                border: Border(bottom: BorderSide(color: ink, width: 2)),
               )
             : null,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(tab.icon, size: 20, color: fg),
+            Icon(tab.icon, size: 20, color: active ? ink : ink.withValues(alpha: 0.55)),
             const SizedBox(height: 2),
             Text(
               tab.label,
@@ -213,20 +214,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Widget> _tabBody(BuildContext context, bool listen) => switch (_tab) {
         _SettingsTab.display => [
             s.webPlate ? _displaySection(context, listen, open: true) : _flutterDisplaySection(context, open: true),
-            const Divider(height: 24, color: rule),
-            _section(
-              context,
-              'Experimental',
-              summary: s.webPlate ? 'The old web plate' : 'Nothing switched on',
-              [
-                _switch('Use the old web plate', s.webPlate, (v) => s.update((x) => x.webPlate = v)),
-                Text(
-                  'The plate as the web page drew it, before it was moved into Flutter. '
-                  'Its own Display options show above while it is on.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
           ],
         _SettingsTab.map => [
             _mapSection(context, open: true),
@@ -830,17 +817,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     app.page?.set(key, value);
   }
 
-  /// The Flutter plate's Display options (the web plate's, below, while
-  /// Experimental > Use the old web plate is on).
-  Widget _flutterDisplaySection(BuildContext context, {bool open = false}) => _section(
-        context,
-        'Display',
-        open: open,
-        summary: PageControl.sizeBy[s.nativeSizeBy] ?? '',
-        [
+  /// The Flutter plate's Display options: core everyday controls upfront,
+  /// fine-grained tweaks tucked cleanly under "More display options".
+  Widget _flutterDisplaySection(BuildContext context, {bool open = false}) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           _switch('Fit on one screen', s.nativeFit, (v) => s.update((x) => x.nativeFit = v)),
-          _switch('Title', s.nativeShowTitle, (v) => s.update((x) => x.nativeShowTitle = v)),
-          _switch('Date', s.nativeShowDate, (v) => s.update((x) => x.nativeShowDate = v)),
           _dropdown(
               'Song scribble',
               s.songScribbleMode,
@@ -850,27 +832,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'off': 'Off',
               },
               (v) => s.update((x) => x.songScribbleMode = v)),
-          _switch('Species and calls under the date', s.nativeTotals, (v) => s.update((x) => x.nativeTotals = v)),
-          _switch('Heading in small capitals', s.nativeTitleCaps, (v) => s.update((x) => x.nativeTitleCaps = v)),
-          _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
-              const {'ink': 'Black, as the title (default)', 'sepia': 'Sepia'},
-              (v) => s.update((x) => x.nativeHeadingInk = v == 'ink')),
-          _dropdown('Latest marked by', s.nativeMarkAt, const {...PageControl.markAt, 'none': 'Nothing'},
-              (v) => s.update((x) => x.nativeMarkAt = v)),
-          _dropdown('Size by', s.nativeSizeBy, PageControl.sizeBy, (v) => s.update((x) => x.nativeSizeBy = v)),
-          _dropdown(
-              'Plates on paper',
-              s.nativePlateStyle,
-              const {
-                'cutout': 'Cut out, as the web plate does',
-                'tint': 'Tinted into the page',
-                'plain': 'As they come',
-              },
-              (v) => s.update((x) => x.nativePlateStyle = v)),
-          _switch('Skulls, wings and eggs', s.nativeParts, (v) => s.update((x) => x.nativeParts = v)),
-          _switch('Show bird info on hover', s.nativeHoverInfo, (v) => s.update((x) => x.nativeHoverInfo = v)),
           _switch('Name tickets on all birds', s.nativeAllNameTickets,
               (v) => s.update((x) => x.nativeAllNameTickets = v)),
+          _switch('Show bird info on hover', s.nativeHoverInfo, (v) => s.update((x) => x.nativeHoverInfo = v)),
           _dropdown(
               'Limit species',
               '${s.nativeLimit}',
@@ -881,6 +845,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   '${s.nativeLimit}': 'The ${s.nativeLimit} most heard',
               },
               (v) => s.update((x) => x.nativeLimit = int.tryParse(v) ?? 0)),
+          const Divider(height: 20, color: rule),
+          _section(
+            context,
+            'More display options',
+            summary: 'Heading, plates, markers and legacy view',
+            [
+              _switch('Title', s.nativeShowTitle, (v) => s.update((x) => x.nativeShowTitle = v)),
+              _switch('Date', s.nativeShowDate, (v) => s.update((x) => x.nativeShowDate = v)),
+              _switch('Species and calls under the date', s.nativeTotals, (v) => s.update((x) => x.nativeTotals = v)),
+              _switch('Heading in small capitals', s.nativeTitleCaps, (v) => s.update((x) => x.nativeTitleCaps = v)),
+              _dropdown('Heading lines', s.nativeHeadingInk ? 'ink' : 'sepia',
+                  const {'ink': 'Black, as the title (default)', 'sepia': 'Sepia'},
+                  (v) => s.update((x) => x.nativeHeadingInk = v == 'ink')),
+              _dropdown('Latest marked by', s.nativeMarkAt, const {...PageControl.markAt, 'none': 'Nothing'},
+                  (v) => s.update((x) => x.nativeMarkAt = v)),
+              _dropdown('Size by', s.nativeSizeBy, PageControl.sizeBy, (v) => s.update((x) => x.nativeSizeBy = v)),
+              _dropdown(
+                  'Plates on paper',
+                  s.nativePlateStyle,
+                  const {
+                    'cutout': 'Cut out, as the web plate does',
+                    'tint': 'Tinted into the page',
+                    'plain': 'As they come',
+                  },
+                  (v) => s.update((x) => x.nativePlateStyle = v)),
+              _switch('Skulls, wings and eggs', s.nativeParts, (v) => s.update((x) => x.nativeParts = v)),
+              _switch('Use the old web plate', s.webPlate, (v) => s.update((x) => x.webPlate = v)),
+            ],
+          ),
         ],
       );
 

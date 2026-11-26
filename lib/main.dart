@@ -85,8 +85,35 @@ ThemeData birdsongTheme() {
     fontFamily: serif,
     textTheme: text,
     scaffoldBackgroundColor: paper,
+    hoverColor: ink.withValues(alpha: 0.08),
+    highlightColor: ink.withValues(alpha: 0.12),
+    splashColor: ink.withValues(alpha: 0.10),
+    iconTheme: const IconThemeData(color: ink),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        foregroundColor: ink,
+        hoverColor: ink.withValues(alpha: 0.08),
+        highlightColor: ink.withValues(alpha: 0.12),
+        focusColor: ink.withValues(alpha: 0.08),
+      ),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: paper.withValues(alpha: 0.95),
+      surfaceTintColor: Colors.transparent,
+      elevation: 6,
+      shadowColor: const Color(0x332A241C),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: rule.withValues(alpha: 0.65)),
+      ),
+    ),
     appBarTheme: const AppBarTheme(
-        backgroundColor: paper, surfaceTintColor: Colors.transparent, scrolledUnderElevation: 0),
+      backgroundColor: paper,
+      foregroundColor: ink,
+      iconTheme: IconThemeData(color: ink),
+      surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 0,
+    ),
   );
 }
 

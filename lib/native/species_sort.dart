@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../main.dart' show caps, ink, madder, paper, sepia;
+import '../main.dart' show caps, ink, madder, paper, rule, sepia;
 import 'plate_library.dart';
 
-/// All sort options shared between "No pecking order" and "Index of Species".
+/// All sort options shared between "No pecking order" and "Index of Species",
+/// in the user's preferred order.
 class SortOption {
   const SortOption(this.key, this.label, this.icon, {required this.defaultAsc});
 
@@ -18,15 +19,15 @@ class SortOption {
 const speciesSortOptions = <SortOption>[
   SortOption('calls', 'Calls', Icons.graphic_eq, defaultAsc: false),
   SortOption('recent', 'Latest', Icons.schedule, defaultAsc: false),
-  SortOption('active', 'Active', Icons.wb_twilight, defaultAsc: true),
-  SortOption('name', 'Name', Icons.sort_by_alpha, defaultAsc: true),
   SortOption('family', 'Species', Icons.workspaces_outlined, defaultAsc: true),
-  SortOption('rare', 'Rarity', Icons.diamond_outlined, defaultAsc: true),
-  SortOption('weight', 'Weight', Icons.scale_outlined, defaultAsc: false),
+  SortOption('name', 'Name', Icons.sort_by_alpha, defaultAsc: true),
   SortOption('wingspan', 'Wingspan', Icons.open_in_full, defaultAsc: false),
-  SortOption('region', 'Region', Icons.public, defaultAsc: true),
+  SortOption('weight', 'Weight', Icons.scale_outlined, defaultAsc: false),
   SortOption('colour', 'Colour', Icons.palette_outlined, defaultAsc: true),
+  SortOption('region', 'Region', Icons.public, defaultAsc: true),
   SortOption('artist', 'Artist', Icons.brush_outlined, defaultAsc: true),
+  SortOption('rare', 'Rarity', Icons.diamond_outlined, defaultAsc: true),
+  SortOption('active', 'Active', Icons.wb_twilight, defaultAsc: true),
 ];
 
 /// Extract a clean sortable artist / illustrator name from a plate's credit.
@@ -48,9 +49,9 @@ String artistOfPlate(PlateArt? art) {
   return raw.split(',').first.split('.').first.trim();
 }
 
-/// Clean, modern, transparent sort control with black icons, one-word labels,
-/// and a direction flip arrow (↑ / ↓) placed 1st inside the collapsible filter
-/// bar so it shows and hides together with the filters.
+/// Clean, modern, translucent sort control with black icons and one-word
+/// labels. Expands into a wrapping panel so every filter is immediately
+/// visible on mobile without hidden horizontal scrolling.
 class SpeciesSortBar extends StatelessWidget {
   const SpeciesSortBar({
     super.key,
@@ -77,58 +78,57 @@ class SpeciesSortBar extends StatelessWidget {
       (o) => o.key == sortKey,
       orElse: () => speciesSortOptions.first,
     );
-    return Row(
-      mainAxisSize: centered ? MainAxisSize.min : MainAxisSize.max,
-      crossAxisAlignment: CrossAxisAlignment.center,
+    final trigger = IconButton(
+      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+      padding: EdgeInsets.zero,
+      iconSize: 22,
+      tooltip: open ? 'Hide sort' : 'Sort by ${active.label}',
+      icon: Icon(open ? Icons.close : Icons.swap_vert, color: ink),
+      onPressed: onToggleOpen,
+    );
+    final panel = AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      alignment: centered ? Alignment.topCenter : Alignment.topLeft,
+      child: open
+          ? Container(
+              margin: EdgeInsets.only(top: centered ? 4 : 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: paper.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: rule.withValues(alpha: 0.55)),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x242A241C), offset: Offset(0, 4), blurRadius: 14),
+                ],
+              ),
+              child: Wrap(
+                spacing: 2,
+                runSpacing: 2,
+                alignment: centered ? WrapAlignment.center : WrapAlignment.start,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  // Direction toggle sits 1st inside the filter bar, showing and hiding with it.
+                  IconButton(
+                    constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                    padding: EdgeInsets.zero,
+                    iconSize: 18,
+                    tooltip: ascending ? 'Ascending (tap to reverse)' : 'Descending (tap to reverse)',
+                    icon: Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward, color: ink),
+                    onPressed: onFlipDirection,
+                  ),
+                  for (final opt in speciesSortOptions) _chip(opt),
+                ],
+              ),
+            )
+          : const SizedBox.shrink(),
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
       children: [
-        IconButton(
-          constraints: const BoxConstraints.tightFor(width: 38, height: 38),
-          padding: EdgeInsets.zero,
-          iconSize: 21,
-          tooltip: open ? 'Hide sort' : 'Sort by ${active.label}',
-          icon: Icon(open ? Icons.close : Icons.sort, color: ink),
-          onPressed: onToggleOpen,
-        ),
-        Flexible(
-          child: ClipRect(
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.centerLeft,
-              child: open
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: paper.withValues(alpha: 0.78),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Direction flip arrow sits 1st inside the filter bar,
-                            // showing and hiding alongside the filters.
-                            IconButton(
-                              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-                              padding: EdgeInsets.zero,
-                              iconSize: 17,
-                              tooltip: ascending ? 'Ascending (tap to reverse)' : 'Descending (tap to reverse)',
-                              icon: Icon(
-                                ascending ? Icons.arrow_upward : Icons.arrow_downward,
-                                color: ink,
-                              ),
-                              onPressed: onFlipDirection,
-                            ),
-                            for (final opt in speciesSortOptions) _chip(opt),
-                          ],
-                        ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ),
-        ),
+        trigger,
+        panel,
       ],
     );
   }
@@ -136,7 +136,9 @@ class SpeciesSortBar extends StatelessWidget {
   Widget _chip(SortOption opt) {
     final selected = opt.key == sortKey;
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
+      hoverColor: ink.withValues(alpha: 0.08),
+      highlightColor: ink.withValues(alpha: 0.12),
       onTap: () {
         if (selected) {
           onFlipDirection();
@@ -155,7 +157,7 @@ class SpeciesSortBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(opt.icon, size: 16, color: selected ? madder : ink),
-            const SizedBox(width: 4),
+            const SizedBox(width: 5),
             Text(
               opt.label,
               style: TextStyle(

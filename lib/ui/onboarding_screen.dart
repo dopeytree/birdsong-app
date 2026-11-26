@@ -122,6 +122,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _finishListen() {
     s.update((x) {
       x.mode = AppMode.listen;
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = 'time';
       x.activeModels = {_model};
       x.plateModel = _model;
       x.useCoreMl = _coreMl;
@@ -130,7 +132,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       x.onboarded = true;
     });
     widget.onDone(0);
-    app.engine.start();
   }
 
   @override

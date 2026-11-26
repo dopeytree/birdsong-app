@@ -351,6 +351,7 @@ class _NativePlateState extends State<NativePlate> {
   void dispose() {
     _landmarks.dispose();
     _noteTimer?.cancel();
+    _heartTimer?.cancel();
     _feed?.dispose();
     _lib?.close();
     _traits?.dispose();
@@ -406,6 +407,34 @@ class _NativePlateState extends State<NativePlate> {
   final Map<String, double?> _remoteActiveHour = {};
   final Set<String> _remoteActiveLoading = {};
   AppMode? _lastAppMode;
+
+  // Heart fill pulse: briefly fills the top-left heart whenever a new
+  // detection arrives (local or remote).
+  String? _heartScope;
+  int _heartSeenCalls = -1;
+  bool _heartPulse = false;
+  Timer? _heartTimer;
+
+  void _checkHeartPulse(String scope, int totalCalls) {
+    if (_heartScope != scope) {
+      _heartScope = scope;
+      _heartSeenCalls = totalCalls;
+      return;
+    }
+    if (totalCalls > _heartSeenCalls) {
+      _heartSeenCalls = totalCalls;
+      _heartTimer?.cancel();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _heartPulse = true);
+        _heartTimer = Timer(const Duration(milliseconds: 1800), () {
+          if (mounted) setState(() => _heartPulse = false);
+        });
+      });
+    } else {
+      _heartSeenCalls = totalCalls;
+    }
+  }
 
   void _ensureRemoteActiveHours(StationFeed f, List<_Row> rows) {
     final scope = '${f.station.id}:${f.day != null ? ymd(f.day!) : f.span.name}:${f.light.name}';
@@ -769,155 +798,115 @@ class _NativePlateState extends State<NativePlate> {
           autofocus: true,
           child: Scaffold(
             backgroundColor: paper,
-            body: SafeArea(
-              child: ListenableBuilder(
-                listenable: Listenable.merge([app.store, app.settings, _landmarks]),
-                builder: (context, _) {
-                  final passed =
-                      app.settings.mapExtras ? (_landmarks.walk?.passed ?? const <Passed>[]) : const <Passed>[];
-                  final btnStyle = app.settings.mapButtonStyle;
-                  final isMadder = btnStyle == 'madder';
-                  final isInk = btnStyle == 'ink';
-                  final btnBg = isMadder
-                      ? madder
-                      : isInk
-                          ? paper.withValues(alpha: 0.85)
-                          : paper.withValues(alpha: 0.94);
-                  final btnFg = isMadder ? paper : (isInk ? ink : madder);
-                  final btnShape = isMadder
-                      ? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4)))
-                      : const CircleBorder(side: BorderSide(color: rule));
-                  return Stack(children: [
-                    Positioned.fill(
-                      child: RepaintBoundary(
-                        key: mapShotKey,
-                        child: LayoutBuilder(
-                          builder: (context, box) => WalkMap(
-                            walk: walk(),
-                            allBirds: app.settings.mapBirds == 'all',
-                            size: box.biggest,
-                            // the card opens over the full-screen map; closing it
-                            // leaves the map full screen
-                            onBird: (sci, common) => _openFromMap(sci, common, rows),
-                            onHold: (_) {},
-                            landmarks: app.settings.mapExtras ? _landmarks : null,
-                            settings: app.settings,
-                            species: [for (final r in rows) (sci: r.sci, common: r.common)],
-                            fullScreen: true,
-                            onPoi: passed.isNotEmpty
-                                ? () => showPassed(context, _landmarks, about: app.settings.mapPassedAbout)
-                                : null,
-                          ),
+            body: ListenableBuilder(
+              listenable: Listenable.merge([app.store, app.settings, _landmarks]),
+              builder: (context, _) {
+                final passed =
+                    app.settings.mapExtras ? (_landmarks.walk?.passed ?? const <Passed>[]) : const <Passed>[];
+                final btnStyle = app.settings.mapButtonStyle;
+                final isMadder = btnStyle == 'madder';
+                final isInk = btnStyle == 'ink';
+                final btnBg = isMadder
+                    ? madder
+                    : isInk
+                        ? paper.withValues(alpha: 0.85)
+                        : paper.withValues(alpha: 0.94);
+                final btnFg = isMadder ? paper : (isInk ? ink : madder);
+                final btnShape = isMadder
+                    ? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4)))
+                    : const CircleBorder(side: BorderSide(color: rule));
+                return Stack(children: [
+                  Positioned.fill(
+                    child: RepaintBoundary(
+                      key: mapShotKey,
+                      child: LayoutBuilder(
+                        builder: (context, box) => WalkMap(
+                          walk: walk(),
+                          allBirds: app.settings.mapBirds == 'all',
+                          size: box.biggest,
+                          // the card opens over the full-screen map; closing it
+                          // leaves the map full screen
+                          onBird: (sci, common) => _openFromMap(sci, common, rows),
+                          onHold: (_) {},
+                          landmarks: app.settings.mapExtras ? _landmarks : null,
+                          settings: app.settings,
+                          species: [for (final r in rows) (sci: r.sci, common: r.common)],
+                          fullScreen: true,
+                          onPoi: passed.isNotEmpty
+                              ? () => showPassed(context, _landmarks, about: app.settings.mapPassedAbout)
+                              : null,
                         ),
                       ),
                     ),
-                    // Top-right menu button on the map (always visible in all views).
-                    Positioned(
-                      right: 4,
-                      top: 4,
-                      child: SettingsButton(
-                        app: app,
-                        color: isInk ? ink : (isMadder ? madder : madder),
-                        onOpenCalendar: _pickDay,
-                      ),
+                  ),
+                  SafeArea(
+                    child: Stack(
+                      children: [
+                        // Top-right menu button on the map (always visible in all views).
+                        Positioned(
+                          right: 4,
+                          top: 4,
+                          child: SettingsButton(
+                            app: app,
+                            color: ink,
+                            onOpenCalendar: _pickDay,
+                          ),
+                        ),
+                        // Bottom-left icon on the map: closes the map and returns
+                        // to View 1 (Most recent on Local / Most heard on Remote).
+                        Positioned(
+                          left: 8,
+                          bottom: 8,
+                          child: () {
+                            final isRemote = app.settings.mode == AppMode.station;
+                            final backIcon =
+                                isRemote ? Icons.view_quilt_outlined : Icons.auto_awesome_mosaic_outlined;
+                            final backTip = isRemote ? 'Most heard' : 'Recent ramblings';
+                            return isInk
+                                ? IconButton(
+                                    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                                    padding: EdgeInsets.zero,
+                                    iconSize: 22,
+                                    tooltip: backTip,
+                                    icon: Icon(backIcon, color: ink),
+                                    onPressed: () => Navigator.of(context).maybePop(),
+                                  )
+                                : Material(
+                                    color: btnBg,
+                                    elevation: 2,
+                                    shadowColor: const Color(0x4D3C280A),
+                                    shape: btnShape,
+                                    clipBehavior: Clip.antiAlias,
+                                    child: InkWell(
+                                      onTap: () => Navigator.of(context).maybePop(),
+                                      child: SizedBox(
+                                        width: 38,
+                                        height: 38,
+                                        child: Center(
+                                          child: Icon(backIcon, size: 21, color: btnFg),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                          }(),
+                        ),
+                        // Bottom-right share button on the map (modern style matching filter menu).
+                        if (PlateShare.supported)
+                          Positioned(
+                            right: 8,
+                            bottom: 8,
+                            child: _shareMenu(
+                              key: mapShareKey,
+                              tooltip: 'Share or save the map',
+                              onShare: shareMap,
+                              onSave: saveMap,
+                            ),
+                          ),
+                      ],
                     ),
-                    // Bottom-left icon on the map: closes the map and returns
-                    // to View 1 (Most recent on Local / Most heard on Remote).
-                    Positioned(
-                      left: 8,
-                      bottom: 8,
-                      child: () {
-                        final isRemote = app.settings.mode == AppMode.station;
-                        final backIcon = isRemote ? Icons.view_quilt_outlined : Icons.auto_awesome_mosaic_outlined;
-                        final backTip = isRemote ? 'Most heard' : 'Recent ramblings';
-                        return isInk
-                            ? IconButton(
-                                constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                                padding: EdgeInsets.zero,
-                                iconSize: 22,
-                                tooltip: backTip,
-                                icon: Icon(backIcon, color: ink),
-                                onPressed: () => Navigator.of(context).maybePop(),
-                              )
-                            : Material(
-                                color: btnBg,
-                                elevation: 2,
-                                shadowColor: const Color(0x4D3C280A),
-                                shape: btnShape,
-                                clipBehavior: Clip.antiAlias,
-                                child: InkWell(
-                                  onTap: () => Navigator.of(context).maybePop(),
-                                  child: SizedBox(
-                                    width: 38,
-                                    height: 38,
-                                    child: Center(
-                                      child: Icon(backIcon, size: 21, color: btnFg),
-                                    ),
-                                  ),
-                                ),
-                              );
-                      }(),
-                    ),
-                    // Bottom-right share button on the map.
-                    if (PlateShare.supported)
-                      Positioned(
-                        right: 8,
-                        bottom: 8,
-                        child: isInk
-                            ? PopupMenuButton<String>(
-                                key: mapShareKey,
-                                padding: const EdgeInsets.all(9),
-                                iconSize: 22,
-                                tooltip: 'Share or save the map',
-                                icon: Icon(Icons.ios_share, color: ink),
-                                color: paper,
-                                onSelected: (v) => v == 'save' ? saveMap() : shareMap(),
-                                itemBuilder: (_) => const [
-                                  PopupMenuItem(
-                                    value: 'share',
-                                    child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'save',
-                                    child: ListTile(
-                                        leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
-                                  ),
-                                ],
-                              )
-                            : Material(
-                                color: btnBg,
-                                elevation: 2,
-                                shadowColor: const Color(0x4D3C280A),
-                                shape: btnShape,
-                                clipBehavior: Clip.antiAlias,
-                                child: PopupMenuButton<String>(
-                                  key: mapShareKey,
-                                  padding: EdgeInsets.zero,
-                                  tooltip: 'Share or save the map',
-                                  color: paper,
-                                  onSelected: (v) => v == 'save' ? saveMap() : shareMap(),
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem(
-                                      value: 'share',
-                                      child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'save',
-                                      child: ListTile(
-                                          leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
-                                    ),
-                                  ],
-                                  child: SizedBox(
-                                    width: 38,
-                                    height: 38,
-                                    child: Center(child: Icon(Icons.ios_share, size: 19, color: btnFg)),
-                                  ),
-                                ),
-                              ),
-                      ),
-                  ]);
-                },
-              ),
+                  ),
+                ]);
+              },
             ),
           ),
         ),
@@ -1125,19 +1114,15 @@ class _NativePlateState extends State<NativePlate> {
         final marked = app.settings.nativeMarkAt == 'none' ? null : newest;
         WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
         final calls = all.fold<int>(0, (n, r) => n + r.count);
+        _checkHeartPulse(_showingFor(ses), calls);
         final i = store.selectedIndex, n = store.sessions.length;
-        final red = Theme.of(context).colorScheme.primary;
-        final showPlate = true;
         final showIndex = !equal;
         final showHeading = !equal;
         final showTopRight = !spotlight && !equal;
         final fit = app.settings.nativeFit;
-        _bottomRoom = 40 + 8 + 6.0;
+        _bottomRoom = equal ? 0.0 : (40 + 8 + 6.0);
         // the folded index's heading has a row above the buttons
-        // Folded away, the index's heading moves into the row along the
-        // bottom, between the map and share buttons, and the plate takes
-        // the room; opened, the list is where it always was.
-        final foldedInline = showIndex && showPlate && !spotlight && app.settings.nativeIndexFolded;
+        final foldedInline = showIndex && !spotlight && app.settings.nativeIndexFolded;
         if (foldedInline) _bottomRoom += 40 + 24;
         final sortedIndex = _sortRows(rows, ses: ses, feed: feed);
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
@@ -1148,12 +1133,9 @@ class _NativePlateState extends State<NativePlate> {
               width: width,
               fit: fit,
               narrow: screen <= 720,
-              // the index alone: never folded, nothing to fold to
-              folded: showPlate && app.settings.nativeIndexFolded,
-              onFold: showPlate
-                  ? () => app.settings.update((x) => x.nativeIndexFolded = !x.nativeIndexFolded)
-                  : () {},
-              foldable: showPlate,
+              folded: app.settings.nativeIndexFolded,
+              onFold: () => app.settings.update((x) => x.nativeIndexFolded = !x.nativeIndexFolded),
+              foldable: true,
               inline: inline,
               species: all.length,
               newest: marked,
@@ -1182,6 +1164,12 @@ class _NativePlateState extends State<NativePlate> {
               key: _shotKey,
               child: PaperBackground(
                 child: SafeArea(
+                  // On No pecking order, use 100% of the full screen canvas
+                  // edge-to-edge (all buttons sit in the corners inside SafeArea).
+                  top: !equal,
+                  bottom: !equal,
+                  left: !equal,
+                  right: !equal,
                   child: spotlight
                       ? _spotlight(rows, newest)
                       // The heading stays put beside the buttons at the top; the
@@ -1243,16 +1231,12 @@ class _NativePlateState extends State<NativePlate> {
                         ? const NeverScrollableScrollPhysics()
                         : null,
                     // room at both ends so the first and last lines sit clear of the fades
-                    padding: const EdgeInsets.symmetric(vertical: _fadeRoom),
+                    padding: EdgeInsets.symmetric(vertical: equal ? 0 : _fadeRoom),
                     child: Column(
                       key: _allKey,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // the index alone sits in the middle of the window
-                        if (!showPlate) SizedBox(height: _indexAloneTop(box.maxHeight)),
-                        if (!showPlate)
-                          const SizedBox.shrink()
-                        else if (rows.isEmpty)
+                        if (rows.isEmpty)
                           Padding(
                             key: _plateKey,
                             padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
@@ -1280,51 +1264,28 @@ class _NativePlateState extends State<NativePlate> {
                             ),
                           )
                         else
-                          // #plate{margin:.2rem clamp(.5rem,2vw,2rem) .55rem}
-                          Stack(
+                          // Full-canvas plate (defunct side < > arrows removed).
+                          Padding(
                             key: _plateKey,
-                            children: [
-                              Padding(
-                                padding: EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
-                                child: _collage(
-                                  ses,
-                                  onPlate,
-                                  newest,
-                                  box.maxWidth - 2 * plateSide,
-                                  equal
-                                      ? math.max(140.0, box.maxHeight - 2 * _fadeRoom - 12)
-                                      : _plateHeight(box.maxWidth, box.maxHeight) - 12,
-                                  sizeBy: equal
-                                      ? 'equal'
-                                      : (feed != null ? 'calls' : 'time'),
-                                ),
-                              ),
-                              // With no index there is no heading to carry the
-                              // session arrows: the web plate's app draws a
-                              // pair at the plate's edges instead.
-                              if (!showIndex && n > 1) ...[
-                                Positioned(
-                                  left: 0,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: Center(
-                                      child: _EdgeArrow(Icons.chevron_left, 'Earlier session',
-                                          i > 0 ? () => store.step(-1) : null)),
-                                ),
-                                Positioned(
-                                  right: 0,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: Center(
-                                      child: _EdgeArrow(Icons.chevron_right, 'Later session',
-                                          i >= 0 && i < n - 1 ? () => store.step(1) : null)),
-                                ),
-                              ],
-                            ],
+                            padding: equal
+                                ? const EdgeInsets.fromLTRB(8, 8, 8, 8)
+                                : EdgeInsets.fromLTRB(plateSide, 3.2, plateSide, 8.8),
+                            child: _collage(
+                              ses,
+                              onPlate,
+                              newest,
+                              equal ? math.max(100.0, box.maxWidth - 16) : box.maxWidth - 2 * plateSide,
+                              equal
+                                  ? math.max(140.0, box.maxHeight - 16)
+                                  : _plateHeight(box.maxWidth, box.maxHeight) - 12,
+                              sizeBy: equal
+                                  ? 'equal'
+                                  : (feed != null ? 'calls' : 'time'),
+                            ),
                           ),
                         // The page's caption, under the plate; not when it is
-                        // fitted on one screen (body.fit #caption)
-                        if (showPlate && !fit)
+                        // fitted on one screen (body.fit #caption) or on No pecking order.
+                        if (!fit && !equal)
                           Center(
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(maxWidth: 704),
@@ -1352,7 +1313,7 @@ class _NativePlateState extends State<NativePlate> {
                           child: ConstrainedBox(
                             constraints: BoxConstraints(maxWidth: fit ? double.infinity : 1248),
                             child: Padding(
-                              padding: EdgeInsets.fromLTRB(side, !showPlate ? 12.8 : (fit ? 8 : 35.2), side, fit ? 12.8 : 40),
+                              padding: EdgeInsets.fromLTRB(side, fit ? 8 : 35.2, side, fit ? 12.8 : 40),
                               child: index(math.min(box.maxWidth, fit ? double.infinity : 1248) - 2 * side, box.maxWidth),
                             ),
                           ),
@@ -1411,8 +1372,8 @@ class _NativePlateState extends State<NativePlate> {
                               tooltip: 'Stations',
                               constraints: const BoxConstraints.tightFor(
                                   width: SourcePill.rowHeight, height: SourcePill.rowHeight),
-                              icon: Text('±', style: TextStyle(fontSize: 22, height: 1, color: red)),
-                              color: red,
+                              icon: const Text('±', style: TextStyle(fontSize: 22, height: 1, color: ink)),
+                              color: ink,
                               onPressed: () => _stationsTap(bc),
                             ),
                           ),
@@ -1436,7 +1397,7 @@ class _NativePlateState extends State<NativePlate> {
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SettingsButton(app: app, color: red, onOpenCalendar: _pickDay),
+                          SettingsButton(app: app, color: ink, onOpenCalendar: _pickDay),
                         ],
                       ),
                     ],
@@ -1499,12 +1460,12 @@ class _NativePlateState extends State<NativePlate> {
                       'spotlight' => 'No pecking order',
                       _ => 'The walk on a map',
                     },
-                    icon: Icon(switch (mode.key) {
-                      'time' => Icons.interests_outlined,
-                      'spotlight' => Icons.grid_view_outlined,
-                      _ => Icons.map_outlined,
-                    }),
-                    color: red,
+                    icon: switch (mode.key) {
+                      'time' => const _ThinInterestsIcon(size: 21, color: ink),
+                      'spotlight' => const Icon(Icons.grid_view_outlined, color: ink),
+                      _ => const Icon(Icons.map_outlined, color: ink),
+                    },
+                    color: ink,
                     onPressed: equal ? () => _openMap(feed, rows) : _nextMode,
                   ),
                 ),
@@ -1536,30 +1497,16 @@ class _NativePlateState extends State<NativePlate> {
                       remoteName: feed != null ? newestCommon : null,
                     ),
                   ),
-                // Share or save, out of the way at the bottom right.
+                // Share or save, out of the way at the bottom right (modern translucent menu).
                 if (PlateShare.supported)
                   Positioned(
                     right: 8,
                     bottom: 8,
-                    child: PopupMenuButton<String>(
+                    child: _shareMenu(
                       key: _shareKey,
-                      padding: const EdgeInsets.all(9),
-                      iconSize: 22,
                       tooltip: 'Share or save the plate',
-                      icon: Icon(Icons.ios_share, color: red),
-                      color: paper,
-                      onSelected: (v) => v == 'save' ? _save() : _share(),
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(
-                          value: 'share',
-                          child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
-                        ),
-                        PopupMenuItem(
-                          value: 'save',
-                          child: ListTile(
-                              leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
-                        ),
-                      ],
+                      onShare: _share,
+                      onSave: _save,
                     ),
                   ),
                 if (_note != null)
@@ -1694,7 +1641,8 @@ class _NativePlateState extends State<NativePlate> {
                     ],
                   ),
                 ),
-              // Heart outline + total species count (achievements / life-list preview)
+              // Heart outline + total species count; subtly fills in whenever a
+              // bird is detected (live locally or new call on remote).
               () {
                 final lifeCount = feed != null
                     ? species
@@ -1702,12 +1650,21 @@ class _NativePlateState extends State<NativePlate> {
                         for (final d in app.store.all)
                           if (!app.settings.isIgnoredSpecies(d.common, d.sci)) d.sci
                       }.length;
+                final filled = _heartPulse || (feed == null && app.engine.liveSpecies.isNotEmpty);
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Padding(
                       padding: const EdgeInsets.only(right: 5),
-                      child: Icon(Icons.favorite_border, size: 15, color: madder),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 280),
+                        child: Icon(
+                          filled ? Icons.favorite : Icons.favorite_border,
+                          key: ValueKey(filled),
+                          size: 15,
+                          color: ink,
+                        ),
+                      ),
                     ),
                     Text(thousands(lifeCount), style: sub),
                   ],
@@ -1788,15 +1745,59 @@ class _NativePlateState extends State<NativePlate> {
     );
   }
 
-  /// View c, the index alone, as the app places it on the web plate: in the
-  /// middle of the window rather than of the room under the heading, as far
-  /// as there is room (plate-extras.js, balance). The space above it.
-  double _indexAloneTop(double screen) {
-    // [screen] is the scrolling part, under the heading
-    final room = screen - 2 * _fadeRoom;
-    // balanced against the room the top buttons take, as it has no heading
-    final pad = math.max(0.0, math.min(_buttonsTop, room - _indexH));
-    return math.max(0.0, (room - pad - _indexH) / 2);
+  /// Modern translucent share / save popup menu matching SpeciesSortBar.
+  Widget _shareMenu({
+    required Key key,
+    required String tooltip,
+    required VoidCallback onShare,
+    required VoidCallback onSave,
+  }) {
+    return PopupMenuButton<String>(
+      key: key,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 168),
+      iconSize: 21,
+      tooltip: tooltip,
+      icon: const SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(child: Icon(Icons.ios_share, size: 21, color: ink)),
+      ),
+      color: paper.withValues(alpha: 0.94),
+      elevation: 6,
+      shadowColor: const Color(0x2E2A241C),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: rule.withValues(alpha: 0.55)),
+      ),
+      onSelected: (v) => v == 'save' ? onSave() : onShare(),
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'share',
+          height: 40,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.ios_share, size: 18, color: ink),
+              SizedBox(width: 10),
+              Text('Share', style: TextStyle(fontFamily: caps, fontSize: 13.5, letterSpacing: 0.5, color: ink)),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'save',
+          height: 40,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.photo_library_outlined, size: 18, color: ink),
+              SizedBox(width: 10),
+              Text('Save to Photos', style: TextStyle(fontFamily: caps, fontSize: 13.5, letterSpacing: 0.5, color: ink)),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   /// Combined Latest & Most heard view: stacked one above the other on mobile
@@ -1949,27 +1950,60 @@ class _NativePlateState extends State<NativePlate> {
   }
 }
 
-/// A small arrow at the plate's edge for the next or previous session; not
-/// drawn at the first or last. The web plate's _Arrow (plate_view.dart).
-class _EdgeArrow extends StatelessWidget {
-  const _EdgeArrow(this.icon, this.tooltip, this.onPressed);
+/// Thin-stroke version of Material's `interests_outlined` (circle, triangle,
+/// square, heart/diamond) drawn at ~1.65 px stroke so its weight matches
+/// `grid_view_outlined`, `map_outlined`, and `auto_awesome_mosaic_outlined`.
+class _ThinInterestsIcon extends StatelessWidget {
+  const _ThinInterestsIcon({required this.size, required this.color});
 
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
+  final double size;
+  final Color color;
 
   @override
-  Widget build(BuildContext context) {
-    if (onPressed == null) return const SizedBox.shrink();
-    return IconButton(
-      tooltip: tooltip,
-      iconSize: 20,
-      visualDensity: VisualDensity.compact,
-      color: sepia.withValues(alpha: 0.75),
-      icon: Icon(icon),
-      onPressed: onPressed,
+  Widget build(BuildContext context) =>
+      CustomPaint(size: Size.square(size), painter: _ThinInterestsPainter(color));
+}
+
+class _ThinInterestsPainter extends CustomPainter {
+  const _ThinInterestsPainter(this.color);
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final p = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.075
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    // Top-left triangle
+    final tri = Path()
+      ..moveTo(w * 0.28, h * 0.14)
+      ..lineTo(w * 0.44, h * 0.43)
+      ..lineTo(w * 0.12, h * 0.43)
+      ..close();
+    canvas.drawPath(tri, p);
+
+    // Top-right circle
+    canvas.drawCircle(Offset(w * 0.72, h * 0.29), w * 0.15, p);
+
+    // Bottom-left circle
+    canvas.drawCircle(Offset(w * 0.28, h * 0.72), w * 0.15, p);
+
+    // Bottom-right rounded square
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(w * 0.72, h * 0.72), width: w * 0.29, height: h * 0.29),
+        Radius.circular(w * 0.04),
+      ),
+      p,
     );
   }
+
+  @override
+  bool shouldRepaint(_ThinInterestsPainter old) => old.color != color;
 }
 
 /// A picture for MET Norway's weather symbol ("partlycloudy_day",

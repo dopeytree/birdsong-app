@@ -100,21 +100,25 @@ class SourcePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final red = Theme.of(context).colorScheme.primary;
     Widget part(bool on, IconData icon, String tip, VoidCallback tap, BorderRadius r) => Tooltip(
           message: tip,
           child: Semantics(
             button: true,
             selected: on,
             label: tip,
-            child: InkWell(
+            child: Material(
+              color: on ? ink : Colors.transparent,
               borderRadius: r,
-              onTap: tap,
-              child: Container(
-                width: half,
-                height: height,
-                decoration: BoxDecoration(color: on ? red : Colors.transparent, borderRadius: r),
-                child: Icon(icon, size: 18, color: on ? paper : sepia.withValues(alpha: 0.7)),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: tap,
+                hoverColor: ink.withValues(alpha: 0.08),
+                highlightColor: ink.withValues(alpha: 0.12),
+                child: SizedBox(
+                  width: half,
+                  height: height,
+                  child: Icon(icon, size: 18, color: on ? paper : ink.withValues(alpha: 0.65)),
+                ),
               ),
             ),
           ),
@@ -122,7 +126,7 @@ class SourcePill extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: paper.withValues(alpha: 0.85),
-        border: Border.all(color: red.withValues(alpha: 0.55)),
+        border: Border.all(color: ink.withValues(alpha: 0.45)),
         borderRadius: BorderRadius.circular(height / 2 + 1),
       ),
       child: Row(
@@ -139,9 +143,8 @@ class SourcePill extends StatelessWidget {
   }
 }
 
-/// Record a new session, or stop the one recording: a madder dot when idle,
-/// a stop square with a slow pulse around it while recording, a spinner
-/// while it starts.
+/// Record a new session, or stop the one recording: a black dot when idle,
+/// a softly glowing red recording dot while active, a spinner while starting.
 class RecordButton extends StatefulWidget {
   const RecordButton({super.key, required this.recording, required this.busy, required this.onTap});
 
@@ -154,66 +157,71 @@ class RecordButton extends StatefulWidget {
 }
 
 class _RecordButtonState extends State<RecordButton> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
+  late final AnimationController _glow =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
+
+  static const _recRed = Color(0xFFC82820);
 
   @override
   void initState() {
     super.initState();
-    if (widget.recording) _pulse.repeat();
+    if (widget.recording) _glow.repeat(reverse: true);
   }
 
   @override
   void didUpdateWidget(RecordButton old) {
     super.didUpdateWidget(old);
-    if (widget.recording && !_pulse.isAnimating) _pulse.repeat();
-    if (!widget.recording && _pulse.isAnimating) _pulse.reset();
+    if (widget.recording && !_glow.isAnimating) _glow.repeat(reverse: true);
+    if (!widget.recording && _glow.isAnimating) _glow.reset();
   }
 
   @override
   void dispose() {
-    _pulse.dispose();
+    _glow.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final red = Theme.of(context).colorScheme.primary;
-    const size = 36.0;
-    // as tall as the menu button beside it, so their middles line up
     return SizedBox(
-      width: size + 8,
+      width: 44,
       height: SourcePill.rowHeight,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (widget.recording)
-            AnimatedBuilder(
-              animation: _pulse,
-              builder: (context, _) => Container(
-                width: size * 0.7 + 14 * _pulse.value,
-                height: size * 0.7 + 14 * _pulse.value,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: red.withValues(alpha: 0.25 * (1 - _pulse.value)),
-                ),
+      child: Center(
+        child: widget.busy
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: ink),
+              )
+            : IconButton(
+                constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                padding: EdgeInsets.zero,
+                tooltip: widget.recording ? 'Stop recording' : 'Record a new session',
+                onPressed: widget.onTap,
+                icon: widget.recording
+                    ? AnimatedBuilder(
+                        animation: _glow,
+                        builder: (context, _) {
+                          final g = 0.35 + 0.55 * Curves.easeInOut.transform(_glow.value);
+                          return Container(
+                            width: 14,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _recRed,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _recRed.withValues(alpha: g),
+                                  blurRadius: 10,
+                                  spreadRadius: 2.5,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      )
+                    : const Icon(Icons.fiber_manual_record, size: 17, color: ink),
               ),
-            ),
-          widget.busy
-              ? SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: red),
-                )
-              : IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: widget.recording ? 'Stop recording' : 'Record a new session',
-                  icon: Icon(widget.recording ? Icons.stop_rounded : Icons.fiber_manual_record,
-                      size: widget.recording ? 24 : 18),
-                  color: red,
-                  onPressed: widget.onTap,
-                ),
-        ],
       ),
     );
   }
