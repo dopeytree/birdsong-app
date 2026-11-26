@@ -458,6 +458,8 @@ class _NativePlateState extends State<NativePlate> {
   String _homeSort = 'family';
   bool _homeSortAsc = true;
   bool _homeLabels = false;
+  String _homeSearch = '';
+  String _equalSearch = '';
   bool _pickedFromCalendar = false;
 
   /// Cached dominant plumage colour key per species (for Colour sort).
@@ -547,12 +549,15 @@ class _NativePlateState extends State<NativePlate> {
 
   void _flipEqualSort() => app.settings.update((x) => x.equalSortAsc = !x.equalSortAsc);
 
-  /// Resets No pecking order filters to defaults: Labels off, sort by Species ascending.
-  void _resetEqualFilters() => app.settings.update((x) {
-        x.equalLabels = false;
-        x.equalSort = 'family';
-        x.equalSortAsc = true;
-      });
+  /// Resets No pecking order filters to defaults: Labels off, sort by Species ascending, search cleared.
+  void _resetEqualFilters() {
+    if (_equalSearch.isNotEmpty) setState(() => _equalSearch = '');
+    app.settings.update((x) {
+      x.equalLabels = false;
+      x.equalSort = 'family';
+      x.equalSortAsc = true;
+    });
+  }
 
   void _selectHomeSort(String key) {
     final opt = speciesSortOptions.firstWhere(
@@ -568,17 +573,44 @@ class _NativePlateState extends State<NativePlate> {
   void _flipHomeSort() => setState(() => _homeSortAsc = !_homeSortAsc);
 
   /// Resets Home (View 1 + Index of Species) filters to off: no labels, sort
-  /// by Species ascending, and closes the filter panel.
+  /// by Species ascending, search cleared, and closes the filter panel.
   void _resetHomeFilters() {
     if (!mounted) return;
-    if (_homeSort != 'family' || !_homeSortAsc || _homeLabels || _indexSortOpen) {
+    if (_homeSort != 'family' || !_homeSortAsc || _homeLabels || _homeSearch.isNotEmpty || _indexSortOpen) {
       setState(() {
         _homeSort = 'family';
         _homeSortAsc = true;
         _homeLabels = false;
+        _homeSearch = '';
         _indexSortOpen = false;
       });
     }
+  }
+
+  /// Per-view text search across common name, scientific name, taxonomic family
+  /// & order, native region, and plate illustrator. Multi-word queries require
+  /// every word to match somewhere on the species.
+  List<_Row> _filterByQuery(List<_Row> rows, String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return rows;
+    final terms = q.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    if (terms.isEmpty) return rows;
+    return [
+      for (final r in rows)
+        if (() {
+          final t = _traits?.of(r.sci);
+          final haystack = [
+            r.common,
+            r.sci,
+            t?.family ?? '',
+            t?.order ?? '',
+            t?.region ?? '',
+            artistOfPlate(_art[r.sci]),
+          ].join(' ').toLowerCase();
+          return terms.every(haystack.contains);
+        }())
+          r,
+    ];
   }
 
   void _ensureColours(List<_Row> rows) {
@@ -763,13 +795,14 @@ class _NativePlateState extends State<NativePlate> {
 
   void _goHome() {
     if (_sortOpen || _indexSortOpen || _zoomTier != 1.0 || _zoomScale != 1.0 ||
-        _homeSort != 'family' || !_homeSortAsc || _homeLabels) {
+        _homeSort != 'family' || !_homeSortAsc || _homeLabels || _homeSearch.isNotEmpty) {
       setState(() {
         _sortOpen = false;
         _indexSortOpen = false;
         _homeSort = 'family';
         _homeSortAsc = true;
         _homeLabels = false;
+        _homeSearch = '';
         _zoomTier = 1.0;
         _zoomScale = 1.0;
       });
@@ -798,13 +831,14 @@ class _NativePlateState extends State<NativePlate> {
     }
     if (best != null) app.store.select(best);
     if (_sortOpen || _indexSortOpen || _zoomTier != 1.0 || _zoomScale != 1.0 ||
-        _homeSort != 'family' || !_homeSortAsc || _homeLabels) {
+        _homeSort != 'family' || !_homeSortAsc || _homeLabels || _homeSearch.isNotEmpty) {
       setState(() {
         _sortOpen = false;
         _indexSortOpen = false;
         _homeSort = 'family';
         _homeSortAsc = true;
         _homeLabels = false;
+        _homeSearch = '';
         _zoomTier = 1.0;
         _zoomScale = 1.0;
       });
@@ -868,6 +902,7 @@ class _NativePlateState extends State<NativePlate> {
         _homeSort = 'family';
         _homeSortAsc = true;
         _homeLabels = false;
+        _homeSearch = '';
         _zoomTier = 1.0;
         _zoomScale = 1.0;
       });
@@ -899,6 +934,7 @@ class _NativePlateState extends State<NativePlate> {
       _homeSort = 'family';
       _homeSortAsc = true;
       _homeLabels = false;
+      _homeSearch = '';
       _zoomTier = 1.0;
       _zoomScale = 1.0;
     });
@@ -1321,8 +1357,10 @@ class _NativePlateState extends State<NativePlate> {
         final showSample = rows.isEmpty &&
             (feed == null || feed.error != null || (!feed.loading && feed.species != null));
         final displayRows = showSample ? _sampleRows() : rows;
-        final onPlate = equal ? displayRows : displayRows.take(maxOnPlate).toList();
-        _ensure(onPlate);
+        final activeQuery = equal ? _equalSearch : (spotlight ? '' : _homeSearch);
+        final filteredDisplay = _filterByQuery(displayRows, activeQuery);
+        final onPlate = equal ? filteredDisplay : filteredDisplay.take(maxOnPlate).toList();
+        _ensure(displayRows.take(equal ? displayRows.length : maxOnPlate).toList());
         final sampleMessage = !showSample
             ? null
             : feed != null
@@ -1387,7 +1425,8 @@ class _NativePlateState extends State<NativePlate> {
                 mediaPad.right > 16 ? math.max(10.0, mediaPad.right - 12.0) : 0.0,
                 cornerBottom,
               );
-        final sortedIndex = _sortRows(rows, sort: _homeSort, asc: _homeSortAsc, ses: ses, feed: feed);
+        final filteredIndexRows = _filterByQuery(rows, _homeSearch);
+        final sortedIndex = _sortRows(filteredIndexRows, sort: _homeSort, asc: _homeSortAsc, ses: ses, feed: feed);
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
               entries: [
                 for (final r in sortedIndex)
@@ -1400,7 +1439,7 @@ class _NativePlateState extends State<NativePlate> {
               onFold: () => app.settings.update((x) => x.nativeIndexFolded = !x.nativeIndexFolded),
               foldable: true,
               inline: inline,
-              species: all.length,
+              species: _homeSearch.trim().isNotEmpty ? filteredIndexRows.length : all.length,
               newest: marked,
               // on a station the ‹ › step a day at a time
               steps: feed != null || n > 1,
@@ -1427,6 +1466,8 @@ class _NativePlateState extends State<NativePlate> {
                           setState(() => _homeLabels = !_homeLabels);
                         }
                       },
+                      searchQuery: _homeSearch,
+                      onSearchChanged: (v) => setState(() => _homeSearch = v),
                       onReset: _resetHomeFilters,
                       centered: true,
                       showTrigger: false,
@@ -1529,6 +1570,39 @@ class _NativePlateState extends State<NativePlate> {
                               ),
                             ),
                           )
+                        else if (onPlate.isEmpty && activeQuery.trim().isNotEmpty)
+                          Padding(
+                            key: _plateKey,
+                            padding: EdgeInsets.symmetric(vertical: equal ? 140 : 72, horizontal: 24),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'No species match "${activeQuery.trim()}".',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontFamily: serif,
+                                      fontStyle: FontStyle.italic,
+                                      fontSize: 17,
+                                      color: sepia,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: () => setState(() {
+                                      if (equal) {
+                                        _equalSearch = '';
+                                      } else {
+                                        _homeSearch = '';
+                                      }
+                                    }),
+                                    child: const Text('Clear search'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
                         else
                           // Full-canvas plate (shows the classic 5-bird sample
                           // plate with status/error notice whenever there are
@@ -1553,6 +1627,7 @@ class _NativePlateState extends State<NativePlate> {
                                       ? 'equal'
                                       : (feed != null ? 'calls' : 'time'),
                                   isSample: showSample,
+                                  searchQuery: activeQuery,
                                 ),
                                 if (sampleMessage != null)
                                   Positioned(
@@ -1645,6 +1720,8 @@ class _NativePlateState extends State<NativePlate> {
                           x.equalLabels = !x.equalLabels;
                         }
                       }),
+                      searchQuery: _equalSearch,
+                      onSearchChanged: (v) => setState(() => _equalSearch = v),
                       onReset: _resetEqualFilters,
                       adaptiveTrigger: true,
                       onToggleOpen: () => setState(() => _sortOpen = !_sortOpen),
@@ -2040,11 +2117,14 @@ class _NativePlateState extends State<NativePlate> {
   }
 
   Widget _collage(Session? ses, List<_Row> rows, String? newest, double width, double height,
-      {required String sizeBy, bool isSample = false}) {
+      {required String sizeBy, bool isSample = false, String searchQuery = ''}) {
     final baseShowing = isSample
         ? 'sample|${_style.name}|${app.settings.nativeParts ? 'parts' : ''}'
         : _showingFor(ses);
-    final showing = sizeBy == 'equal' ? '$baseShowing|equal|${rows.length}' : baseShowing;
+    final qKey = searchQuery.trim().toLowerCase();
+    final showing = sizeBy == 'equal'
+        ? '$baseShowing|equal|${rows.length}|$qKey'
+        : (qKey.isEmpty ? baseShowing : '$baseShowing|q:$qKey|${rows.length}');
     final ready = [for (final r in rows) if (_art.containsKey(r.sci)) r];
     // Not before the height is known either (_measure), or they would be
     // placed once and then again.

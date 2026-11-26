@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../main.dart' show caps, ink, madder, rule, sepia;
+import '../main.dart' show caps, ink, madder, paperDeep, rule, sepia, serif;
 import '../ui/paper_surface.dart';
 import 'plate_library.dart';
 
@@ -68,6 +68,9 @@ class SpeciesSortBar extends StatelessWidget {
     this.onReset,
     this.showLabels,
     this.onToggleLabels,
+    this.searchQuery = '',
+    this.onSearchChanged,
+    this.searchHint = 'Search species, family, region, artist…',
     this.centered = false,
     this.showTrigger = true,
     this.adaptiveTrigger = false,
@@ -86,6 +89,11 @@ class SpeciesSortBar extends StatelessWidget {
   /// Optional name-ticket labels toggle (filled label icon when on).
   final bool? showLabels;
   final VoidCallback? onToggleLabels;
+
+  /// Optional per-view search query inside the filter panel.
+  final String searchQuery;
+  final ValueChanged<String>? onSearchChanged;
+  final String searchHint;
   final bool centered;
 
   /// When false, renders only the expandable panel (used by [IndexView] which
@@ -117,8 +125,27 @@ class SpeciesSortBar extends StatelessWidget {
       constraints: const BoxConstraints.tightFor(width: 40, height: 40),
       padding: EdgeInsets.zero,
       iconSize: 22,
-      tooltip: open ? 'Hide filters' : 'Filter & sort (${active.label})',
-      icon: adaptiveTrigger ? AdaptiveContrast(child: triggerIcon) : triggerIcon,
+      tooltip: open
+          ? 'Hide filters'
+          : searchQuery.trim().isNotEmpty
+              ? 'Filter & sort (${active.label} · "${searchQuery.trim()}")'
+              : 'Filter & sort (${active.label})',
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          adaptiveTrigger ? AdaptiveContrast(child: triggerIcon) : triggerIcon,
+          if (!open && searchQuery.trim().isNotEmpty)
+            Positioned(
+              right: -2,
+              top: -2,
+              child: Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(color: madder, shape: BoxShape.circle),
+              ),
+            ),
+        ],
+      ),
       onPressed: () {
         hapticTap();
         onToggleOpen();
@@ -137,6 +164,17 @@ class SpeciesSortBar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
                 children: [
+                  if (onSearchChanged != null) ...[
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 340),
+                      child: _FilterSearchField(
+                        query: searchQuery,
+                        hint: searchHint,
+                        onChanged: onSearchChanged!,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
                   Wrap(
                     spacing: 2,
                     runSpacing: 2,
@@ -295,6 +333,93 @@ class SpeciesSortBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Compact borderless search box inside [SpeciesSortBar], scoped per view.
+class _FilterSearchField extends StatefulWidget {
+  const _FilterSearchField({
+    required this.query,
+    required this.hint,
+    required this.onChanged,
+  });
+
+  final String query;
+  final String hint;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_FilterSearchField> createState() => _FilterSearchFieldState();
+}
+
+class _FilterSearchFieldState extends State<_FilterSearchField> {
+  late final TextEditingController _ctrl = TextEditingController(text: widget.query);
+
+  @override
+  void didUpdateWidget(_FilterSearchField old) {
+    super.didUpdateWidget(old);
+    if (widget.query != _ctrl.text) {
+      _ctrl.value = TextEditingValue(
+        text: widget.query,
+        selection: TextSelection.collapsed(offset: widget.query.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: paperDeep.withValues(alpha: 0.50),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(Symbols.search, size: 17, color: ink),
+          const SizedBox(width: 7),
+          Expanded(
+            child: TextField(
+              controller: _ctrl,
+              onChanged: widget.onChanged,
+              style: const TextStyle(fontFamily: serif, fontSize: 14, color: ink, height: 1.2),
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                hintText: widget.hint,
+                hintStyle: TextStyle(
+                  fontFamily: serif,
+                  fontStyle: FontStyle.italic,
+                  fontSize: 13.5,
+                  color: sepia.withValues(alpha: 0.78),
+                ),
+              ),
+            ),
+          ),
+          if (widget.query.isNotEmpty)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                hapticTap();
+                _ctrl.clear();
+                widget.onChanged('');
+              },
+              child: const Padding(
+                padding: EdgeInsets.only(left: 4),
+                child: Icon(Symbols.close, size: 16, color: ink),
+              ),
+            ),
+        ],
       ),
     );
   }
