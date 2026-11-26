@@ -956,8 +956,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Map buttons',
           s.mapButtonStyle,
           const {
+            'ink': 'All black icons (default)',
             'paper': 'Paper circle, madder icons',
-            'ink': 'All black icons',
             'madder': 'Solid madder',
           },
           (v) => s.update((x) => x.mapButtonStyle = v),

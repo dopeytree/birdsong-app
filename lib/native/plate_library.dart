@@ -164,7 +164,7 @@ class PlateLibrary {
         PlateCandidate(
           '$_art/artwork/classic/$key',
           ready: true,
-          credit: '${_artists[_cutoutSource[key]] == null ? '' : 'After ${_artists[_cutoutSource[key]]}. '}'
+          credit: '${_artists[_cutoutSource[key]] == null ? '' : '${_artists[_cutoutSource[key]]}. '}'
               'Cut-out from the Fugleramme project, CC BY-SA 4.0.',
           page: _cutoutPage[key],
         ),

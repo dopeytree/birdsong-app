@@ -1448,20 +1448,10 @@ class _WalkMapState extends State<WalkMap> {
                   top: 10,
                   child: _ZoomButtons(
                     map: _map,
-                    style: widget.settings?.mapButtonStyle ?? 'paper',
+                    style: widget.settings?.mapButtonStyle ?? 'ink',
                     home: w == null || (w.trail.isEmpty && w.birds.isEmpty && w.place == null) ? null : _home,
                     homeTip: w?.station != null ? 'Back to the station' : 'Back to the walk',
                     layers: widget.settings == null ? null : () => setState(() => _layersOpen = !_layersOpen),
-                  ),
-                ),
-              if (kit != null && _layersOpen && widget.settings != null)
-                Positioned(
-                  right: 52,
-                  top: 10,
-                  child: _LayersPanel(
-                    settings: widget.settings!,
-                    species: widget.species,
-                    onClose: () => setState(() => _layersOpen = false),
                   ),
                 ),
               if (kit != null)
@@ -1470,25 +1460,47 @@ class _WalkMapState extends State<WalkMap> {
                   top: 10,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       PlaceSearch(
                         width: math.min(
                           220.0,
-                          math.max(100.0, widget.size.width - 20 - 44 - (widget.onPoi != null ? 58 : 0)),
+                          math.max(100.0, widget.size.width - 20 - 44 - (widget.onPoi != null ? 44 : 0)),
                         ),
-                        style: widget.settings?.mapButtonStyle ?? 'paper',
+                        style: widget.settings?.mapButtonStyle ?? 'ink',
                         near: () => _ready ? _map.camera.center : center,
                         onPick: _goTo,
                       ),
                       if (widget.onPoi != null) ...[
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 4),
                         _PoiButton(
                           onTap: widget.onPoi!,
-                          style: widget.settings?.mapButtonStyle ?? 'paper',
+                          style: widget.settings?.mapButtonStyle ?? 'ink',
                         ),
                       ],
                     ],
+                  ),
+                ),
+              if (kit != null && _layersOpen && widget.settings != null)
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _layersOpen = false),
+                    child: Container(
+                      color: const Color(0x402A241C),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.fromLTRB(24, 56, 24, 56),
+                      child: GestureDetector(
+                        onTap: () {},
+                        child: SingleChildScrollView(
+                          child: _LayersPanel(
+                            settings: widget.settings!,
+                            species: widget.species,
+                            onClose: () => setState(() => _layersOpen = false),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               if (kit != null)
@@ -1826,10 +1838,10 @@ class _StartFinishPainter extends CustomPainter {
   bool shouldRepaint(_StartFinishPainter old) => old.start != start;
 }
 
-/// Style tokens for map controls: 'paper' (round warm paper background with
-/// madder icons, matching the main plate's button hover state), 'ink' (all-black
-/// icons), or 'madder' (solid madder with paper icons).
-({Color bg, Color fg, Color divider, BorderRadius radius, Border? border}) _mapControlTheme(String style) {
+/// Style tokens for map controls: 'ink' (all-black icons with hover/touch-only
+/// background, matching the rest of the app), 'paper' (permanent round warm
+/// paper background with madder icons), or 'madder' (solid madder).
+({Color bg, Color fg, Color divider, BorderRadius radius, Border? border, bool flat}) _mapControlTheme(String style) {
   if (style == 'madder') {
     return (
       bg: madder,
@@ -1837,23 +1849,26 @@ class _StartFinishPainter extends CustomPainter {
       divider: const Color(0x59EEE5CE),
       radius: const BorderRadius.all(Radius.circular(4)),
       border: null,
+      flat: false,
     );
   }
-  if (style == 'ink') {
+  if (style == 'paper') {
     return (
-      bg: paper.withValues(alpha: 0.85),
-      fg: ink,
+      bg: paper.withValues(alpha: 0.94),
+      fg: madder,
       divider: paperDeep,
       radius: const BorderRadius.all(Radius.circular(18)),
       border: Border.all(color: paperDeep),
+      flat: false,
     );
   }
   return (
-    bg: paper.withValues(alpha: 0.94),
-    fg: madder,
-    divider: paperDeep,
-    radius: const BorderRadius.all(Radius.circular(18)),
-    border: Border.all(color: paperDeep),
+    bg: Colors.transparent,
+    fg: ink,
+    divider: Colors.transparent,
+    radius: const BorderRadius.all(Radius.circular(20)),
+    border: null,
+    flat: true,
   );
 }
 
@@ -1863,7 +1878,7 @@ const _controlShadow = BoxShadow(color: Color(0x4D3C280A), offset: Offset(0, 2),
 class _ZoomButtons extends StatelessWidget {
   const _ZoomButtons({
     required this.map,
-    this.style = 'paper',
+    this.style = 'ink',
     this.home,
     this.homeTip = '',
     this.layers,
@@ -1882,6 +1897,49 @@ class _ZoomButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = _mapControlTheme(style);
+    if (t.flat) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+            padding: EdgeInsets.zero,
+            tooltip: 'Zoom in',
+            icon: Icon(Icons.add, size: 22, color: t.fg),
+            onPressed: () {
+              final c = map.camera;
+              map.move(c.center, (c.zoom + 1).clamp(2.0, 18.0));
+            },
+          ),
+          IconButton(
+            constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+            padding: EdgeInsets.zero,
+            tooltip: 'Zoom out',
+            icon: Icon(Icons.remove, size: 22, color: t.fg),
+            onPressed: () {
+              final c = map.camera;
+              map.move(c.center, (c.zoom - 1).clamp(2.0, 18.0));
+            },
+          ),
+          if (home != null)
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+              padding: EdgeInsets.zero,
+              tooltip: homeTip,
+              icon: Icon(Icons.refresh, size: 20, color: t.fg),
+              onPressed: home,
+            ),
+          if (layers != null)
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+              padding: EdgeInsets.zero,
+              tooltip: 'Layers',
+              icon: Icon(Icons.layers_outlined, size: 20, color: t.fg),
+              onPressed: layers,
+            ),
+        ],
+      );
+    }
     Widget button(String label, String tip, double by) => Tooltip(
           message: tip,
           child: InkWell(
@@ -1949,9 +2007,9 @@ class _ZoomButtons extends StatelessWidget {
   }
 }
 
-/// POI ("Passed on the way") button beside Search at the top of the map.
+/// Route / POI ("Passed on the way") icon button beside Search at top left.
 class _PoiButton extends StatelessWidget {
-  const _PoiButton({required this.onTap, this.style = 'paper'});
+  const _PoiButton({required this.onTap, this.style = 'ink'});
 
   final VoidCallback onTap;
   final String style;
@@ -1959,6 +2017,15 @@ class _PoiButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = _mapControlTheme(style);
+    if (t.flat) {
+      return IconButton(
+        constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+        padding: EdgeInsets.zero,
+        tooltip: 'Points of interest passed on the way',
+        icon: Icon(Icons.route_outlined, size: 21, color: t.fg),
+        onPressed: onTap,
+      );
+    }
     return Tooltip(
       message: 'Points of interest passed on the way',
       child: Semantics(
@@ -1973,16 +2040,10 @@ class _PoiButton extends StatelessWidget {
             child: InkWell(
               onTap: onTap,
               child: SizedBox(
-                height: 32,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 11),
-                  child: Center(
-                    widthFactor: 1,
-                    child: Text(
-                      'POI',
-                      style: TextStyle(fontFamily: caps, fontSize: 13, letterSpacing: 0.8, color: t.fg, height: 1.1),
-                    ),
-                  ),
+                width: 34,
+                height: 34,
+                child: Center(
+                  child: Icon(Icons.route_outlined, size: 19, color: t.fg),
                 ),
               ),
             ),

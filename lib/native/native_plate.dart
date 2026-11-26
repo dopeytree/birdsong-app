@@ -553,64 +553,94 @@ class _NativePlateState extends State<NativePlate> {
                         ),
                       ),
                     ),
-                    // Bottom-left owl icon on the map: closes the map and opens
+                    // Bottom-left interests icon on the map: closes the map and opens
                     // Latest & most heard.
                     Positioned(
                       left: 8,
                       bottom: 8,
-                      child: Material(
-                        color: btnBg,
-                        elevation: 2,
-                        shadowColor: const Color(0x4D3C280A),
-                        shape: btnShape,
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: () => Navigator.of(context).maybePop(),
-                          child: SizedBox(
-                            width: 38,
-                            height: 38,
-                            child: Center(
-                              child: _OwlIcon(size: 21, color: btnFg),
+                      child: isInk
+                          ? IconButton(
+                              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                              padding: EdgeInsets.zero,
+                              iconSize: 22,
+                              tooltip: 'Latest & most heard',
+                              icon: Icon(Icons.interests_outlined, color: ink),
+                              onPressed: () => Navigator.of(context).maybePop(),
+                            )
+                          : Material(
+                              color: btnBg,
+                              elevation: 2,
+                              shadowColor: const Color(0x4D3C280A),
+                              shape: btnShape,
+                              clipBehavior: Clip.antiAlias,
+                              child: InkWell(
+                                onTap: () => Navigator.of(context).maybePop(),
+                                child: SizedBox(
+                                  width: 38,
+                                  height: 38,
+                                  child: Center(
+                                    child: Icon(Icons.interests_outlined, size: 21, color: btnFg),
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      ),
                     ),
                     // Bottom-right share button on the map.
                     if (PlateShare.supported)
                       Positioned(
                         right: 8,
                         bottom: 8,
-                        child: Material(
-                          color: btnBg,
-                          elevation: 2,
-                          shadowColor: const Color(0x4D3C280A),
-                          shape: btnShape,
-                          clipBehavior: Clip.antiAlias,
-                          child: PopupMenuButton<String>(
-                            key: mapShareKey,
-                            padding: EdgeInsets.zero,
-                            tooltip: 'Share or save the map',
-                            color: paper,
-                            onSelected: (v) => v == 'save' ? saveMap() : shareMap(),
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(
-                                value: 'share',
-                                child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
+                        child: isInk
+                            ? PopupMenuButton<String>(
+                                key: mapShareKey,
+                                padding: const EdgeInsets.all(9),
+                                iconSize: 22,
+                                tooltip: 'Share or save the map',
+                                icon: Icon(Icons.ios_share, color: ink),
+                                color: paper,
+                                onSelected: (v) => v == 'save' ? saveMap() : shareMap(),
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(
+                                    value: 'share',
+                                    child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'save',
+                                    child: ListTile(
+                                        leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
+                                  ),
+                                ],
+                              )
+                            : Material(
+                                color: btnBg,
+                                elevation: 2,
+                                shadowColor: const Color(0x4D3C280A),
+                                shape: btnShape,
+                                clipBehavior: Clip.antiAlias,
+                                child: PopupMenuButton<String>(
+                                  key: mapShareKey,
+                                  padding: EdgeInsets.zero,
+                                  tooltip: 'Share or save the map',
+                                  color: paper,
+                                  onSelected: (v) => v == 'save' ? saveMap() : shareMap(),
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                      value: 'share',
+                                      child: ListTile(leading: Icon(Icons.ios_share), title: Text('Share…')),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'save',
+                                      child: ListTile(
+                                          leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
+                                    ),
+                                  ],
+                                  child: SizedBox(
+                                    width: 38,
+                                    height: 38,
+                                    child: Center(child: Icon(Icons.ios_share, size: 19, color: btnFg)),
+                                  ),
+                                ),
                               ),
-                              PopupMenuItem(
-                                value: 'save',
-                                child: ListTile(
-                                    leading: Icon(Icons.photo_library_outlined), title: Text('Save to Photos')),
-                              ),
-                            ],
-                            child: SizedBox(
-                              width: 38,
-                              height: 38,
-                              child: Center(child: Icon(Icons.ios_share, size: 19, color: btnFg)),
-                            ),
-                          ),
-                        ),
                       ),
                   ]);
                 },
@@ -1572,74 +1602,6 @@ class _NativePlateState extends State<NativePlate> {
     final others = all - plate + 2 * _fadeRoom;
     if (_others == null || (others - _others!).abs() > .5) setState(() => _others = others);
   }
-}
-
-/// Crisp outlined owl icon matching Material Outlined stroke weight,
-/// used on the map's bottom-left button to open the Latest & most heard view.
-class _OwlIcon extends StatelessWidget {
-  const _OwlIcon({required this.size, required this.color});
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: Size.square(size), painter: _OwlPainter(color));
-}
-
-class _OwlPainter extends CustomPainter {
-  const _OwlPainter(this.color);
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width, h = size.height;
-    final stroke = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.085
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final fill = Paint()..color = color;
-
-    // Owl body + ear tufts
-    final body = Path()
-      ..moveTo(w * 0.24, h * 0.14) // left ear tuft
-      ..lineTo(w * 0.36, h * 0.24)
-      ..quadraticBezierTo(w * 0.50, h * 0.20, w * 0.64, h * 0.24)
-      ..lineTo(w * 0.76, h * 0.14) // right ear tuft
-      ..quadraticBezierTo(w * 0.84, h * 0.34, w * 0.82, h * 0.58)
-      ..quadraticBezierTo(w * 0.80, h * 0.86, w * 0.50, h * 0.89)
-      ..quadraticBezierTo(w * 0.20, h * 0.86, w * 0.18, h * 0.58)
-      ..quadraticBezierTo(w * 0.16, h * 0.34, w * 0.24, h * 0.14)
-      ..close();
-    canvas.drawPath(body, stroke);
-
-    // Two large round eyes + pupils
-    final eyeR = w * 0.125;
-    final leftEye = Offset(w * 0.37, h * 0.44);
-    final rightEye = Offset(w * 0.63, h * 0.44);
-    canvas.drawCircle(leftEye, eyeR, stroke);
-    canvas.drawCircle(rightEye, eyeR, stroke);
-    canvas.drawCircle(leftEye, w * 0.042, fill);
-    canvas.drawCircle(rightEye, w * 0.042, fill);
-
-    // Small beak
-    final beak = Path()
-      ..moveTo(w * 0.45, h * 0.54)
-      ..lineTo(w * 0.50, h * 0.63)
-      ..lineTo(w * 0.55, h * 0.54);
-    canvas.drawPath(beak, stroke);
-
-    // Subtle breast feather arc
-    final breast = Path()
-      ..moveTo(w * 0.36, h * 0.72)
-      ..quadraticBezierTo(w * 0.50, h * 0.79, w * 0.64, h * 0.72);
-    canvas.drawPath(breast, stroke);
-  }
-
-  @override
-  bool shouldRepaint(_OwlPainter old) => old.color != color;
 }
 
 /// A small arrow at the plate's edge for the next or previous session; not

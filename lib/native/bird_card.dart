@@ -336,32 +336,39 @@ class _BirdCardState extends State<BirdCard> {
                       _nameAndBlurb(text, padRightForClose: false),
                       _recordingsSection(text),
                       _detailsAndCharts(text),
+                      _creditFooter(),
                     ],
                   )
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        flex: 105,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _artSection(text, screen, false),
-                            _recordingsSection(text),
-                          ],
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 105,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _artSection(text, screen, false),
+                                _recordingsSection(text),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 32),
+                          Expanded(
+                            flex: 100,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _nameAndBlurb(text, padRightForClose: true),
+                                _detailsAndCharts(text),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 32),
-                      Expanded(
-                        flex: 100,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _nameAndBlurb(text, padRightForClose: true),
-                            _detailsAndCharts(text),
-                          ],
-                        ),
-                      ),
+                      _creditFooter(),
                     ],
                   ),
           ),
@@ -463,41 +470,52 @@ class _BirdCardState extends State<BirdCard> {
     );
   }
 
-  /// The plate and its credit.
+  /// The plate artwork (tap to view full screen).
   Widget _artSection(TextStyle text, Size screen, bool narrow) {
     final art = _art;
-    final caption = TextStyle(fontFamily: serif, fontSize: text.fontSize! * .82, height: 1.35, color: sepia);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (art != null)
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () => _openFullImage(art),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: screen.height * (narrow ? .42 : .52)),
-                child: PlateImage(art: art, width: math.min(500, screen.width * .9)),
-              ),
-            ),
-          ),
-        const SizedBox(height: 8),
-        Text.rich(
-          art == null
-              ? const TextSpan(text: 'No plate has been found for this species.')
-              : TextSpan(text: art.credit, children: [
-                  if (art.from.page != null) ...[
-                    const TextSpan(text: ' '),
-                    WidgetSpan(
-                      alignment: PlaceholderAlignment.baseline,
-                      baseline: TextBaseline.alphabetic,
-                      child: _Link('View the source', onTap: () => _open(art.from.page!), size: caption.fontSize!, italic: false),
-                    ),
-                  ],
-                ]),
-          style: caption,
+    if (art == null) {
+      return Text(
+        'No plate has been found for this species.',
+        style: TextStyle(fontFamily: serif, fontStyle: FontStyle.italic, fontSize: text.fontSize! * .85, color: sepia),
+      );
+    }
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _openFullImage(art),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: screen.height * (narrow ? .42 : .52)),
+          child: PlateImage(art: art, width: math.min(500, screen.width * .9)),
         ),
-      ],
+      ),
+    );
+  }
+
+  /// Subtle legal attribution at the bottom of the pop-up.
+  Widget _creditFooter() {
+    final art = _art;
+    if (art == null) return const SizedBox.shrink();
+    final creditText = art.credit.replaceFirst(RegExp(r'^After\s+'), '');
+    final style = TextStyle(fontFamily: serif, fontSize: 11.5, height: 1.35, color: sepia.withValues(alpha: 0.85));
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: Container(
+        padding: const EdgeInsets.only(top: 8),
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: rule))),
+        child: Text.rich(
+          TextSpan(text: creditText, children: [
+            if (art.from.page != null) ...[
+              const TextSpan(text: ' '),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                child: _Link('Source', onTap: () => _open(art.from.page!), size: 11.5, italic: false),
+              ),
+            ],
+          ]),
+          style: style,
+        ),
+      ),
     );
   }
 

@@ -306,9 +306,10 @@ class Settings extends ChangeNotifier {
   /// decoration (from the map's own tiles; nothing looked up).
   bool mapWildlife = true;
 
-  /// Map button appearance: 'paper' (round warm paper background with madder
-  /// icons, default), 'ink' (all-black icons), or 'madder' (solid madder).
-  String mapButtonStyle = 'paper';
+  /// Map button appearance: 'ink' (all-black icons with hover-only background,
+  /// default), 'paper' (round warm paper background with madder icons), or
+  /// 'madder' (solid madder).
+  String mapButtonStyle = 'ink';
 
   static Future<Settings> load(Directory dir) async {
     final s = Settings._(File('${dir.path}/settings.json'));

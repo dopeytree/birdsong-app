@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:latlong2/latlong.dart' hide Path;
 
-import '../main.dart' show ink, madder, paper, paperDeep, sepia, serif;
+import '../main.dart' show caps, ink, madder, paper, paperDeep, sepia, serif;
 
 /// A place found by the map's search: its name, a line saying where it is,
 /// its point, and its extent when it has one.
@@ -145,7 +145,7 @@ class PlaceSearch extends StatefulWidget {
     required this.width,
     required this.near,
     required this.onPick,
-    this.style = 'paper',
+    this.style = 'ink',
   });
 
   final double width;
@@ -236,15 +236,15 @@ class _PlaceSearchState extends State<PlaceSearch> {
     final bg = isMadder
         ? madder
         : isInk
-            ? paper.withValues(alpha: 0.85)
+            ? paper.withValues(alpha: 0.72)
             : paper.withValues(alpha: 0.94);
     final fg = isMadder ? paper : (isInk ? ink : madder);
     final radius = BorderRadius.all(Radius.circular(isMadder ? 4 : 16));
     final bar = BoxDecoration(
       color: bg,
       borderRadius: radius,
-      border: isMadder ? null : Border.all(color: paperDeep),
-      boxShadow: const [BoxShadow(color: Color(0x4D3C280A), offset: Offset(0, 2), blurRadius: 8)],
+      border: isMadder ? null : Border.all(color: paperDeep.withValues(alpha: isInk ? 0.6 : 1.0)),
+      boxShadow: isInk ? null : const [BoxShadow(color: Color(0x4D3C280A), offset: Offset(0, 2), blurRadius: 8)],
     );
     const box = BoxDecoration(
       color: paper,
@@ -285,18 +285,17 @@ class _PlaceSearchState extends State<PlaceSearch> {
                       if (_found.isNotEmpty) _pick(_found.first);
                     },
                     textInputAction: TextInputAction.search,
-                    style: TextStyle(fontFamily: serif, fontSize: 15, color: fg, height: 1.2),
+                    style: TextStyle(fontFamily: caps, fontSize: 14, letterSpacing: 0.6, color: fg, height: 1.2),
                     cursorColor: fg,
                     decoration: InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
                       hintText: 'Search',
                       hintStyle: TextStyle(
-                        fontFamily: serif,
-                        fontStyle: FontStyle.italic,
-                        fontSize: 15,
-                        letterSpacing: 0.3,
-                        color: fg.withValues(alpha: 0.78),
+                        fontFamily: caps,
+                        fontSize: 14,
+                        letterSpacing: 0.8,
+                        color: fg.withValues(alpha: 0.75),
                       ),
                       contentPadding: const EdgeInsets.symmetric(vertical: 7),
                     ),
