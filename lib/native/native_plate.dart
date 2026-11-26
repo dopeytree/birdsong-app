@@ -141,7 +141,7 @@ class _NativePlateState extends State<NativePlate> {
 
   /// The most species drawn on the plate; the rest are in the index only
   /// (the page's maxOnPlate).
-  static const maxOnPlate = 60;
+  static const maxOnPlate = 200;
 
   PlateStyle get _style => PlateStyle.named(app.settings.nativePlateStyle);
 
@@ -277,6 +277,8 @@ class _NativePlateState extends State<NativePlate> {
     s.update((x) {
       x.mode = AppMode.station;
       x.stationId = picked;
+      x.plateMode = defaultPlateMode;
+      x.nativeSizeBy = 'calls';
     });
   }
 
@@ -399,6 +401,54 @@ class _NativePlateState extends State<NativePlate> {
   final Map<String, double> _colourKey = {};
   final Set<String> _colourLoading = {};
 
+  /// Cached circular mean activity hour per species for Remote stations
+  /// (keyed by "<stationScope>|<sci>").
+  final Map<String, double?> _remoteActiveHour = {};
+  final Set<String> _remoteActiveLoading = {};
+  AppMode? _lastAppMode;
+
+  void _ensureRemoteActiveHours(StationFeed f, List<_Row> rows) {
+    final scope = '${f.station.id}:${f.day != null ? ymd(f.day!) : f.span.name}:${f.light.name}';
+    final todo = <StationSpecies>[];
+    for (final r in rows) {
+      final k = '$scope|${r.sci}';
+      if (_remoteActiveHour.containsKey(k) || _remoteActiveLoading.contains(k)) continue;
+      final sp = (f.species ?? const <StationSpecies>[]).where((x) => x.sci == r.sci).firstOrNull;
+      if (sp != null) todo.add(sp);
+    }
+    if (todo.isEmpty) return;
+    // Fetch up to 4 at a time so we don't flood the station API.
+    for (final sp in todo.take(4)) {
+      final k = '$scope|${sp.sci}';
+      _remoteActiveLoading.add(k);
+      f.hourly(sp).then((res) {
+        _remoteActiveLoading.remove(k);
+        final mean = res == null ? null : circularMeanHour(res.hours);
+        _remoteActiveHour[k] = mean;
+        if (mounted && app.settings.equalSort == 'active') setState(() {});
+      }).catchError((Object e) {
+        debugPrint('activeHour ${sp.sci}: $e');
+        _remoteActiveLoading.remove(k);
+        _remoteActiveHour[k] = null;
+      });
+    }
+  }
+
+  Map<String, double> _localActiveHours(Session? ses) {
+    if (ses == null) return const {};
+    final byHour = <String, List<int>>{};
+    for (final d in app.store.forPlate(app.settings.plateModel, session: ses)) {
+      if (app.settings.isIgnoredSpecies(d.common, d.sci)) continue;
+      (byHour[d.sci] ??= List<int>.filled(24, 0))[d.at.hour]++;
+    }
+    final out = <String, double>{};
+    for (final e in byHour.entries) {
+      final m = circularMeanHour(e.value);
+      if (m != null) out[e.key] = m;
+    }
+    return out;
+  }
+
   void _selectSort(String key) {
     final opt = speciesSortOptions.firstWhere(
       (o) => o.key == key,
@@ -491,7 +541,7 @@ class _NativePlateState extends State<NativePlate> {
 
   /// Sort [rows] using the shared sort setting (`equalSort` + `equalSortAsc`),
   /// used by both "No pecking order" and "Index of Species".
-  List<_Row> _sortRows(List<_Row> rows) {
+  List<_Row> _sortRows(List<_Row> rows, {Session? ses, StationFeed? feed}) {
     final sort = app.settings.equalSort;
     final asc = app.settings.equalSortAsc;
     final dir = asc ? 1 : -1;
@@ -504,34 +554,65 @@ class _NativePlateState extends State<NativePlate> {
       return c != 0 ? c * dir : fallbackA.toLowerCase().compareTo(fallbackB.toLowerCase());
     }
 
+    int cmpOptStr(String? a, String? b, String fallbackA, String fallbackB) {
+      final aa = (a ?? '').trim().toLowerCase();
+      final bb = (b ?? '').trim().toLowerCase();
+      if (aa.isEmpty && bb.isEmpty) return fallbackA.toLowerCase().compareTo(fallbackB.toLowerCase());
+      if (aa.isEmpty) return 1;
+      if (bb.isEmpty) return -1;
+      final c = aa.compareTo(bb);
+      return c != 0 ? c * dir : fallbackA.toLowerCase().compareTo(fallbackB.toLowerCase());
+    }
+
     switch (sort) {
       case 'recent':
         out.sort((a, b) {
           final c = (a.last ?? DateTime(0)).compareTo(b.last ?? DateTime(0));
           return c != 0 ? c * dir : a.common.toLowerCase().compareTo(b.common.toLowerCase());
         });
+      case 'active':
+        if (feed != null) {
+          _ensureRemoteActiveHours(feed, rows);
+          final scope = '${feed.station.id}:${feed.day != null ? ymd(feed.day!) : feed.span.name}:${feed.light.name}';
+          double? hourOf(_Row r) {
+            final k = '$scope|${r.sci}';
+            if (_remoteActiveHour.containsKey(k)) return _remoteActiveHour[k];
+            final t = r.last;
+            return t == null ? null : t.hour + t.minute / 60.0;
+          }
+          out.sort((a, b) => cmpOptNum(hourOf(a), hourOf(b), a.common, b.common));
+        } else {
+          final map = _localActiveHours(ses);
+          out.sort((a, b) => cmpOptNum(map[a.sci], map[b.sci], a.common, b.common));
+        }
       case 'name':
         out.sort((a, b) => a.common.toLowerCase().compareTo(b.common.toLowerCase()) * dir);
+      case 'family':
+        _traits?.wantGbif(rows.map((r) => r.sci));
+        out.sort((a, b) {
+          final ka = _traits?.of(a.sci)?.taxonomicKey(a.sci) ?? 'zzz|zzz|${a.sci.toLowerCase()}';
+          final kb = _traits?.of(b.sci)?.taxonomicKey(b.sci) ?? 'zzz|zzz|${b.sci.toLowerCase()}';
+          return ka.compareTo(kb) * dir;
+        });
       case 'rare':
         _traits?.wantRarity(rows.map((r) => r.sci));
         out.sort((a, b) => cmpOptNum(
             _traits?.of(a.sci)?.rarityScore, _traits?.of(b.sci)?.rarityScore, a.common, b.common));
-      case 'size':
-        _traits?.wantSizeAndIucn(rows.map((r) => r.sci));
+      case 'weight':
+        _traits?.wantWikidata(rows.map((r) => r.sci));
         out.sort((a, b) => cmpOptNum(
-            _traits?.of(a.sci)?.sizeScore, _traits?.of(b.sci)?.sizeScore, a.common, b.common));
-      case 'sci':
-        out.sort((a, b) => a.sci.toLowerCase().compareTo(b.sci.toLowerCase()) * dir);
+            _traits?.of(a.sci)?.massGrams, _traits?.of(b.sci)?.massGrams, a.common, b.common));
+      case 'wingspan':
+        _traits?.wantWikidata(rows.map((r) => r.sci));
+        out.sort((a, b) => cmpOptNum(
+            _traits?.of(a.sci)?.wingspanCm, _traits?.of(b.sci)?.wingspanCm, a.common, b.common));
+      case 'region':
+        _traits?.wantWikidata(rows.map((r) => r.sci));
+        out.sort((a, b) => cmpOptStr(
+            _traits?.of(a.sci)?.region, _traits?.of(b.sci)?.region, a.common, b.common));
       case 'artist':
-        out.sort((a, b) {
-          final aa = artistOfPlate(_art[a.sci]).toLowerCase();
-          final bb = artistOfPlate(_art[b.sci]).toLowerCase();
-          if (aa.isEmpty && bb.isEmpty) return a.common.toLowerCase().compareTo(b.common.toLowerCase());
-          if (aa.isEmpty) return 1;
-          if (bb.isEmpty) return -1;
-          final c = aa.compareTo(bb);
-          return c != 0 ? c * dir : a.common.toLowerCase().compareTo(b.common.toLowerCase());
-        });
+        out.sort((a, b) => cmpOptStr(
+            artistOfPlate(_art[a.sci]), artistOfPlate(_art[b.sci]), a.common, b.common));
       case 'colour':
         _ensureColours(rows);
         out.sort((a, b) {
@@ -740,37 +821,42 @@ class _NativePlateState extends State<NativePlate> {
                         onOpenCalendar: _pickDay,
                       ),
                     ),
-                    // Bottom-left interests icon on the map: closes the map and opens
-                    // Latest & most heard.
+                    // Bottom-left icon on the map: closes the map and returns
+                    // to View 1 (Most recent on Local / Most heard on Remote).
                     Positioned(
                       left: 8,
                       bottom: 8,
-                      child: isInk
-                          ? IconButton(
-                              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                              padding: EdgeInsets.zero,
-                              iconSize: 22,
-                              tooltip: 'Latest & most heard',
-                              icon: Icon(Icons.interests_outlined, color: ink),
-                              onPressed: () => Navigator.of(context).maybePop(),
-                            )
-                          : Material(
-                              color: btnBg,
-                              elevation: 2,
-                              shadowColor: const Color(0x4D3C280A),
-                              shape: btnShape,
-                              clipBehavior: Clip.antiAlias,
-                              child: InkWell(
-                                onTap: () => Navigator.of(context).maybePop(),
-                                child: SizedBox(
-                                  width: 38,
-                                  height: 38,
-                                  child: Center(
-                                    child: Icon(Icons.interests_outlined, size: 21, color: btnFg),
+                      child: () {
+                        final isRemote = app.settings.mode == AppMode.station;
+                        final backIcon = isRemote ? Icons.view_quilt_outlined : Icons.auto_awesome_mosaic_outlined;
+                        final backTip = isRemote ? 'Most heard' : 'Recent ramblings';
+                        return isInk
+                            ? IconButton(
+                                constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                                padding: EdgeInsets.zero,
+                                iconSize: 22,
+                                tooltip: backTip,
+                                icon: Icon(backIcon, color: ink),
+                                onPressed: () => Navigator.of(context).maybePop(),
+                              )
+                            : Material(
+                                color: btnBg,
+                                elevation: 2,
+                                shadowColor: const Color(0x4D3C280A),
+                                shape: btnShape,
+                                clipBehavior: Clip.antiAlias,
+                                child: InkWell(
+                                  onTap: () => Navigator.of(context).maybePop(),
+                                  child: SizedBox(
+                                    width: 38,
+                                    height: 38,
+                                    child: Center(
+                                      child: Icon(backIcon, size: 21, color: btnFg),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
+                              );
+                      }(),
                     ),
                     // Bottom-right share button on the map.
                     if (PlateShare.supported)
@@ -952,6 +1038,7 @@ class _NativePlateState extends State<NativePlate> {
           style: _style,
           source: _StationCard(f, s),
           art: _art[r.sci],
+          traits: _traits,
           onChosen: (art) {
             if (mounted) setState(() => _art[r.sci] = art);
           },
@@ -979,6 +1066,7 @@ class _NativePlateState extends State<NativePlate> {
           spectrogramOf: (d) => d.hasClip ? store.spectrogramFile(d.id) : null,
         ),
         art: _art[r.sci],
+        traits: _traits,
         onChosen: (art) {
           if (mounted) setState(() => _art[r.sci] = art);
         },
@@ -999,14 +1087,26 @@ class _NativePlateState extends State<NativePlate> {
       ]),
       builder: (context, _) {
         final store = app.store, engine = app.engine;
+        // Whenever Local / Remote mode swaps from anywhere (pill, station list,
+        // Settings), guarantee we land on View 1 (Most recent / Most heard).
+        final curMode = app.settings.mode;
+        if (_lastAppMode != null && _lastAppMode != curMode && app.settings.plateMode != defaultPlateMode) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            app.settings.update((x) {
+              x.plateMode = defaultPlateMode;
+              x.nativeSizeBy = x.mode == AppMode.station ? 'calls' : 'time';
+            });
+          });
+        }
+        _lastAppMode = curMode;
         // a remote station has no sessions
         final ses = feed == null ? store.selected : null;
         final mode = plateModes[(app.settings.plateMode - 1).clamp(0, plateModes.length - 1)];
         final spotlight = mode.key == 'spotlight';
         final equal = mode.key == 'equal';
-        final onDefaultView = mode.key == 'time';
         // Limit species: the most heard only, on the plate and in the index.
-        // No pecking order shows every species (not capped at maxOnPlate = 60).
+        // Default view loads up to maxOnPlate (200); No pecking order loads all.
         final all = _rows(ses), limit = app.settings.nativeLimit;
         final rows = limit > 0 && all.length > limit ? all.sublist(0, limit) : all;
         final onPlate = equal ? rows : rows.take(maxOnPlate).toList();
@@ -1039,7 +1139,7 @@ class _NativePlateState extends State<NativePlate> {
         // the room; opened, the list is where it always was.
         final foldedInline = showIndex && showPlate && !spotlight && app.settings.nativeIndexFolded;
         if (foldedInline) _bottomRoom += 40 + 24;
-        final sortedIndex = _sortRows(rows);
+        final sortedIndex = _sortRows(rows, ses: ses, feed: feed);
         IndexView index(double width, double screen, {bool inline = false}) => IndexView(
               entries: [
                 for (final r in sortedIndex)
@@ -1382,9 +1482,11 @@ class _NativePlateState extends State<NativePlate> {
                     right: 8 + 12,
                     child: _lightToggle(feed, app.settings.nativeHeadingInk ? ink : sepia, end: true),
                   ),
-                // Single bottom-left view cycle button:
-                // Local:  Most recent (map) -> Map (owl) -> Latest & most heard (grid) -> No pecking order (mosaic) -> Most recent.
-                // Remote: Most heard (map)  -> Map (owl) -> Latest & most heard (grid) -> No pecking order (quilt)  -> Most heard.
+                // Single bottom-left view cycle button (order: 1 -> 3 -> 4 -> 2 -> 1):
+                // 1. Default (Most recent / Most heard) -> interests -> 3. Latest & most heard
+                // 3. Latest & most heard                -> grid      -> 4. No pecking order
+                // 4. No pecking order                   -> map       -> 2. Map
+                // 2. Map                                -> mosaic/quilt -> 1. Default
                 Positioned(
                   left: 8,
                   bottom: 8,
@@ -1393,17 +1495,17 @@ class _NativePlateState extends State<NativePlate> {
                     padding: EdgeInsets.zero,
                     iconSize: 22,
                     tooltip: switch (mode.key) {
-                      'time' => 'The walk on a map',
+                      'time' => 'Latest & most heard',
                       'spotlight' => 'No pecking order',
-                      _ => feed != null ? 'Most heard' : 'Recent ramblings',
+                      _ => 'The walk on a map',
                     },
                     icon: Icon(switch (mode.key) {
-                      'time' => Icons.map_outlined,
+                      'time' => Icons.interests_outlined,
                       'spotlight' => Icons.grid_view_outlined,
-                      _ => feed != null ? Icons.view_quilt_outlined : Icons.auto_awesome_mosaic_outlined,
+                      _ => Icons.map_outlined,
                     }),
                     color: red,
-                    onPressed: onDefaultView ? () => _openMap(feed, rows) : _nextMode,
+                    onPressed: equal ? () => _openMap(feed, rows) : _nextMode,
                   ),
                 ),
                 // The folded index's heading, on a row of its own just above
@@ -1419,9 +1521,9 @@ class _NativePlateState extends State<NativePlate> {
                   ),
                 // The song scribble between the buttons along the bottom: live
                 // mic when listening here, or the matching resting line with
-                // the latest heard species when on a remote station. On No
-                // pecking order, shows "Index of <N> Species" instead.
-                if (app.settings.songScribble || equal)
+                // the latest heard species when on a remote station. Hidden on
+                // No pecking order for a clean museum plate.
+                if (app.settings.songScribble && !equal)
                   Positioned(
                     left: 8 + 40 + 8,
                     right: (PlateShare.supported ? 8 + 40 : 8) + 8,
@@ -1430,10 +1532,8 @@ class _NativePlateState extends State<NativePlate> {
                     child: SongScribble(
                       engine: engine,
                       simpleWave: app.settings.songScribbleMode == 'wave',
-                      remote: equal || feed != null,
-                      remoteName: equal
-                          ? 'Index of ${thousands(all.length)} Species'
-                          : (feed != null ? newestCommon : null),
+                      remote: feed != null,
+                      remoteName: feed != null ? newestCommon : null,
                     ),
                   ),
                 // Share or save, out of the way at the bottom right.
@@ -1649,7 +1749,8 @@ class _NativePlateState extends State<NativePlate> {
       }
       _revealed = showing;
     }
-    final ordered = sizeBy == 'equal' ? _sortRows(ready) : ready;
+    final ordered = sizeBy == 'equal' ? _sortRows(ready, ses: ses, feed: _feed) : ready;
+    final deepMaxScale = math.max(14.0, math.sqrt(ordered.length) * 2.0);
     final collage = CollageView(
       birds: [for (final r in ordered) CollageBird(r.sci, r.common, r.count, r.last)],
       art: _art,
@@ -1673,7 +1774,7 @@ class _NativePlateState extends State<NativePlate> {
       key: ValueKey('$showing|$sizeBy'),
       size: Size(width, height),
       allPlatforms: sizeBy == 'equal',
-      maxScale: sizeBy == 'equal' ? 8.0 : 4.0,
+      maxScale: sizeBy == 'equal' ? deepMaxScale : 4.0,
       onScaleTier: sizeBy == 'equal'
           ? (t) {
               if (mounted && t != _zoomTier) setState(() => _zoomTier = t);

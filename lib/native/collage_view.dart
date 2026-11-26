@@ -252,7 +252,7 @@ class _CollageViewState extends State<CollageView> {
                 child: _Bird(
                   bird: bird[p.id]!,
                   art: art[p.id],
-                  width: p.rect.width * widget.resolutionScale,
+                  width: widget.resolutionScale <= 0 ? 0 : p.rect.width * widget.resolutionScale,
                   delay: _first ? Duration(milliseconds: 28 * at[p.id]!) : Duration.zero,
                   hovered: _hover == p.id,
                   isCenter: p.id == centerSci,
@@ -615,8 +615,8 @@ class PlateImage extends StatelessWidget {
     return Image.file(
       art.file,
       fit: BoxFit.contain,
-      // decode no larger than it is drawn
-      cacheWidth: math.max(1, (width * MediaQuery.devicePixelRatioOf(context)).round()),
+      // decode at screen width unless width <= 0 (deep zoom: full raw PNG resolution)
+      cacheWidth: width <= 0 ? null : math.max(1, (width * MediaQuery.devicePixelRatioOf(context)).round()),
       // modulate multiplies colour and alpha alike, so a cut-out stays cut out
       color: shape ?? (tint ? paper : null),
       colorBlendMode: shape != null ? BlendMode.srcIn : (tint ? BlendMode.modulate : null),
@@ -820,9 +820,10 @@ class _ZoomableCollageState extends State<ZoomableCollage> {
   double get _scale => _view.value.getMaxScaleOnAxis();
 
   double _tierFor(double s) {
-    if (s >= 5.0) return 8.0;
-    if (s >= 2.6) return 4.0;
-    if (s >= 1.4) return 2.0;
+    // 0 signals PlateImage to decode at 100% raw native PNG resolution (feathers/eyes).
+    if (s >= 4.0) return 0.0;
+    if (s >= 2.2) return 4.0;
+    if (s >= 1.35) return 2.0;
     return 1.0;
   }
 

@@ -186,18 +186,14 @@ class IndexView extends StatelessWidget {
           maintainSize: true,
           maintainAnimation: true,
           maintainState: true,
-          child: Semantics(
-            button: true,
-            label: label,
-            child: InkResponse(
-              radius: 22,
-              onTap: () => onStep(by),
-              child: Padding(
-                // a finger's worth of room about the chevron
-                padding: EdgeInsets.symmetric(horizontal: math.max(6.0, pad - 4), vertical: 6),
-                child: Icon(icon, size: fit ? 20 : 22, color: sepia),
-              ),
-            ),
+          child: IconButton(
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+            padding: EdgeInsets.zero,
+            iconSize: fit ? 20 : 22,
+            tooltip: label,
+            color: sepia,
+            icon: Icon(icon),
+            onPressed: on ? () => onStep(by) : null,
           ),
         );
     final line = SizedBox(width: rules, height: 1, child: const ColoredBox(color: rule));

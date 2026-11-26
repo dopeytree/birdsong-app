@@ -18,12 +18,15 @@ class SortOption {
 const speciesSortOptions = <SortOption>[
   SortOption('calls', 'Calls', Icons.graphic_eq, defaultAsc: false),
   SortOption('recent', 'Latest', Icons.schedule, defaultAsc: false),
+  SortOption('active', 'Active', Icons.wb_twilight, defaultAsc: true),
   SortOption('name', 'Name', Icons.sort_by_alpha, defaultAsc: true),
+  SortOption('family', 'Species', Icons.workspaces_outlined, defaultAsc: true),
   SortOption('rare', 'Rarity', Icons.diamond_outlined, defaultAsc: true),
-  SortOption('size', 'Size', Icons.straighten, defaultAsc: false),
+  SortOption('weight', 'Weight', Icons.scale_outlined, defaultAsc: false),
+  SortOption('wingspan', 'Wingspan', Icons.open_in_full, defaultAsc: false),
+  SortOption('region', 'Region', Icons.public, defaultAsc: true),
   SortOption('colour', 'Colour', Icons.palette_outlined, defaultAsc: true),
   SortOption('artist', 'Artist', Icons.brush_outlined, defaultAsc: true),
-  SortOption('sci', 'Latin', Icons.account_tree_outlined, defaultAsc: true),
 ];
 
 /// Extract a clean sortable artist / illustrator name from a plate's credit.
@@ -32,15 +35,12 @@ String artistOfPlate(PlateArt? art) {
   if (art == null) return '';
   final raw = art.credit.trim().replaceFirst(RegExp(r'^After\s+'), '');
   if (raw.isEmpty) return '';
-  // Fugleramme credits look like: "John Gould. Cut-out from the Fugleramme project, CC BY-SA 4.0."
-  // or "The von Wright brothers, Svenska Fåglar. Cut-out from..."
   if (raw.contains('Cut-out from the Fugleramme')) {
     final before = raw.split('.').first.trim();
     if (before.isEmpty || before.startsWith('Cut-out')) return 'Fugleramme';
     final name = before.split(',').first.trim();
     return name.replaceFirst(RegExp(r'^The\s+', caseSensitive: false), '');
   }
-  // Commons credits typically look like: "Artist, Title (year), Licence" or "Title — Artist"
   final emDash = raw.split('—');
   if (emDash.length >= 2) {
     return emDash.last.split(',').first.trim();
@@ -49,8 +49,8 @@ String artistOfPlate(PlateArt? art) {
 }
 
 /// Clean, modern, transparent sort control with black icons, one-word labels,
-/// and a direction flip arrow (↑ / ↓). Used on both "No pecking order" and
-/// "Index of Species".
+/// and a direction flip arrow (↑ / ↓) placed 1st inside the collapsible filter
+/// bar so it shows and hides together with the filters.
 class SpeciesSortBar extends StatelessWidget {
   const SpeciesSortBar({
     super.key,
@@ -89,15 +89,6 @@ class SpeciesSortBar extends StatelessWidget {
           icon: Icon(open ? Icons.close : Icons.sort, color: ink),
           onPressed: onToggleOpen,
         ),
-        if (!open)
-          IconButton(
-            constraints: const BoxConstraints.tightFor(width: 32, height: 38),
-            padding: EdgeInsets.zero,
-            iconSize: 18,
-            tooltip: ascending ? 'Ascending (tap to reverse)' : 'Descending (tap to reverse)',
-            icon: Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward, color: ink),
-            onPressed: onFlipDirection,
-          ),
         Flexible(
           child: ClipRect(
             child: AnimatedSize(
@@ -116,8 +107,8 @@ class SpeciesSortBar extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            for (final opt in speciesSortOptions) _chip(opt),
-                            const SizedBox(width: 2),
+                            // Direction flip arrow sits 1st inside the filter bar,
+                            // showing and hiding alongside the filters.
                             IconButton(
                               constraints: const BoxConstraints.tightFor(width: 32, height: 32),
                               padding: EdgeInsets.zero,
@@ -129,6 +120,7 @@ class SpeciesSortBar extends StatelessWidget {
                               ),
                               onPressed: onFlipDirection,
                             ),
+                            for (final opt in speciesSortOptions) _chip(opt),
                           ],
                         ),
                       ),

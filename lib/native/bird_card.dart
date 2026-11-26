@@ -11,6 +11,7 @@ import '../store/detection_store.dart';
 import 'collage_view.dart' show PlateImage, calls;
 import 'index_view.dart' show thousands;
 import 'plate_library.dart';
+import 'species_traits.dart';
 
 const _months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -198,6 +199,7 @@ class BirdCard extends StatefulWidget {
     required this.source,
     required this.art,
     required this.onChosen,
+    this.traits,
   });
 
   final PlateLibrary lib;
@@ -205,6 +207,7 @@ class BirdCard extends StatefulWidget {
   final CardSource source;
   final PlateArt? art;
   final ValueChanged<PlateArt?> onChosen;
+  final SpeciesTraits? traits;
 
   /// Open the card over [context].
   static Future<void> show(BuildContext context, BirdCard card) => showDialog<void>(
@@ -238,6 +241,7 @@ class _BirdCardState extends State<BirdCard> {
   @override
   void initState() {
     super.initState();
+    widget.traits?.wantAll([widget.source.sci]);
     // Play alongside a session that is recording and whatever music is on,
     // as the recorder does (engine/listen_engine.dart).
     _player
@@ -620,12 +624,38 @@ class _BirdCardState extends State<BirdCard> {
   /// Particulars, the two bar charts, and other plates.
   Widget _detailsAndCharts(TextStyle text) {
     final f = widget.source, size = text.fontSize!;
+    final traits = widget.traits;
+    Widget buildParticulars(List<(String, String)> extra, List<int>? hoursList) {
+      final t = traits?.of(f.sci);
+      final meanHour = hoursList == null ? null : circularMeanHour(hoursList);
+      final existingKeys = {for (final r in [...f.rows, ...extra]) r.$1.toLowerCase()};
+      final bioRows = <(String, String)>[
+        if (meanHour != null) ('Most active', formatActiveHour(meanHour)),
+        if (t?.family != null && !existingKeys.contains('family')) ('Family', t!.family!),
+        if (t?.region != null) ('Native range', t!.region!),
+        if (t?.wingspanCm != null) ('Wingspan', formatWingspan(t!.wingspanCm!)),
+        if (t?.massGrams != null) ('Weight', formatWeight(t!.massGrams!)),
+      ];
+      return _particulars([...f.rows, ...extra, ...bioRows], text);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FutureBuilder<List<(String, String)>>(
           future: _more,
-          builder: (context, snap) => _particulars([...f.rows, ...?snap.data], text),
+          builder: (context, moreSnap) => FutureBuilder<({List<int> hours, String label})?>(
+            future: _hours,
+            builder: (context, hourSnap) {
+              final extra = moreSnap.data ?? const <(String, String)>[];
+              final hrs = hourSnap.data?.hours;
+              if (traits == null) return buildParticulars(extra, hrs);
+              return ListenableBuilder(
+                listenable: traits,
+                builder: (context, _) => buildParticulars(extra, hrs),
+              );
+            },
+          ),
         ),
         SizedBox(height: size * 1.2),
         FutureBuilder<({List<int> hours, String label})?>(

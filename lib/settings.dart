@@ -74,6 +74,8 @@ class Settings extends ChangeNotifier {
         }
         x.stationId = st.id;
         x.mode = AppMode.station;
+        x.plateMode = defaultPlateMode;
+        x.nativeSizeBy = 'calls';
       });
 
   /// Forgets a station; a plate that was showing it moves to the next one,
@@ -87,6 +89,8 @@ class Settings extends ChangeNotifier {
         if (x.stations.isEmpty) {
           x.stationId = null;
           x.mode = AppMode.listen;
+          x.plateMode = defaultPlateMode;
+          x.nativeSizeBy = 'time';
         } else {
           x.stationId = x.stations[i.clamp(0, x.stations.length - 1)].id;
         }
@@ -414,9 +418,24 @@ class Settings extends ChangeNotifier {
       modelOverrides = next;
     }
     webPlate = (j['webPlate'] as bool?) ?? webPlate;
-    equalSort = const ['calls', 'recent', 'name', 'rare', 'size', 'colour', 'artist', 'sci'].contains(j['equalSort'])
-        ? j['equalSort'] as String
-        : equalSort;
+    var rawSort = j['equalSort'] as String?;
+    if (rawSort == 'size') rawSort = 'weight';
+    if (rawSort == 'sci') rawSort = 'family';
+    if (const [
+      'calls',
+      'recent',
+      'active',
+      'name',
+      'family',
+      'rare',
+      'weight',
+      'wingspan',
+      'region',
+      'colour',
+      'artist',
+    ].contains(rawSort)) {
+      equalSort = rawSort!;
+    }
     equalSortAsc = (j['equalSortAsc'] as bool?) ?? equalSortAsc;
     nativeShowTitle = (j['nativeShowTitle'] as bool?) ?? nativeShowTitle;
     nativeShowDate = (j['nativeShowDate'] as bool?) ?? nativeShowDate;

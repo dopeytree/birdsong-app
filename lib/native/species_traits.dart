@@ -1,16 +1,65 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'bird_records.dart';
+/// Circular mean hour of day (`0.0` to `< 24.0`) from a 24-hour count histogram.
+/// Uses circular statistics so nocturnal birds active at 23:00 and 01:00 average
+/// cleanly to ~00:00 instead of 12:00 noon. Returns null if [hours] has no calls.
+double? circularMeanHour(List<int> hours) {
+  if (hours.length < 24) return null;
+  var sinSum = 0.0, cosSum = 0.0, total = 0;
+  for (var h = 0; h < 24; h++) {
+    final c = hours[h];
+    if (c <= 0) continue;
+    // Use the middle of each hour bin (h + 0.5).
+    final rad = ((h + 0.5) / 24.0) * 2.0 * math.pi;
+    sinSum += c * math.sin(rad);
+    cosSum += c * math.cos(rad);
+    total += c;
+  }
+  if (total == 0) return null;
+  var angle = math.atan2(sinSum, cosSum);
+  if (angle < 0) angle += 2.0 * math.pi;
+  return (angle / (2.0 * math.pi)) * 24.0;
+}
+
+/// Format a mean activity hour (`0..24`) for the bird card, e.g. `around 06:30 (dawn)`.
+String formatActiveHour(double hour) {
+  final totalMin = ((hour % 24) * 60).round() % (24 * 60);
+  final h = totalMin ~/ 60;
+  final m = (totalMin % 60 ~/ 5) * 5; // nearest 5 min reads naturally
+  final hh = h.toString().padLeft(2, '0');
+  final mm = m.toString().padLeft(2, '0');
+  final band = switch (h) {
+    >= 4 && < 8 => 'dawn',
+    >= 8 && < 12 => 'morning',
+    >= 12 && < 17 => 'afternoon',
+    >= 17 && < 21 => 'dusk',
+    _ => 'night',
+  };
+  return 'around $hh:$mm ($band)';
+}
+
+/// Format body mass in grams cleanly (e.g. `18 g`, `420 g`, `1.4 kg`).
+String formatWeight(double grams) {
+  if (grams >= 1000) return '${(grams / 1000).toStringAsFixed(1)} kg';
+  if (grams >= 10) return '${grams.round()} g';
+  return '${grams.toStringAsFixed(1)} g';
+}
+
+/// Format wingspan in cm cleanly (e.g. `22 cm`, `135 cm`).
+String formatWingspan(double cm) {
+  if (cm >= 10) return '${cm.round()} cm';
+  return '${cm.toStringAsFixed(1)} cm';
+}
 
 /// Biological traits for one species, fetched lazily from open sources
-/// (Wikidata for body mass / length / wingspan / IUCN conservation status;
-/// GBIF for global occurrence count) and cached on disk so each species is
-/// only ever looked up once.
+/// (Wikidata for weight, wingspan, length, native range, IUCN status; GBIF for
+/// order, family, and global occurrence count) and cached on disk.
 class SpeciesTrait {
   const SpeciesTrait({
     this.massGrams,
@@ -18,6 +67,9 @@ class SpeciesTrait {
     this.wingspanCm,
     this.iucnRank,
     this.gbifCount,
+    this.order,
+    this.family,
+    this.region,
   });
 
   final double? massGrams;
@@ -30,24 +82,27 @@ class SpeciesTrait {
   /// Total occurrence records in GBIF (fewer = rarer).
   final int? gbifCount;
 
-  /// Comparable size score (prefers body mass in grams; falls back to length
-  /// or wingspan scaled into an approximate mass order so raptors/swans sit at
-  /// one end and wrens/goldcrests at the other).
-  double? get sizeScore {
-    if (massGrams != null && massGrams! > 0) return massGrams!;
-    if (lengthCm != null && lengthCm! > 0) return lengthCm! * lengthCm! * lengthCm! * 0.008;
-    if (wingspanCm != null && wingspanCm! > 0) return wingspanCm! * wingspanCm! * 0.05;
-    return null;
-  }
+  /// Taxonomic order and family (from GBIF), e.g. Passeriformes / Turdidae.
+  final String? order;
+  final String? family;
+
+  /// Native range / endemic region (from Wikidata), e.g. "Europe", "Palearctic".
+  final String? region;
 
   /// Comparable rarity score: lower = rarer (threatened IUCN species first,
   /// then fewest GBIF records). Null when not yet fetched.
   double? get rarityScore {
     if (gbifCount == null && iucnRank == null) return null;
-    // Threat tier (CR=0 .. LC=4, unknown=4.5) dominates, then log occurrence count.
     final tier = iucnRank != null ? (5 - iucnRank!).toDouble() : 4.5;
     final occ = (gbifCount ?? 10000000).clamp(0, 100000000).toDouble();
     return tier * 1e9 + occ;
+  }
+
+  /// Taxonomic sort key grouping related birds together (Order | Family | Sci).
+  String taxonomicKey(String sci) {
+    final o = (order ?? 'zzz').toLowerCase();
+    final f = (family ?? 'zzz').toLowerCase();
+    return '$o|$f|${sci.toLowerCase()}';
   }
 
   Map<String, dynamic> toJson() => {
@@ -56,6 +111,9 @@ class SpeciesTrait {
         if (wingspanCm != null) 'wingspanCm': wingspanCm,
         if (iucnRank != null) 'iucnRank': iucnRank,
         if (gbifCount != null) 'gbifCount': gbifCount,
+        if (order != null) 'order': order,
+        if (family != null) 'family': family,
+        if (region != null) 'region': region,
       };
 
   static SpeciesTrait fromJson(Map<String, dynamic> j) => SpeciesTrait(
@@ -64,10 +122,13 @@ class SpeciesTrait {
         wingspanCm: (j['wingspanCm'] as num?)?.toDouble(),
         iucnRank: (j['iucnRank'] as num?)?.toInt(),
         gbifCount: (j['gbifCount'] as num?)?.toInt(),
+        order: j['order'] as String?,
+        family: j['family'] as String?,
+        region: j['region'] as String?,
       );
 }
 
-/// On-disk cached trait & rarity lookup for species sorting.
+/// On-disk cached trait, taxonomy & rarity lookup for species sorting and cards.
 class SpeciesTraits extends ChangeNotifier {
   SpeciesTraits._(this._file);
 
@@ -105,12 +166,23 @@ class SpeciesTraits extends ChangeNotifier {
 
   SpeciesTrait? of(String sci) => _cache[sci];
 
-  /// Request biological size & IUCN data from Wikidata for [scis].
-  void wantSizeAndIucn(Iterable<String> scis) {
+  /// Fetch all available Wikidata + GBIF fields for [scis] (used by BirdCard).
+  void wantAll(Iterable<String> scis) {
+    wantWikidata(scis);
+    wantGbif(scis);
+  }
+
+  /// Fetch weight, wingspan, length, region & IUCN status from Wikidata.
+  void wantWikidata(Iterable<String> scis) {
     var added = false;
     for (final sci in scis) {
       final cur = _cache[sci];
-      if ((cur?.sizeScore != null && cur?.iucnRank != null) || _wikiAsked.contains(sci)) continue;
+      final complete = cur != null &&
+          cur.massGrams != null &&
+          cur.wingspanCm != null &&
+          cur.region != null &&
+          cur.iucnRank != null;
+      if (complete || _wikiAsked.contains(sci)) continue;
       _wikiAsked.add(sci);
       _wikiQueue.add(sci);
       added = true;
@@ -118,12 +190,12 @@ class SpeciesTraits extends ChangeNotifier {
     if (added && !_wikiBusy) unawaited(_drainWiki());
   }
 
-  /// Request real occurrence counts from GBIF (and IUCN from Wikidata) for [scis].
-  void wantRarity(Iterable<String> scis) {
-    wantSizeAndIucn(scis);
+  /// Fetch taxonomic order, family & occurrence count from GBIF.
+  void wantGbif(Iterable<String> scis) {
     var added = false;
     for (final sci in scis) {
-      if (_cache[sci]?.gbifCount != null || _gbifAsked.contains(sci)) continue;
+      final cur = _cache[sci];
+      if ((cur?.gbifCount != null && cur?.family != null) || _gbifAsked.contains(sci)) continue;
       _gbifAsked.add(sci);
       _gbifQueue.add(sci);
       added = true;
@@ -131,11 +203,14 @@ class SpeciesTraits extends ChangeNotifier {
     if (added && !_gbifBusy) unawaited(_drainGbif());
   }
 
+  void wantRarity(Iterable<String> scis) => wantAll(scis);
+  void wantSizeAndIucn(Iterable<String> scis) => wantWikidata(scis);
+
   Future<void> _drainWiki() async {
     _wikiBusy = true;
     try {
       while (_wikiQueue.isNotEmpty) {
-        final batch = _wikiQueue.take(40).toList();
+        final batch = _wikiQueue.take(35).toList();
         _wikiQueue.removeRange(0, batch.length);
         await _fetchWikidataBatch(batch);
       }
@@ -148,14 +223,14 @@ class SpeciesTraits extends ChangeNotifier {
     final values = scis
         .map((s) => '"${s.replaceAll(r'\', '').replaceAll('"', '')}"')
         .join(' ');
-    // Query mass (P2067), length (P2043), wingspan (P2050), and IUCN status (P141)
-    // in normalized SI units (grams/metres via psv/psn).
     final sparql = '''
 SELECT ?sci
   (SAMPLE(?massKg) AS ?mass)
   (SAMPLE(?lenM) AS ?len)
   (SAMPLE(?spanM) AS ?span)
   (SAMPLE(?iucn) AS ?status)
+  (SAMPLE(?rangeLabel) AS ?range)
+  (SAMPLE(?endemicLabel) AS ?endemic)
 WHERE {
   VALUES ?sci { $values }
   ?item wdt:P225 ?sci .
@@ -163,6 +238,16 @@ WHERE {
   OPTIONAL { ?item p:P2043/psn:P2043/wikibase:quantityAmount ?lenM . }
   OPTIONAL { ?item p:P2050/psn:P2050/wikibase:quantityAmount ?spanM . }
   OPTIONAL { ?item wdt:P141 ?iucn . }
+  OPTIONAL {
+    ?item wdt:P9714 ?r .
+    ?r rdfs:label ?rangeLabel .
+    FILTER(LANG(?rangeLabel) = "en")
+  }
+  OPTIONAL {
+    ?item wdt:P183 ?e .
+    ?e rdfs:label ?endemicLabel .
+    FILTER(LANG(?endemicLabel) = "en")
+  }
 }
 GROUP BY ?sci
 ''';
@@ -172,7 +257,7 @@ GROUP BY ?sci
       final req = await client.getUrl(uri);
       req.headers.set(HttpHeaders.userAgentHeader, 'BirdsongApp/0.1 (https://github.com/dopeytree/birdsongs.ai)');
       req.headers.set(HttpHeaders.acceptHeader, 'application/sparql-results+json');
-      final res = await req.close().timeout(const Duration(seconds: 20));
+      final res = await req.close().timeout(const Duration(seconds: 22));
       if (res.statusCode != 200) return;
       final body = jsonDecode(await res.transform(utf8.decoder).join()) as Map<String, dynamic>;
       final bindings = ((body['results'] as Map?)?['bindings'] as List?) ?? const [];
@@ -185,12 +270,16 @@ GROUP BY ?sci
           final v = (row[k] as Map?)?['value'];
           return v is String ? double.tryParse(v) : null;
         }
-        // Wikidata SI normalized mass is in kg -> convert to grams; lengths are in m -> cm.
+        String? strOf(String k) {
+          final v = (row[k] as Map?)?['value'];
+          return v is String && v.trim().isNotEmpty ? v.trim() : null;
+        }
+
         final massKg = numOf('mass');
         final lenM = numOf('len');
         final spanM = numOf('span');
-        final iucnUrl = (row['status'] as Map?)?['value'] as String?;
-        final iucn = _parseIucn(iucnUrl);
+        final iucn = _parseIucn(strOf('status'));
+        final region = strOf('endemic') ?? strOf('range');
         final prev = _cache[sci];
         _cache[sci] = SpeciesTrait(
           massGrams: massKg != null ? massKg * 1000.0 : prev?.massGrams,
@@ -198,6 +287,9 @@ GROUP BY ?sci
           wingspanCm: spanM != null ? spanM * 100.0 : prev?.wingspanCm,
           iucnRank: iucn ?? prev?.iucnRank,
           gbifCount: prev?.gbifCount,
+          order: prev?.order,
+          family: prev?.family,
+          region: region ?? prev?.region,
         );
         changed = true;
       }
@@ -214,11 +306,11 @@ GROUP BY ?sci
 
   int? _parseIucn(String? url) {
     if (url == null) return null;
-    if (url.endsWith('Q219127')) return 5; // Critically Endangered (CR)
-    if (url.endsWith('Q11394')) return 4; // Endangered (EN)
-    if (url.endsWith('Q278113')) return 3; // Vulnerable (VU)
-    if (url.endsWith('Q719675')) return 2; // Near Threatened (NT)
-    if (url.endsWith('Q211005')) return 1; // Least Concern (LC)
+    if (url.endsWith('Q219127')) return 5; // CR
+    if (url.endsWith('Q11394')) return 4; // EN
+    if (url.endsWith('Q278113')) return 3; // VU
+    if (url.endsWith('Q719675')) return 2; // NT
+    if (url.endsWith('Q211005')) return 1; // LC
     return null;
   }
 
@@ -234,26 +326,41 @@ GROUP BY ?sci
           for (final sci in batch)
             () async {
               try {
-                final key = await BirdRecords.keyFor(sci);
-                if (key == null) return;
-                final uri = Uri.https('api.gbif.org', '/v1/occurrence/count', {'taxonKey': '$key'});
-                final req = await client.getUrl(uri);
-                req.headers.set(HttpHeaders.userAgentHeader, 'Birdsong/0.1 github.com/dopeytree/birdsong');
-                final res = await req.close().timeout(const Duration(seconds: 12));
-                if (res.statusCode != 200) return;
-                final count = int.tryParse((await res.transform(utf8.decoder).join()).trim());
-                if (count == null) return;
+                final matchUri =
+                    Uri.https('api.gbif.org', '/v1/species/match', {'name': sci, 'kingdom': 'Animalia'});
+                final mReq = await client.getUrl(matchUri);
+                mReq.headers.set(HttpHeaders.userAgentHeader, 'Birdsong/0.1 github.com/dopeytree/birdsong');
+                final mRes = await mReq.close().timeout(const Duration(seconds: 12));
+                if (mRes.statusCode != 200) return;
+                final mJson = jsonDecode(await mRes.transform(utf8.decoder).join()) as Map<String, dynamic>;
+                if (mJson['matchType'] == 'NONE' || mJson['matchType'] == null) return;
+                final key = (mJson['speciesKey'] ?? mJson['acceptedUsageKey'] ?? mJson['usageKey']) as int?;
+                final order = mJson['order'] as String?;
+                final family = mJson['family'] as String?;
+                int? count;
+                if (key != null) {
+                  final cUri = Uri.https('api.gbif.org', '/v1/occurrence/count', {'taxonKey': '$key'});
+                  final cReq = await client.getUrl(cUri);
+                  cReq.headers.set(HttpHeaders.userAgentHeader, 'Birdsong/0.1 github.com/dopeytree/birdsong');
+                  final cRes = await cReq.close().timeout(const Duration(seconds: 12));
+                  if (cRes.statusCode == 200) {
+                    count = int.tryParse((await cRes.transform(utf8.decoder).join()).trim());
+                  }
+                }
                 final prev = _cache[sci];
                 _cache[sci] = SpeciesTrait(
                   massGrams: prev?.massGrams,
                   lengthCm: prev?.lengthCm,
                   wingspanCm: prev?.wingspanCm,
                   iucnRank: prev?.iucnRank,
-                  gbifCount: count,
+                  gbifCount: count ?? prev?.gbifCount,
+                  order: order ?? prev?.order,
+                  family: family ?? prev?.family,
+                  region: prev?.region,
                 );
                 changed = true;
               } catch (e) {
-                debugPrint('gbif count $sci: $e');
+                debugPrint('gbif trait $sci: $e');
               }
             }(),
         ]);
